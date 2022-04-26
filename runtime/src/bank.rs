@@ -2643,7 +2643,7 @@ impl Bank {
 
         println!("validator_point_value={}",validator_point_value);
 
-        if !self
+        /*if !self
             .feature_set
             .is_active(&feature_set::deprecate_rewards_sysvar::id())
         {
@@ -2654,7 +2654,7 @@ impl Bank {
                     self.inherit_specially_retained_account_fields(account),
                 )
             });
-        }
+        }*/
 
         let new_vote_balance_and_staked = self.stakes_cache.stakes().vote_balance_and_staked();
         let validator_rewards_paid = new_vote_balance_and_staked - old_vote_balance_and_staked;
@@ -9318,13 +9318,9 @@ pub(crate) mod tests {
         // verify the inflation is represented in validator_points *
         let paid_rewards = bank1.capitalization()
             - bank0.capitalization()
-            - bank1_sysvar_delta()
-            - new_epoch_sysvar_delta();
-        println!("paid_rewards={}",paid_rewards);
-        println!("bank1_sysvar_delta={}",bank1_sysvar_delta());
-        println!("new_epoch_sysvar_delta={}",new_epoch_sysvar_delta());
-        println!("sysvar::rewards::id={}",(&sysvar::rewards::id()));
-        println!("sysvar account {:#?}",bank1.get_account(&sysvar::rewards::id()));
+            - bank1_sysvar_delta();
+            //- new_epoch_sysvar_delta();
+
         /*let rewards = bank1
             .get_account(&sysvar::rewards::id())
             .map(|account| from_account::<Rewards, _>(&account).unwrap())
@@ -9333,10 +9329,6 @@ pub(crate) mod tests {
         //println!("rewards {:#?}",rewards);
 
         // verify the stake and vote accounts are the right size
-        println!("stake_acc_bank_bal={}",bank1.get_balance(&stake_id));
-        println!("stake_account_lamp={}",stake_account.lamports());
-        println!("vote_acc_bank_bal={}",bank1.get_balance(&vote_id));
-        println!("vote_account_lamp={}",vote_account.lamports());
         assert!(
             ((bank1.get_balance(&stake_id) - stake_account.lamports() + bank1.get_balance(&vote_id)
                 - vote_account.lamports()) as f64
@@ -9346,8 +9338,8 @@ pub(crate) mod tests {
         );
 
         // verify the rewards are the right size
-        //let allocated_rewards = rewards.validator_point_value * validator_points as f64;
-        //assert!((allocated_rewards - paid_rewards as f64).abs() < 1.0); // rounding, truncating
+        let allocated_rewards = rewards.validator_point_value * validator_points as f64;
+        assert!((allocated_rewards - paid_rewards as f64).abs() < 1.0); // rounding, truncating
 
         // verify validator rewards show up in bank1.rewards vector
         assert_eq!(
