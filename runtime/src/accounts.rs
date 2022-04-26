@@ -3634,6 +3634,10 @@ mod tests {
         );
 
         // list should be sorted by balance, then pubkey, descending
+        println!("0={}, 1={}",pubkey0,pubkey1);
+        solana_logger::setup();
+        info!("TEST..0={}, 1={}",pubkey0,pubkey1);
+
         assert!(pubkey1 > pubkey0);
         assert_eq!(
             accounts
