@@ -13401,11 +13401,12 @@ pub(crate) mod tests {
         genesis_config.cluster_type = ClusterType::MainnetBeta;
         genesis_config.rent.burn_percent = 100;
         let mut bank = Arc::new(Bank::new_for_tests(&genesis_config));
-        println!("{:#?}",bank);
+        println!("{:?}",bank.hash);
         // Check a few slots, cross an epoch boundary
         assert_eq!(bank.get_slots_in_epoch(0), 32);
         loop {
             goto_end_of_slot(Arc::get_mut(&mut bank).unwrap());
+            println!("{:?}",bank.hash);
             if bank.slot == 0 {
                 assert_eq!(
                     bank.hash().to_string(),
@@ -13413,7 +13414,6 @@ pub(crate) mod tests {
                 );
             }
             if bank.slot == 32 {
-                println!("{:#?}",bank);
                 assert_eq!(
                     bank.hash().to_string(),
                     "7qCbZN5WLT928VpsaLwLp6HfRDzZirmoU4JM4XBEyupu"
