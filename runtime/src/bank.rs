@@ -2631,7 +2631,7 @@ impl Bank {
             .feature_set
             .is_active(&feature_set::update_rewards_from_cached_accounts::id());
 
-        self.pay_validator_rewards_with_thread_pool(
+        let validator_point_value = self.pay_validator_rewards_with_thread_pool(
             prev_epoch,
             validator_rewards,
             reward_calc_tracer,
@@ -2641,7 +2641,7 @@ impl Bank {
             update_rewards_from_cached_accounts,
         );
 
-        /*if !self
+        if !self
             .feature_set
             .is_active(&feature_set::deprecate_rewards_sysvar::id())
         {
@@ -2652,7 +2652,7 @@ impl Bank {
                     self.inherit_specially_retained_account_fields(account),
                 )
             });
-        }*/
+        }
 
         let new_vote_balance_and_staked = self.stakes_cache.stakes().vote_balance_and_staked();
         let validator_rewards_paid = new_vote_balance_and_staked - old_vote_balance_and_staked;
@@ -9317,16 +9317,16 @@ pub(crate) mod tests {
         let paid_rewards = bank1.capitalization()
             - bank0.capitalization()
             - bank1_sysvar_delta();
-        //    - new_epoch_sysvar_delta();
+            - new_epoch_sysvar_delta();
         println!("paid_rewards={}",paid_rewards);
         println!("bank1_sysvar_delta={}",bank1_sysvar_delta());
         println!("new_epoch_sysvar_delta={}",new_epoch_sysvar_delta());
         println!("sysvar::rewards::id={}",(&sysvar::rewards::id()));
         println!("sysvar account {:#?}",bank1.get_account(&sysvar::rewards::id()));
-        /*let rewards = bank1
+        let rewards = bank1
             .get_account(&sysvar::rewards::id())
             .map(|account| from_account::<Rewards, _>(&account).unwrap())
-            .unwrap();*/
+            .unwrap();
         //let rewards = Rewards{validator_point_value:0.0, unused:0.0};
         //println!("rewards {:#?}",rewards);
 
@@ -9338,7 +9338,7 @@ pub(crate) mod tests {
         assert!(
             ((bank1.get_balance(&stake_id) - stake_account.lamports() + bank1.get_balance(&vote_id)
                 - vote_account.lamports()) as f64)
-                //- rewards.validator_point_value * validator_points as f64)
+                - rewards.validator_point_value * validator_points as f64)
                 .abs()
                 < 1.0
         );
@@ -9354,7 +9354,7 @@ pub(crate) mod tests {
                 stake_id,
                 RewardInfo {
                     reward_type: RewardType::Staking,
-                    lamports: (0.0 * validator_points as f64) as i64,
+                    lamports: (rewards.validator_point_value * validator_points as f64) as i64,
                     post_balance: bank1.get_balance(&stake_id),
                     commission: Some(0),
                 }
