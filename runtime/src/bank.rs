@@ -9168,10 +9168,13 @@ pub(crate) mod tests {
 
     #[test]
     fn test_bank_update_vote_stake_rewards() {
+        println!("Running test_bank_update_vote_stake_rewards");
         let thread_pool = ThreadPoolBuilder::new().num_threads(1).build().unwrap();
+        println!("Running with thread pool");
         check_bank_update_vote_stake_rewards(|bank: &Bank| {
             bank.load_vote_and_stake_accounts_with_thread_pool(&thread_pool, null_tracer())
         });
+        println!("Running without thread pool");
         check_bank_update_vote_stake_rewards(|bank: &Bank| {
             bank.load_vote_and_stake_accounts(&thread_pool, null_tracer())
         });
@@ -9217,12 +9220,16 @@ pub(crate) mod tests {
             42 * 1_000_000_000 + genesis_sysvar_and_builtin_program_lamports(),
         );
 
+        println!("Bank capitalization is {}",bank0.capitalization());
+
         let ((vote_id, mut vote_account), (stake_id, stake_account)) =
             crate::stakes::tests::create_staked_node_accounts(10_000);
         let starting_vote_and_stake_balance = 10_000 + 1;
 
         // set up accounts
         bank0.store_account_and_update_capitalization(&stake_id, &stake_account);
+
+        println!("Bank capitalization is {}",bank0.capitalization());
 
         // generate some rewards
         let mut vote_state = Some(VoteState::from(&vote_account).unwrap());
@@ -9241,6 +9248,7 @@ pub(crate) mod tests {
             };
         }
         bank0.store_account_and_update_capitalization(&vote_id, &vote_account);
+        println!("Bank capitalization is {}",bank0.capitalization());
         bank0.freeze();
 
         assert_eq!(
@@ -9251,6 +9259,7 @@ pub(crate) mod tests {
                 + bank0_sysvar_delta(),
         );
         assert!(bank0.rewards.read().unwrap().is_empty());
+        println!("Bank capitalization is {}",bank0.capitalization());
 
         let validator_points: u128 = load_vote_and_stake_accounts(&bank0)
             .vote_with_stake_delegations_map
@@ -9287,6 +9296,8 @@ pub(crate) mod tests {
         );
         // verify that there's inflation
         assert_ne!(bank1.capitalization(), bank0.capitalization());
+        println!("Bank0 capitalization is {}",bank0.capitalization());
+        println!("Bank1 capitalization is {}",bank1.capitalization());
 
         // verify the inflation is represented in validator_points *
         let paid_rewards = bank1.capitalization()
