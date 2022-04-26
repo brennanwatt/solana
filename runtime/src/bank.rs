@@ -13419,7 +13419,7 @@ pub(crate) mod tests {
             if bank.slot == 64 {
                 assert_eq!(
                     bank.hash().to_string(),
-                    "D3ypfQFreDaQhJuuYN8rWG1TVy9ApvTCx5CAiQ5i9d7A"
+                    "4vZCSbBuL8xjE43rCy9Cm3dCh1BMj45heMiMb6n6qgzA"
                 );
             }
             if bank.slot == 128 {
