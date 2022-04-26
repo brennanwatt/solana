@@ -2641,6 +2641,8 @@ impl Bank {
             update_rewards_from_cached_accounts,
         );
 
+        println!("validator_point_value={}",validator_point_value);
+
         if !self
             .feature_set
             .is_active(&feature_set::deprecate_rewards_sysvar::id())
