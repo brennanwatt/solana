@@ -2630,7 +2630,7 @@ impl Bank {
             .feature_set
             .is_active(&feature_set::update_rewards_from_cached_accounts::id());
 
-        let validator_point_value = self.pay_validator_rewards_with_thread_pool(
+        let _validator_point_value = self.pay_validator_rewards_with_thread_pool(
             prev_epoch,
             validator_rewards,
             reward_calc_tracer,
@@ -2639,6 +2639,9 @@ impl Bank {
             metrics,
             update_rewards_from_cached_accounts,
         );
+
+        let drs_feat = self.feature_set.is_active(&feature_set::deprecate_rewards_sysvar::id());
+        println!("drs_feat={}", drs_feat);
 
         let new_vote_balance_and_staked = self.stakes_cache.stakes().vote_balance_and_staked();
         let validator_rewards_paid = new_vote_balance_and_staked - old_vote_balance_and_staked;
