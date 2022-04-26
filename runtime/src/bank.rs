@@ -9316,7 +9316,7 @@ pub(crate) mod tests {
         // verify the inflation is represented in validator_points *
         let paid_rewards = bank1.capitalization()
             - bank0.capitalization()
-            - bank1_sysvar_delta();
+            - bank1_sysvar_delta()
             - new_epoch_sysvar_delta();
         println!("paid_rewards={}",paid_rewards);
         println!("bank1_sysvar_delta={}",bank1_sysvar_delta());
