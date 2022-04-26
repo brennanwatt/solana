@@ -9321,12 +9321,13 @@ pub(crate) mod tests {
         println!("bank1_sysvar_delta={}",bank1_sysvar_delta());
         println!("new_epoch_sysvar_delta={}",new_epoch_sysvar_delta());
         println!("sysvar::rewards::id={}",(&sysvar::rewards::id()));
-        println!("rewards {:#?}",bank1.get_account(&sysvar::rewards::id()));
-        /*let rewards = bank1
+        println!("sysvar account {:#?}",bank1.get_account(&sysvar::rewards::id()));
+        let rewards = bank1
             .get_account(&sysvar::rewards::id())
             .map(|account| from_account::<Rewards, _>(&account).unwrap())
-            .unwrap();*/
-        let rewards = Rewards{validator_point_value:0.0, unused:0.0};
+            .unwrap();
+        //let rewards = Rewards{validator_point_value:0.0, unused:0.0};
+        println!("rewards {:#?}",rewards);
 
         // verify the stake and vote accounts are the right size
         assert!(
