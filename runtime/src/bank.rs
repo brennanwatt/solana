@@ -9331,6 +9331,10 @@ pub(crate) mod tests {
         //println!("rewards {:#?}",rewards);
 
         // verify the stake and vote accounts are the right size
+        println!("stake_acc_bank_bal={}",bank1.get_balance(&stake_id));
+        println!("stake_account_lamp={}",stake_account.lamports());
+        println!("vote_acc_bank_bal={}",bank1.get_balance(&vote_id));
+        println!("vote_account_lamp={}",vote_account.lamports());
         assert!(
             ((bank1.get_balance(&stake_id) - stake_account.lamports() + bank1.get_balance(&vote_id)
                 - vote_account.lamports()) as f64)
