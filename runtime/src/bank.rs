@@ -7457,11 +7457,6 @@ pub(crate) mod tests {
         SLOT_HASHES_SYSVAR_MIN_BALANCE
     }
 
-    fn new_epoch_sysvar_delta() -> u64 {
-        const REWARDS_SYSVAR_MIN_BALANCE: u64 = 1_002_240;
-        REWARDS_SYSVAR_MIN_BALANCE
-    }
-
     #[test]
     fn test_bank_capitalization() {
         let bank0 = Arc::new(Bank::new_for_tests(&GenesisConfig {
