@@ -9304,7 +9304,10 @@ pub(crate) mod tests {
             - bank0.capitalization()
             - bank1_sysvar_delta()
             - new_epoch_sysvar_delta();
-
+        println!("paid_rewards={}",paid_rewards);
+        println!("bank1_sysvar_delta={}",bank1_sysvar_delta());
+        println!("new_epoch_sysvar_delta={}",new_epoch_sysvar_delta());
+        println!("rewards {}",bank1.get_account(&sysvar::rewards::id()).lamports);
         /*let rewards = bank1
             .get_account(&sysvar::rewards::id())
             .map(|account| from_account::<Rewards, _>(&account).unwrap())
