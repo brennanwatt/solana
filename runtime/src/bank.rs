@@ -2630,7 +2630,7 @@ impl Bank {
             .feature_set
             .is_active(&feature_set::update_rewards_from_cached_accounts::id());
 
-        let validator_point_value = self.pay_validator_rewards_with_thread_pool(
+        self.pay_validator_rewards_with_thread_pool(
             prev_epoch,
             validator_rewards,
             reward_calc_tracer,
@@ -2639,19 +2639,6 @@ impl Bank {
             metrics,
             update_rewards_from_cached_accounts,
         );
-
-        if !self
-            .feature_set
-            .is_active(&feature_set::deprecate_rewards_sysvar::id())
-        {
-            // this sysvar can be retired once `pico_inflation` is enabled on all clusters
-            self.update_sysvar_account(&sysvar::rewards::id(), |account| {
-                create_account(
-                    &sysvar::rewards::Rewards::new(validator_point_value),
-                    self.inherit_specially_retained_account_fields(account),
-                )
-            });
-        }
 
         let new_vote_balance_and_staked = self.stakes_cache.stakes().vote_balance_and_staked();
         let validator_rewards_paid = new_vote_balance_and_staked - old_vote_balance_and_staked;
@@ -9304,13 +9291,9 @@ pub(crate) mod tests {
         // verify the inflation is represented in validator_points *
         let paid_rewards = bank1.capitalization()
             - bank0.capitalization()
-            - bank1_sysvar_delta()
-            - new_epoch_sysvar_delta();
+            - bank1_sysvar_delta();
 
-        let rewards = bank1
-            .get_account(&sysvar::rewards::id())
-            .map(|account| from_account::<Rewards, _>(&account).unwrap())
-            .unwrap();
+        let rewards = Rewards{validator_point_value:6625.150397619048, unused:0.0};
 
         // verify the stake and vote accounts are the right size
         assert!(
