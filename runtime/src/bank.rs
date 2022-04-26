@@ -9337,7 +9337,7 @@ pub(crate) mod tests {
         println!("vote_account_lamp={}",vote_account.lamports());
         assert!(
             ((bank1.get_balance(&stake_id) - stake_account.lamports() + bank1.get_balance(&vote_id)
-                - vote_account.lamports()) as f64)
+                - vote_account.lamports()) as f64
                 - rewards.validator_point_value * validator_points as f64)
                 .abs()
                 < 1.0
