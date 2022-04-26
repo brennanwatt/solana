@@ -9298,7 +9298,7 @@ pub(crate) mod tests {
             .get_account(&sysvar::rewards::id())
             .map(|account| from_account::<Rewards, _>(&account).unwrap())
             .unwrap();*/
-        let rewards = Rewards{validator_point_value:0, unused:0};
+        let rewards = Rewards{validator_point_value:0.0, unused:0.0};
 
         // verify the stake and vote accounts are the right size
         assert!(
