@@ -13405,7 +13405,6 @@ pub(crate) mod tests {
         // Check a few slots, cross an epoch boundary
         assert_eq!(bank.get_slots_in_epoch(0), 32);
         loop {
-            println!("{:#?}",bank);
             goto_end_of_slot(Arc::get_mut(&mut bank).unwrap());
             if bank.slot == 0 {
                 assert_eq!(
@@ -13414,6 +13413,7 @@ pub(crate) mod tests {
                 );
             }
             if bank.slot == 32 {
+                println!("{:#?}",bank);
                 assert_eq!(
                     bank.hash().to_string(),
                     "7qCbZN5WLT928VpsaLwLp6HfRDzZirmoU4JM4XBEyupu"
