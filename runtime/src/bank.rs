@@ -9294,10 +9294,11 @@ pub(crate) mod tests {
             - bank1_sysvar_delta()
             - new_epoch_sysvar_delta();
 
-        let rewards = bank1
+        /*let rewards = bank1
             .get_account(&sysvar::rewards::id())
             .map(|account| from_account::<Rewards, _>(&account).unwrap())
-            .unwrap();
+            .unwrap();*/
+        let rewards = Rewards{validator_point_value:0, unused:0};
 
         // verify the stake and vote accounts are the right size
         assert!(
