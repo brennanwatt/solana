@@ -2630,7 +2630,7 @@ impl Bank {
             .feature_set
             .is_active(&feature_set::update_rewards_from_cached_accounts::id());
 
-        self.pay_validator_rewards_with_thread_pool(
+        let validator_point_value = self.pay_validator_rewards_with_thread_pool(
             prev_epoch,
             validator_rewards,
             reward_calc_tracer,
