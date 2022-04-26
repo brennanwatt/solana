@@ -2630,7 +2630,7 @@ impl Bank {
             .feature_set
             .is_active(&feature_set::update_rewards_from_cached_accounts::id());
 
-        let _validator_point_value = self.pay_validator_rewards_with_thread_pool(
+        self.pay_validator_rewards_with_thread_pool(
             prev_epoch,
             validator_rewards,
             reward_calc_tracer,
@@ -13401,9 +13401,11 @@ pub(crate) mod tests {
         genesis_config.cluster_type = ClusterType::MainnetBeta;
         genesis_config.rent.burn_percent = 100;
         let mut bank = Arc::new(Bank::new_for_tests(&genesis_config));
+        println!("{:#?}",bank);
         // Check a few slots, cross an epoch boundary
         assert_eq!(bank.get_slots_in_epoch(0), 32);
         loop {
+            println!("{:#?}",bank);
             goto_end_of_slot(Arc::get_mut(&mut bank).unwrap());
             if bank.slot == 0 {
                 assert_eq!(
