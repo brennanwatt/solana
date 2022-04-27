@@ -7150,7 +7150,6 @@ pub(crate) mod tests {
             },
             system_instruction::{self, SystemError},
             system_program,
-            sysvar::rewards::Rewards,
             timing::duration_as_s,
             transaction::MAX_TX_ACCOUNT_LOCKS,
             transaction_context::InstructionContext,
@@ -9251,26 +9250,7 @@ pub(crate) mod tests {
         );
         assert!(bank0.rewards.read().unwrap().is_empty());
 
-        // START
-        let slot_in_year = bank0.slot_in_year_for_inflation();
-        let epoch_duration_in_years = bank0.epoch_duration_in_years(bank0.epoch());
-
-        let (validator_rate, foundation_rate) = {
-            let inflation = bank0.inflation.read().unwrap();
-            (
-                (*inflation).validator(slot_in_year),
-                (*inflation).foundation(slot_in_year),
-            )
-        };
-        println!("4 {:?}",(validator_rate, foundation_rate));
-
-        let capitalization = bank0.capitalization();
-        let validator_rewards =
-            (validator_rate * capitalization as f64 * epoch_duration_in_years) as u64;
-        println!("5 {:?}",(validator_rewards,validator_rate,capitalization,epoch_duration_in_years));
-        // END
-
-        let validator_points: u128 = load_vote_and_stake_accounts(&bank0)
+        load_vote_and_stake_accounts(&bank0)
             .vote_with_stake_delegations_map
             .into_iter()
             .map(
@@ -9296,6 +9276,25 @@ pub(crate) mod tests {
                 },
             )
             .sum();
+
+        // START
+        let slot_in_year = bank0.slot_in_year_for_inflation();
+        let epoch_duration_in_years = bank0.epoch_duration_in_years(bank0.epoch());
+
+        let (validator_rate, foundation_rate) = {
+            let inflation = bank0.inflation.read().unwrap();
+            (
+                (*inflation).validator(slot_in_year),
+                (*inflation).foundation(slot_in_year),
+            )
+        };
+        println!("4 {:?}",(validator_rate, foundation_rate));
+
+        let capitalization = bank0.capitalization();
+        let validator_rewards =
+            (validator_rate * capitalization as f64 * epoch_duration_in_years) as u64;
+        println!("5 {:?}",(validator_rewards,validator_rate,capitalization,epoch_duration_in_years));
+        // END
 
         // put a child bank in epoch 1, which calls update_rewards()...
         let bank1 = Bank::new_from_parent(
