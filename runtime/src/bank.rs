@@ -9306,6 +9306,7 @@ pub(crate) mod tests {
         let capitalization = bank0.capitalization();
         let validator_rewards =
             (validator_rate * capitalization as f64 * epoch_duration_in_years) as u64;
+        println!("4 {:?}",(validator_rewards,validator_rate,capitalization,epoch_duration_in_years));
         // END
 
         //let rewards = Rewards{validator_point_value:6625.150397619048, unused:0.0};
