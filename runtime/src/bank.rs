@@ -9291,19 +9291,36 @@ pub(crate) mod tests {
             - bank0.capitalization()
             - bank1_sysvar_delta();
 
-        let rewards = Rewards{validator_point_value:6625.150397619048, unused:0.0};
+        // START
+        let slot_in_year = bank0.slot_in_year_for_inflation();
+        let epoch_duration_in_years = bank0.epoch_duration_in_years(bank0.epoch());
+
+        let (validator_rate, foundation_rate) = {
+            let inflation = bank0.inflation.read().unwrap();
+            (
+                (*inflation).validator(slot_in_year),
+                (*inflation).foundation(slot_in_year),
+            )
+        };
+
+        let capitalization = bank0.capitalization();
+        let validator_rewards =
+            (validator_rate * capitalization as f64 * epoch_duration_in_years) as u64;
+        // END
+
+        //let rewards = Rewards{validator_point_value:6625.150397619048, unused:0.0};
 
         // verify the stake and vote accounts are the right size
         assert!(
             ((bank1.get_balance(&stake_id) - stake_account.lamports() + bank1.get_balance(&vote_id)
                 - vote_account.lamports()) as f64
-                - rewards.validator_point_value * validator_points as f64)
+                - validator_rewards as f64)
                 .abs()
                 < 1.0
         );
 
         // verify the rewards are the right size
-        let allocated_rewards = rewards.validator_point_value * validator_points as f64;
+        let allocated_rewards = validator_rewards as f64;
         println!("allocated_rewards = {}",allocated_rewards);
         assert!((allocated_rewards - paid_rewards as f64).abs() < 1.0); // rounding, truncating
 
@@ -9314,7 +9331,7 @@ pub(crate) mod tests {
                 stake_id,
                 RewardInfo {
                     reward_type: RewardType::Staking,
-                    lamports: (rewards.validator_point_value * validator_points as f64) as i64,
+                    lamports: (validator_rewards as f64) as i64,
                     post_balance: bank1.get_balance(&stake_id),
                     commission: Some(0),
                 }
