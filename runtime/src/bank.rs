@@ -9267,14 +9267,7 @@ pub(crate) mod tests {
 
         let slot_in_year = bank1.slot_in_year_for_inflation();
         let epoch_duration_in_years = bank1.epoch_duration_in_years(bank0.epoch());
-
-        let (validator_rate, _) = {
-            let inflation = bank1.inflation.read().unwrap();
-            (
-                (*inflation).validator(slot_in_year),
-                (*inflation).foundation(slot_in_year),
-            )
-        };
+        let validator_rate = bank1.inflation.read().unwrap().validator(slot_in_year);
 
         let allocated_rewards =
             (validator_rate * bank0.capitalization() as f64 * epoch_duration_in_years) as f64;
