@@ -2624,7 +2624,7 @@ impl Bank {
         let capitalization = self.capitalization();
         let validator_rewards =
             (validator_rate * capitalization as f64 * epoch_duration_in_years) as u64;
-        println!("1 {}",(validator_rewards, validator_rate, capitalization));
+        println!("1 {:?}",(validator_rewards, validator_rate, capitalization));
 
         let old_vote_balance_and_staked = self.stakes_cache.stakes().vote_balance_and_staked();
         let update_rewards_from_cached_accounts = self
