@@ -9270,7 +9270,7 @@ pub(crate) mod tests {
         // START
         println!("hash={:?}",bank1.parent_hash);
         let slot_in_year = bank1.slot_in_year_for_inflation();
-        let epoch_duration_in_years = bank1.epoch_duration_in_years(bank1.epoch());
+        let epoch_duration_in_years = bank1.epoch_duration_in_years(bank0.epoch());
 
         let (validator_rate, foundation_rate) = {
             let inflation = bank1.inflation.read().unwrap();
