@@ -2610,6 +2610,7 @@ impl Bank {
         thread_pool: &ThreadPool,
         metrics: &mut RewardsMetrics,
     ) {
+        println!("hash={:?}",self.parent_hash);
         let slot_in_year = self.slot_in_year_for_inflation();
         let epoch_duration_in_years = self.epoch_duration_in_years(prev_epoch);
 
@@ -9253,6 +9254,7 @@ pub(crate) mod tests {
         load_vote_and_stake_accounts(&bank0).vote_with_stake_delegations_map;
 
         // START
+        println!("hash={:?}",bank0.parent_hash);
         let slot_in_year = bank0.slot_in_year_for_inflation();
         let epoch_duration_in_years = bank0.epoch_duration_in_years(bank0.epoch());
 
@@ -9268,7 +9270,7 @@ pub(crate) mod tests {
         let capitalization = bank0.capitalization();
         let validator_rewards =
             (validator_rate * capitalization as f64 * epoch_duration_in_years) as u64;
-        println!("5 {:?}",(validator_rewards,validator_rate,capitalization,epoch_duration_in_years));
+        println!("5 {:?}",(validator_rewards, validator_rate, capitalization, epoch_duration_in_years));
         // END
 
         // put a child bank in epoch 1, which calls update_rewards()...
