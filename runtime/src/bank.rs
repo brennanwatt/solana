@@ -9253,13 +9253,27 @@ pub(crate) mod tests {
 
         load_vote_and_stake_accounts(&bank0).vote_with_stake_delegations_map;
 
+        // put a child bank in epoch 1, which calls update_rewards()...
+        let bank1 = Bank::new_from_parent(
+            &bank0,
+            &Pubkey::default(),
+            bank0.get_slots_in_epoch(bank0.epoch()) + 1,
+        );
+        // verify that there's inflation
+        assert_ne!(bank1.capitalization(), bank0.capitalization());
+
+        // verify the inflation is represented in validator_points *
+        let paid_rewards = bank1.capitalization()
+            - bank0.capitalization()
+            - bank1_sysvar_delta();
+
         // START
-        println!("hash={:?}",bank0.parent_hash);
-        let slot_in_year = bank0.slot_in_year_for_inflation();
-        let epoch_duration_in_years = bank0.epoch_duration_in_years(bank0.epoch());
+        println!("hash={:?}",bank1.parent_hash);
+        let slot_in_year = bank1.slot_in_year_for_inflation();
+        let epoch_duration_in_years = bank1.epoch_duration_in_years(bank1.epoch());
 
         let (validator_rate, foundation_rate) = {
-            let inflation = bank0.inflation.read().unwrap();
+            let inflation = bank1.inflation.read().unwrap();
             (
                 (*inflation).validator(slot_in_year),
                 (*inflation).foundation(slot_in_year),
@@ -9272,21 +9286,6 @@ pub(crate) mod tests {
             (validator_rate * capitalization as f64 * epoch_duration_in_years) as u64;
         println!("5 {:?}",(validator_rewards, validator_rate, capitalization, epoch_duration_in_years));
         // END
-
-        // put a child bank in epoch 1, which calls update_rewards()...
-        let bank1 = Bank::new_from_parent(
-            &bank0,
-            &Pubkey::default(),
-            bank0.get_slots_in_epoch(bank0.epoch()) + 1,
-        );
-        // verify that there's inflation
-        assert_ne!(bank1.capitalization(), bank0.capitalization());
-        println!("hash1={:?}",bank1.parent_hash);
-
-        // verify the inflation is represented in validator_points *
-        let paid_rewards = bank1.capitalization()
-            - bank0.capitalization()
-            - bank1_sysvar_delta();
 
         //let rewards = Rewards{validator_point_value:6625.150397619048, unused:0.0};
 
