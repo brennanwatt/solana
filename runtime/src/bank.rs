@@ -2624,13 +2624,14 @@ impl Bank {
         let capitalization = self.capitalization();
         let validator_rewards =
             (validator_rate * capitalization as f64 * epoch_duration_in_years) as u64;
+        println!("1 {}",(validator_rewards, validator_rate, capitalization));
 
         let old_vote_balance_and_staked = self.stakes_cache.stakes().vote_balance_and_staked();
         let update_rewards_from_cached_accounts = self
             .feature_set
             .is_active(&feature_set::update_rewards_from_cached_accounts::id());
 
-        self.pay_validator_rewards_with_thread_pool(
+        let val_point_val = self.pay_validator_rewards_with_thread_pool(
             prev_epoch,
             validator_rewards,
             reward_calc_tracer,
@@ -2639,9 +2640,11 @@ impl Bank {
             metrics,
             update_rewards_from_cached_accounts,
         );
+        println!("2 {}",val_point_val);
 
         let new_vote_balance_and_staked = self.stakes_cache.stakes().vote_balance_and_staked();
         let validator_rewards_paid = new_vote_balance_and_staked - old_vote_balance_and_staked;
+        println!("3 {}",validator_rewards_paid);
         assert_eq!(
             validator_rewards_paid,
             u64::try_from(
@@ -9301,6 +9304,7 @@ pub(crate) mod tests {
 
         // verify the rewards are the right size
         let allocated_rewards = rewards.validator_point_value * validator_points as f64;
+        println!("allocated_rewards = {}",allocated_rewards);
         assert!((allocated_rewards - paid_rewards as f64).abs() < 1.0); // rounding, truncating
 
         // verify validator rewards show up in bank1.rewards vector
