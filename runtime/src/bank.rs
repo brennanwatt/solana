@@ -9281,6 +9281,7 @@ pub(crate) mod tests {
         );
         // verify that there's inflation
         assert_ne!(bank1.capitalization(), bank0.capitalization());
+        println!("hash1={:?}",bank1.parent_hash);
 
         // verify the inflation is represented in validator_points *
         let paid_rewards = bank1.capitalization()
