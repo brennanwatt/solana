@@ -9250,32 +9250,7 @@ pub(crate) mod tests {
         );
         assert!(bank0.rewards.read().unwrap().is_empty());
 
-        load_vote_and_stake_accounts(&bank0)
-            .vote_with_stake_delegations_map
-            .into_iter()
-            .map(
-                |(
-                    _vote_pubkey,
-                    VoteWithStakeDelegations {
-                        vote_state,
-                        delegations,
-                        ..
-                    },
-                )| {
-                    delegations
-                        .iter()
-                        .map(move |(_stake_pubkey, stake_account)| {
-                            stake_state::calculate_points(
-                                stake_account.stake_state(),
-                                &vote_state,
-                                None, // stake_history
-                            )
-                            .unwrap_or_default()
-                        })
-                        .sum::<u128>()
-                },
-            )
-            .sum();
+        load_vote_and_stake_accounts(&bank0).vote_with_stake_delegations_map;
 
         // START
         let slot_in_year = bank0.slot_in_year_for_inflation();
