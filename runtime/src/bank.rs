@@ -2620,11 +2620,12 @@ impl Bank {
                 (*inflation).foundation(slot_in_year),
             )
         };
+        println!("0 {:?}",(validator_rate, foundation_rate));
 
         let capitalization = self.capitalization();
         let validator_rewards =
             (validator_rate * capitalization as f64 * epoch_duration_in_years) as u64;
-        println!("1 {:?}",(validator_rewards, validator_rate, capitalization));
+        println!("1 {:?}",(validator_rewards, validator_rate, capitalization, epoch_duration_in_years));
 
         let old_vote_balance_and_staked = self.stakes_cache.stakes().vote_balance_and_staked();
         let update_rewards_from_cached_accounts = self
@@ -9250,6 +9251,25 @@ pub(crate) mod tests {
         );
         assert!(bank0.rewards.read().unwrap().is_empty());
 
+        // START
+        let slot_in_year = bank0.slot_in_year_for_inflation();
+        let epoch_duration_in_years = bank0.epoch_duration_in_years(bank0.epoch());
+
+        let (validator_rate, foundation_rate) = {
+            let inflation = bank0.inflation.read().unwrap();
+            (
+                (*inflation).validator(slot_in_year),
+                (*inflation).foundation(slot_in_year),
+            )
+        };
+        println!("4 {:?}",(validator_rate, foundation_rate));
+
+        let capitalization = bank0.capitalization();
+        let validator_rewards =
+            (validator_rate * capitalization as f64 * epoch_duration_in_years) as u64;
+        println!("5 {:?}",(validator_rewards,validator_rate,capitalization,epoch_duration_in_years));
+        // END
+
         let validator_points: u128 = load_vote_and_stake_accounts(&bank0)
             .vote_with_stake_delegations_map
             .into_iter()
@@ -9290,24 +9310,6 @@ pub(crate) mod tests {
         let paid_rewards = bank1.capitalization()
             - bank0.capitalization()
             - bank1_sysvar_delta();
-
-        // START
-        let slot_in_year = bank0.slot_in_year_for_inflation();
-        let epoch_duration_in_years = bank0.epoch_duration_in_years(bank0.epoch());
-
-        let (validator_rate, foundation_rate) = {
-            let inflation = bank0.inflation.read().unwrap();
-            (
-                (*inflation).validator(slot_in_year),
-                (*inflation).foundation(slot_in_year),
-            )
-        };
-
-        let capitalization = bank0.capitalization();
-        let validator_rewards =
-            (validator_rate * capitalization as f64 * epoch_duration_in_years) as u64;
-        println!("4 {:?}",(validator_rewards,validator_rate,capitalization,epoch_duration_in_years));
-        // END
 
         //let rewards = Rewards{validator_point_value:6625.150397619048, unused:0.0};
 
