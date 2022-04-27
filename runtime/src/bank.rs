@@ -9262,45 +9262,33 @@ pub(crate) mod tests {
         // verify that there's inflation
         assert_ne!(bank1.capitalization(), bank0.capitalization());
 
-        // verify the inflation is represented in validator_points *
-        let paid_rewards = bank1.capitalization()
-            - bank0.capitalization()
-            - bank1_sysvar_delta();
+        // verify the inflation is represented in validator_points
+        let paid_rewards = bank1.capitalization() - bank0.capitalization() - bank1_sysvar_delta();
 
-        // START
-        println!("hash={:?}",bank1.parent_hash);
         let slot_in_year = bank1.slot_in_year_for_inflation();
         let epoch_duration_in_years = bank1.epoch_duration_in_years(bank0.epoch());
 
-        let (validator_rate, foundation_rate) = {
+        let (validator_rate, _) = {
             let inflation = bank1.inflation.read().unwrap();
             (
                 (*inflation).validator(slot_in_year),
                 (*inflation).foundation(slot_in_year),
             )
         };
-        println!("4 {:?}",(validator_rate, foundation_rate));
 
-        let capitalization = bank0.capitalization();
-        let validator_rewards =
-            (validator_rate * capitalization as f64 * epoch_duration_in_years) as u64;
-        println!("5 {:?}",(validator_rewards, validator_rate, capitalization, epoch_duration_in_years));
-        // END
-
-        //let rewards = Rewards{validator_point_value:6625.150397619048, unused:0.0};
+        let allocated_rewards =
+            (validator_rate * bank0.capitalization() as f64 * epoch_duration_in_years) as f64;
 
         // verify the stake and vote accounts are the right size
         assert!(
             ((bank1.get_balance(&stake_id) - stake_account.lamports() + bank1.get_balance(&vote_id)
                 - vote_account.lamports()) as f64
-                - validator_rewards as f64)
+                - allocated_rewards)
                 .abs()
                 < 1.0
         );
 
         // verify the rewards are the right size
-        let allocated_rewards = validator_rewards as f64;
-        println!("allocated_rewards = {}",allocated_rewards);
         assert!((allocated_rewards - paid_rewards as f64).abs() < 1.0); // rounding, truncating
 
         // verify validator rewards show up in bank1.rewards vector
@@ -9310,7 +9298,7 @@ pub(crate) mod tests {
                 stake_id,
                 RewardInfo {
                     reward_type: RewardType::Staking,
-                    lamports: (validator_rewards as f64) as i64,
+                    lamports: allocated_rewards as i64,
                     post_balance: bank1.get_balance(&stake_id),
                     commission: Some(0),
                 }
