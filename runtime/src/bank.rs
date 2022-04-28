@@ -2602,6 +2602,16 @@ impl Bank {
         num_slots as f64 / self.slots_per_year
     }
 
+    fn inflation_allocated_during_epoch(&self) -> f64 {
+        let prev_bank_epoch = self.rc.parent.read().unwrap().epoch();
+        let epoch_duration_in_years = self.epoch_duration_in_years(prev_bank_epoch);
+        let slot_in_year = self.slot_in_year_for_inflation();
+        let validator_rate = self.inflation.read().unwrap().validator(slot_in_year);
+        let prev_bank_capitalization = self.rc.parent.read().unwrap().capitalization();
+
+        (validator_rate * prev_bank_capitalization as f64 * epoch_duration_in_years) as f64
+    }
+
     // update rewards based on the previous epoch
     fn update_rewards_with_thread_pool(
         &mut self,
@@ -2610,7 +2620,6 @@ impl Bank {
         thread_pool: &ThreadPool,
         metrics: &mut RewardsMetrics,
     ) {
-        println!("hash={:?}",self.parent_hash);
         let slot_in_year = self.slot_in_year_for_inflation();
         let epoch_duration_in_years = self.epoch_duration_in_years(prev_epoch);
 
@@ -2621,12 +2630,9 @@ impl Bank {
                 (*inflation).foundation(slot_in_year),
             )
         };
-        println!("0 {:?}",(validator_rate, foundation_rate));
 
         let capitalization = self.capitalization();
-        let validator_rewards =
-            (validator_rate * capitalization as f64 * epoch_duration_in_years) as u64;
-        println!("1 {:?}",(validator_rewards, validator_rate, capitalization, epoch_duration_in_years));
+        let validator_rewards = self.inflation_allocated_during_epoch();
 
         let old_vote_balance_and_staked = self.stakes_cache.stakes().vote_balance_and_staked();
         let update_rewards_from_cached_accounts = self
@@ -2642,11 +2648,10 @@ impl Bank {
             metrics,
             update_rewards_from_cached_accounts,
         );
-        println!("2 {}",val_point_val);
 
         let new_vote_balance_and_staked = self.stakes_cache.stakes().vote_balance_and_staked();
         let validator_rewards_paid = new_vote_balance_and_staked - old_vote_balance_and_staked;
-        println!("3 {}",validator_rewards_paid);
+
         assert_eq!(
             validator_rewards_paid,
             u64::try_from(
