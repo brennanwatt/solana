@@ -9282,13 +9282,13 @@ pub(crate) mod tests {
         assert!(
             ((bank1.get_balance(&stake_id) - stake_account.lamports() + bank1.get_balance(&vote_id)
                 - vote_account.lamports()) as f64
-                - validator_rewards)
+                - validator_rewards as f64)
                 .abs()
                 < 1.0
         );
 
         // verify the rewards are the right size
-        assert!((validator_rewards - paid_rewards as f64).abs() < 1.0); // rounding, truncating
+        assert!((validator_rewards as f64 - paid_rewards as f64).abs() < 1.0); // rounding, truncating
 
         // verify validator rewards show up in bank1.rewards vector
         assert_eq!(
