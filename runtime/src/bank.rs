@@ -2602,14 +2602,15 @@ impl Bank {
         num_slots as f64 / self.slots_per_year
     }
 
-    fn inflation_allocated_during_epoch(&self) -> f64 {
-        let prev_bank_epoch = self.rc.parent.read().unwrap().epoch();
-        let epoch_duration_in_years = self.epoch_duration_in_years(prev_bank_epoch);
+    fn inflation_allocated_during_epoch(&self) -> u64 {
         let slot_in_year = self.slot_in_year_for_inflation();
         let validator_rate = self.inflation.read().unwrap().validator(slot_in_year);
-        let prev_bank_capitalization = self.rc.parent.read().unwrap().capitalization();
+        let parent_bank = self.rc.parent.read().unwrap() as Bank;
+        let prev_bank_capitalization = parent_bank.capitalization();
+        let prev_bank_epoch = parent_bank.epoch();
+        let epoch_duration_in_years = self.epoch_duration_in_years(prev_bank_epoch);
 
-        (validator_rate * prev_bank_capitalization as f64 * epoch_duration_in_years) as f64
+        (validator_rate * prev_bank_capitalization as f64 * epoch_duration_in_years) as u64
     }
 
     // update rewards based on the previous epoch
