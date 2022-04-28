@@ -2605,13 +2605,12 @@ impl Bank {
     fn inflation_allocated_during_epoch(&self) -> u64 {
         let slot_in_year = self.slot_in_year_for_inflation();
         let validator_rate = self.inflation.read().unwrap().validator(slot_in_year);
-        let parent_bank = self.parent().unwrap();
-        //let parent_bank = self.rc.parent.read().unwrap().unwrap().as_ref();
-        let prev_bank_capitalization = parent_bank.capitalization();
-        let prev_bank_epoch = parent_bank.epoch();
-        let epoch_duration_in_years = self.epoch_duration_in_years(prev_bank_epoch);
+        //let parent_bank = self.parent().unwrap();
+        //let prev_bank_capitalization = parent_bank.capitalization();
+        //let prev_bank_epoch = parent_bank.epoch();
+        let epoch_duration_in_years = self.epoch_duration_in_years(self.epoch());
 
-        (validator_rate * prev_bank_capitalization as f64 * epoch_duration_in_years) as u64
+        (validator_rate * self.capitalization() as f64 * epoch_duration_in_years) as u64
     }
 
     // update rewards based on the previous epoch
@@ -9271,7 +9270,7 @@ pub(crate) mod tests {
 
         // verify the inflation is represented in validator_points
         let paid_rewards = bank1.capitalization() - bank0.capitalization() - bank1_sysvar_delta();
-        let allocated_rewards = bank1.inflation_allocated_during_epoch() as f64;
+        let allocated_rewards = bank0.inflation_allocated_during_epoch() as f64;
 
         // verify the stake and vote accounts are the right size
         assert!(
