@@ -2606,7 +2606,7 @@ impl Bank {
         &self,
         capitalization : u64,
         epoch : Epoch
-    ) -> (u64, f64, f64, f64, u64) {
+    ) -> (u64, f64, f64, f64) {
         let slot_in_year = self.slot_in_year_for_inflation();
         let (validator_rate, foundation_rate) = {
             let inflation = self.inflation.read().unwrap();
@@ -9275,7 +9275,7 @@ pub(crate) mod tests {
         let paid_rewards = bank1.capitalization() - bank0.capitalization() - bank1_sysvar_delta();
         //let validator_rewards = bank1.inflation_allocated_during_epoch() as f64;
 
-        let (validator_rewards, _)
+        let (validator_rewards, _, _, _)
             = bank1.inflation_allocated_during_epoch(bank0.capitalization(), bank0.epoch());
 
         // verify the stake and vote accounts are the right size
