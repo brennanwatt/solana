@@ -2602,17 +2602,6 @@ impl Bank {
         num_slots as f64 / self.slots_per_year
     }
 
-    fn inflation_allocated_during_epoch(&self) -> u64 {
-        let slot_in_year = self.slot_in_year_for_inflation();
-        let validator_rate = self.inflation.read().unwrap().validator(slot_in_year);
-        let parent_bank = self.parent().unwrap();
-        let prev_bank_capitalization = parent_bank.capitalization();
-        let prev_bank_epoch = parent_bank.epoch();
-        let epoch_duration_in_years = self.epoch_duration_in_years(prev_bank_epoch);
-
-        (validator_rate * prev_bank_capitalization as f64 * epoch_duration_in_years) as u64
-    }
-
     // update rewards based on the previous epoch
     fn update_rewards_with_thread_pool(
         &mut self,
@@ -9181,6 +9170,17 @@ pub(crate) mod tests {
         check_bank_update_vote_stake_rewards(|bank: &Bank| {
             bank.load_vote_and_stake_accounts(&thread_pool, null_tracer())
         });
+    }
+
+    fn inflation_allocated_during_epoch(&self) -> u64 {
+        let slot_in_year = self.slot_in_year_for_inflation();
+        let validator_rate = self.inflation.read().unwrap().validator(slot_in_year);
+        let parent_bank = self.parent().unwrap();
+        let prev_bank_capitalization = parent_bank.capitalization();
+        let prev_bank_epoch = parent_bank.epoch();
+        let epoch_duration_in_years = self.epoch_duration_in_years(prev_bank_epoch);
+
+        (validator_rate * prev_bank_capitalization as f64 * epoch_duration_in_years) as u64
     }
 
     fn check_bank_update_vote_stake_rewards<F>(load_vote_and_stake_accounts: F)
