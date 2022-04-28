@@ -2641,7 +2641,7 @@ impl Bank {
             .feature_set
             .is_active(&feature_set::update_rewards_from_cached_accounts::id());
 
-        let val_point_val = self.pay_validator_rewards_with_thread_pool(
+        self.pay_validator_rewards_with_thread_pool(
             prev_epoch,
             validator_rewards,
             reward_calc_tracer,
@@ -9271,13 +9271,7 @@ pub(crate) mod tests {
 
         // verify the inflation is represented in validator_points
         let paid_rewards = bank1.capitalization() - bank0.capitalization() - bank1_sysvar_delta();
-
-        let slot_in_year = bank1.slot_in_year_for_inflation();
-        let epoch_duration_in_years = bank1.epoch_duration_in_years(bank0.epoch());
-        let validator_rate = bank1.inflation.read().unwrap().validator(slot_in_year);
-
-        let allocated_rewards =
-            (validator_rate * bank0.capitalization() as f64 * epoch_duration_in_years) as f64;
+        let allocated_rewards = bank1.inflation_allocated_during_epoch() as f64;
 
         // verify the stake and vote accounts are the right size
         assert!(
