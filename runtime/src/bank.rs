@@ -2611,7 +2611,7 @@ impl Bank {
         //let prev_bank_epoch = parent_bank.epoch();
 
         let epoch_duration_in_years = self.epoch_duration_in_years(self.epoch());
-        println!("{:?}",(validator_rate, self.capitalization(), epoch_duration_in_years));
+        println!("{:?}",(slot_in_year, validator_rate, self.capitalization(), epoch_duration_in_years));
 
         (validator_rate * self.capitalization() as f64 * epoch_duration_in_years) as u64
     }
