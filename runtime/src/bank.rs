@@ -1350,14 +1350,12 @@ pub struct NewBankOptions {
 }
 
 #[derive(Debug)]
-/*struct PrevEpochInflationRewards {
+struct PrevEpochInflationRewards {
     validator_rewards: u64,
     prev_epoch_duration_in_years: f64,
     validator_rate: f64,
     foundation_rate: f64,
-}*/
-
-struct PrevEpochInflationRewards(u64,f64,f64,f64);
+}
 
 impl Bank {
     pub fn default_for_tests() -> Self {
@@ -2627,13 +2625,15 @@ impl Bank {
         };
 
         let prev_epoch_duration_in_years = self.epoch_duration_in_years(prev_epoch);
+        let validator_rewards = 
+        (validator_rate * prev_epoch_capitalization as f64 * prev_epoch_duration_in_years) as u64;
 
-        PrevEpochInflationRewards (
-            (validator_rate * prev_epoch_capitalization as f64 * prev_epoch_duration_in_years) as u64,
+        PrevEpochInflationRewards {
+            validator_rewards,
             prev_epoch_duration_in_years,
             validator_rate,
             foundation_rate,
-        )
+        }
     }
 
     // update rewards based on the previous epoch
@@ -2645,7 +2645,7 @@ impl Bank {
         metrics: &mut RewardsMetrics,
     ) {
         let capitalization = self.capitalization();
-        let (validator_rewards, epoch_duration_in_years, validator_rate, foundation_rate) =
+        let PrevEpochInflationRewards{validator_rewards, prev_epoch_duration_in_years, validator_rate, foundation_rate} =
             self.calculate_previous_epoch_inflation_rewards(capitalization, prev_epoch);
 
         let old_vote_balance_and_staked = self.stakes_cache.stakes().vote_balance_and_staked();
@@ -2708,7 +2708,7 @@ impl Bank {
             ("epoch", prev_epoch, i64),
             ("validator_rate", validator_rate, f64),
             ("foundation_rate", foundation_rate, f64),
-            ("epoch_duration_in_years", epoch_duration_in_years, f64),
+            ("epoch_duration_in_years", prev_epoch_duration_in_years, f64),
             ("validator_rewards", validator_rewards_paid, i64),
             ("active_stake", active_stake, i64),
             ("pre_capitalization", capitalization, i64),
@@ -9284,7 +9284,9 @@ pub(crate) mod tests {
         let paid_rewards = bank1.capitalization() - bank0.capitalization() - bank1_sysvar_delta();
 
         // this assumes that no new builtins or precompiles were activated in bank1
-        let (validator_rewards, _, _, _) =
+        //let (validator_rewards, _, _, _) =
+        //    bank1.calculate_previous_epoch_inflation_rewards(bank0.capitalization(), bank0.epoch());
+        let PrevEpochInflationRewards{validator_rewards, prev_epoch_duration_in_years, validator_rate, foundation_rate} =
             bank1.calculate_previous_epoch_inflation_rewards(bank0.capitalization(), bank0.epoch());
 
         // verify the stake and vote accounts are the right size
