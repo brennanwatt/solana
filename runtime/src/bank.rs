@@ -1349,6 +1349,14 @@ pub struct NewBankOptions {
     pub vote_only_bank: bool,
 }
 
+#[derive(Debug)]
+struct PrevEpochInflationRewards {
+    validator_rewards: u64,
+    prev_epoch_duration_in_years: f64,
+    validator_rate: f64,
+    foundation_rate: f64,
+}
+
 impl Bank {
     pub fn default_for_tests() -> Self {
         Self::default_with_accounts(Accounts::default_for_tests())
@@ -2602,11 +2610,11 @@ impl Bank {
         num_slots as f64 / self.slots_per_year
     }
 
-    fn inflation_allocated_during_epoch(
+    fn calculate_previous_epoch_inflation_rewards(
         &self,
-        capitalization : u64,
-        epoch : Epoch
-    ) -> (u64, f64, f64, f64) {
+        prev_epoch_capitalization: u64,
+        prev_epoch: Epoch,
+    ) -> PrevEpochInflationRewards {
         let slot_in_year = self.slot_in_year_for_inflation();
         let (validator_rate, foundation_rate) = {
             let inflation = self.inflation.read().unwrap();
@@ -2616,14 +2624,16 @@ impl Bank {
             )
         };
 
-        let epoch_duration_in_years = self.epoch_duration_in_years(epoch);
+        let prev_epoch_duration_in_years = self.epoch_duration_in_years(epoch);
+        let validator_rewards =
+            (validator_rate * prev_epoch_capitalization as f64 * prev_epoch_duration_in_years) as u64;
 
-        (
-            (validator_rate * capitalization as f64 * epoch_duration_in_years) as u64,
-            epoch_duration_in_years,
+        PrevEpochInflationRewards {
+            validator_rewards,
+            prev_epoch_duration_in_years,
             validator_rate,
-            foundation_rate
-        )
+            foundation_rate,
+        }
     }
 
     // update rewards based on the previous epoch
@@ -2635,8 +2645,8 @@ impl Bank {
         metrics: &mut RewardsMetrics,
     ) {
         let capitalization = self.capitalization();
-        let (validator_rewards, epoch_duration_in_years, validator_rate, foundation_rate)
-            = self.inflation_allocated_during_epoch(capitalization, prev_epoch);
+        let (validator_rewards, epoch_duration_in_years, validator_rate, foundation_rate) =
+            self.calculate_previous_epoch_inflation_rewards(capitalization, prev_epoch);
 
         let old_vote_balance_and_staked = self.stakes_cache.stakes().vote_balance_and_staked();
         let update_rewards_from_cached_accounts = self
@@ -2655,7 +2665,6 @@ impl Bank {
 
         let new_vote_balance_and_staked = self.stakes_cache.stakes().vote_balance_and_staked();
         let validator_rewards_paid = new_vote_balance_and_staked - old_vote_balance_and_staked;
-
         assert_eq!(
             validator_rewards_paid,
             u64::try_from(
@@ -9260,7 +9269,7 @@ pub(crate) mod tests {
         );
         assert!(bank0.rewards.read().unwrap().is_empty());
 
-        load_vote_and_stake_accounts(&bank0).vote_with_stake_delegations_map;
+        load_vote_and_stake_accounts(&bank0);
 
         // put a child bank in epoch 1, which calls update_rewards()...
         let bank1 = Bank::new_from_parent(
@@ -9273,10 +9282,10 @@ pub(crate) mod tests {
 
         // verify the inflation is represented in validator_points
         let paid_rewards = bank1.capitalization() - bank0.capitalization() - bank1_sysvar_delta();
-        //let validator_rewards = bank1.inflation_allocated_during_epoch() as f64;
 
-        let (validator_rewards, _, _, _)
-            = bank1.inflation_allocated_during_epoch(bank0.capitalization(), bank0.epoch());
+        // this assumes that no new builtins or precompiles were activated in bank1
+        let (validator_rewards, _, _, _) =
+            bank1.calculate_previous_epoch_inflation_rewards(bank0.capitalization(), bank0.epoch());
 
         // verify the stake and vote accounts are the right size
         assert!(
@@ -13389,19 +13398,19 @@ pub(crate) mod tests {
             if bank.slot == 32 {
                 assert_eq!(
                     bank.hash().to_string(),
-                    "7qCbZN5WLT928VpsaLwLp6HfRDzZirmoU4JM4XBEyupu"
+                    "AxphC8xDj9gmFosor5gyiovNvPVMydJCFRUTxn2wFiQf"
                 );
             }
             if bank.slot == 64 {
                 assert_eq!(
                     bank.hash().to_string(),
-                    "D3ypfQFreDaQhJuuYN8rWG1TVy9ApvTCx5CAiQ5i9d7A"
+                    "4vZCSbBuL8xjE43rCy9Cm3dCh1BMj45heMiMb6n6qgzA"
                 );
             }
             if bank.slot == 128 {
                 assert_eq!(
                     bank.hash().to_string(),
-                    "67krqDMqjkkixdfypnCCgSyUm2FoqAE8KB1hgRAtCaBp"
+                    "46LUpeBdJuisnfwgYisvh4x7jnxzBaLfHF614GtcTs59"
                 );
                 break;
             }
