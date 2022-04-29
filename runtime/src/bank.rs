@@ -9283,10 +9283,7 @@ pub(crate) mod tests {
         // verify the inflation is represented in validator_points
         let paid_rewards = bank1.capitalization() - bank0.capitalization() - bank1_sysvar_delta();
 
-        // this assumes that no new builtins or precompiles were activated in bank1
-        //let (validator_rewards, _, _, _) =
-        //    bank1.calculate_previous_epoch_inflation_rewards(bank0.capitalization(), bank0.epoch());
-        let PrevEpochInflationRewards{validator_rewards, prev_epoch_duration_in_years, validator_rate, foundation_rate} =
+        let PrevEpochInflationRewards{validator_rewards, ..} =
             bank1.calculate_previous_epoch_inflation_rewards(bank0.capitalization(), bank0.epoch());
 
         // verify the stake and vote accounts are the right size
