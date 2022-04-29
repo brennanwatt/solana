@@ -1350,12 +1350,14 @@ pub struct NewBankOptions {
 }
 
 #[derive(Debug)]
-struct PrevEpochInflationRewards {
+/*struct PrevEpochInflationRewards {
     validator_rewards: u64,
     prev_epoch_duration_in_years: f64,
     validator_rate: f64,
     foundation_rate: f64,
-}
+}*/
+
+struct PrevEpochInflationRewards(u64,f64,f64,f64);
 
 impl Bank {
     pub fn default_for_tests() -> Self {
@@ -2624,16 +2626,14 @@ impl Bank {
             )
         };
 
-        let prev_epoch_duration_in_years = self.epoch_duration_in_years(epoch);
-        let validator_rewards =
-            (validator_rate * prev_epoch_capitalization as f64 * prev_epoch_duration_in_years) as u64;
+        let prev_epoch_duration_in_years = self.epoch_duration_in_years(prev_epoch);
 
-        PrevEpochInflationRewards {
-            validator_rewards,
+        PrevEpochInflationRewards (
+            (validator_rate * prev_epoch_capitalization as f64 * prev_epoch_duration_in_years) as u64,
             prev_epoch_duration_in_years,
             validator_rate,
             foundation_rate,
-        }
+        )
     }
 
     // update rewards based on the previous epoch
