@@ -995,6 +995,10 @@ impl ClusterInfo {
         let mut gossip_crds = self.gossip.crds.write().unwrap();
         if let Err(err) = gossip_crds.insert(vote, now, GossipRoute::LocalMessage) {
             error!("push_vote failed: {:?}", err);
+            self.stats.vote_push_fail_count.add_relaxed(1);
+        }
+        else {
+            self.stats.vote_push_count.add_relaxed(1);
         }
     }
 

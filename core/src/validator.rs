@@ -381,8 +381,8 @@ impl Validator {
         let id = identity_keypair.pubkey();
         assert_eq!(id, node.info.id);
 
-        warn!("identity: {}", id);
-        warn!("vote account: {}", vote_account);
+        println!("identity: {}", id);
+        println!("vote account: {}", vote_account);
 
         if !config.no_os_network_stats_reporting {
             verify_udp_stats_access().unwrap_or_else(|err| {

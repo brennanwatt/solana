@@ -273,14 +273,14 @@ impl SigVerifyStage {
         sendr.send(batches)?;
         verify_batch_time.stop();
 
-        println!(
+        /*println!(
             "@{:?} verifier: done. batches: {} total verify time: {:?} verified: {} v/s {}",
             timing::timestamp(),
             batches_len,
             verify_batch_time.as_ms(),
             num_packets,
             (num_packets as f32 / verify_batch_time.as_s())
-        );
+        );*/
 
         stats
             .recv_batches_us_hist

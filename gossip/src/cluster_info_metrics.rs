@@ -174,6 +174,8 @@ pub struct GossipStats {
     pub(crate) tvu_peers: Counter,
     pub(crate) verify_gossip_packets_time: Counter,
     pub(crate) window_request_loopback: Counter,
+    pub(crate) vote_push_count: Counter,
+    pub(crate) vote_push_fail_count: Counter,
 }
 
 pub(crate) fn submit_gossip_stats(
@@ -548,6 +550,19 @@ pub(crate) fn submit_gossip_stats(
         (
             "gossip_pong_msg_verify_fail",
             stats.gossip_pong_msg_verify_fail.clear(),
+            i64
+        ),
+    );
+    datapoint_info!(
+        "cluster_info_stats6",
+        (
+            "vote_push_count",
+            stats.vote_push_count.clear(),
+            i64
+        ),
+        (
+            "vote_push_fail_count",
+            stats.vote_push_fail_count.clear(),
             i64
         ),
     );
