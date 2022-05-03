@@ -566,6 +566,15 @@ impl ClusterInfoVoteListener {
         Ok(vec![])
     }
 
+    #[derive(Default)]
+    struct VoteStats
+    {
+        gossip_vote_new: Counter,
+        gossip_vote_old: Counter,
+        replay_vote_new: Counter,
+        replay_vote_old: Counter,
+    }
+
     #[allow(clippy::too_many_arguments)]
     fn track_new_votes_and_notify_confirmations(
         vote: VoteTransaction,
@@ -580,6 +589,7 @@ impl ClusterInfoVoteListener {
         is_gossip_vote: bool,
         bank_notification_sender: &Option<BankNotificationSender>,
         cluster_confirmed_slot_sender: &Option<GossipDuplicateConfirmedSlotsSender>,
+        vote_stats : &mut VoteStats,
     ) {
         if vote.is_empty() {
             return;
@@ -634,10 +644,10 @@ impl ClusterInfoVoteListener {
                             last_vote_slot,
                             last_vote_hash,
                         ));
-                        stats.gossip_vote_new.add_relaxed(1);
+                        vote_stats.gossip_vote_new.add_relaxed(1);
                     }
                     else {
-                        stats.gossip_vote_old.add_relaxed(1);
+                        vote_stats.gossip_vote_old.add_relaxed(1);
                     }
                 }
 
@@ -669,11 +679,11 @@ impl ClusterInfoVoteListener {
 
                         // Note gossip votes will always be processed because those should be unique
                         // and we need to update the gossip-only stake in the `VoteTracker`.
-                        stats.replay_vote_old.add_relaxed(1);
+                        vote_stats.replay_vote_old.add_relaxed(1);
                         return;
                     }
                     else {
-                        stats.replay_vote_new.add_relaxed(1);
+                        vote_stats.replay_vote_new.add_relaxed(1);
                     }
                 }
 
@@ -710,6 +720,7 @@ impl ClusterInfoVoteListener {
         let mut new_optimistic_confirmed_slots = vec![];
 
         // Process votes from gossip and ReplayStage
+        let vote_stats : VoteStats;
         let votes = gossip_vote_txs
             .iter()
             .filter_map(vote_parser::parse_vote_transaction)
@@ -729,8 +740,33 @@ impl ClusterInfoVoteListener {
                 is_gossip,
                 bank_notification_sender,
                 cluster_confirmed_slot_sender,
+                &mut vote_stats,
             );
         }
+
+        datapoint_info!(
+            "filter_and_confirm_with_new_votes",
+            (
+                "gossip_vote_new",
+                vote_stats.gossip_vote_new.clear(),
+                i64
+            ),
+            (
+                "gossip_vote_old",
+                vote_stats.gossip_vote_old.clear(),
+                i64
+            ),
+            (
+                "replay_vote_new",
+                vote_stats.replay_vote_new.clear(),
+                i64
+            ),
+            (
+                "replay_vote_old",
+                vote_stats.replay_vote_old.clear(),
+                i64
+            ),
+        );
 
         // Process all the slots accumulated from replay and gossip.
         for (slot, mut slot_diff) in diff {

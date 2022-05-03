@@ -556,29 +556,6 @@ pub(crate) fn submit_gossip_stats(
         ),
     );
     datapoint_info!(
-        "cluster_info_stats6",
-        (
-            "gossip_vote_new",
-            stats.gossip_vote_new.clear(),
-            i64
-        ),
-        (
-            "gossip_vote_old",
-            stats.gossip_vote_old.clear(),
-            i64
-        ),
-        (
-            "replay_vote_new",
-            stats.replay_vote_new.clear(),
-            i64
-        ),
-        (
-            "replay_vote_old",
-            stats.replay_vote_old.clear(),
-            i64
-        ),
-    );
-    datapoint_info!(
         "cluster_info_crds_stats",
         ("ContactInfo-push", crds_stats.push.counts[0], i64),
         ("ContactInfo-pull", crds_stats.pull.counts[0], i64),
