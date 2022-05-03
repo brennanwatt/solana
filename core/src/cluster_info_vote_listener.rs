@@ -181,6 +181,15 @@ impl BankSendVotesStats {
     }
 }
 
+#[derive(Default)]
+struct VoteStats
+{
+    gossip_vote_new: Counter,
+    gossip_vote_old: Counter,
+    replay_vote_new: Counter,
+    replay_vote_old: Counter,
+}
+
 pub struct ClusterInfoVoteListener {
     thread_hdls: Vec<JoinHandle<()>>,
 }
@@ -564,15 +573,6 @@ impl ClusterInfoVoteListener {
             remaining_wait_time = remaining_wait_time.saturating_sub(start.elapsed());
         }
         Ok(vec![])
-    }
-
-    #[derive(Default)]
-    struct VoteStats
-    {
-        gossip_vote_new: Counter,
-        gossip_vote_old: Counter,
-        replay_vote_new: Counter,
-        replay_vote_old: Counter,
     }
 
     #[allow(clippy::too_many_arguments)]

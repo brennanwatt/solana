@@ -174,10 +174,6 @@ pub struct GossipStats {
     pub(crate) tvu_peers: Counter,
     pub(crate) verify_gossip_packets_time: Counter,
     pub(crate) window_request_loopback: Counter,
-    pub(crate) gossip_vote_new: Counter,
-    pub(crate) gossip_vote_old: Counter,
-    pub(crate) replay_vote_new: Counter,
-    pub(crate) replay_vote_old: Counter,
 }
 
 pub(crate) fn submit_gossip_stats(
