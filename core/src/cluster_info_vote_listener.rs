@@ -184,10 +184,22 @@ impl BankSendVotesStats {
 #[derive(Default)]
 struct VoteStats
 {
-    gossip_vote_new: Counter,
-    gossip_vote_old: Counter,
-    replay_vote_new: Counter,
-    replay_vote_old: Counter,
+    gossip_vote_new: u64,
+    gossip_vote_old: u64,
+    replay_vote_new: u64,
+    replay_vote_old: u64,
+}
+
+impl VoteStats {
+    fn report_metrics(&self) {
+        datapoint_info!(
+            "filter_and_confirm_with_new_votes",
+            ("gossip_vote_new", self.gossip_vote_new, i64),
+            ("gossip_vote_old", self.gossip_vote_old, i64),
+            ("replay_vote_new", self.replay_vote_new, i64),
+            ("replay_vote_old", self.replay_vote_old, i64),
+        );
+    }
 }
 
 pub struct ClusterInfoVoteListener {
@@ -644,10 +656,10 @@ impl ClusterInfoVoteListener {
                             last_vote_slot,
                             last_vote_hash,
                         ));
-                        vote_stats.gossip_vote_new.add_relaxed(1);
+                        vote_stats.gossip_vote_new += 1;
                     }
                     else {
-                        vote_stats.gossip_vote_old.add_relaxed(1);
+                        vote_stats.gossip_vote_old += 1;
                     }
                 }
 
@@ -679,11 +691,11 @@ impl ClusterInfoVoteListener {
 
                         // Note gossip votes will always be processed because those should be unique
                         // and we need to update the gossip-only stake in the `VoteTracker`.
-                        vote_stats.replay_vote_old.add_relaxed(1);
+                        vote_stats.replay_vote_old += 1;
                         return;
                     }
                     else {
-                        vote_stats.replay_vote_new.add_relaxed(1);
+                        vote_stats.replay_vote_new += 1;
                     }
                 }
 
@@ -743,30 +755,7 @@ impl ClusterInfoVoteListener {
                 &mut vote_stats,
             );
         }
-
-        datapoint_info!(
-            "filter_and_confirm_with_new_votes",
-            (
-                "gossip_vote_new",
-                vote_stats.gossip_vote_new.clear(),
-                i64
-            ),
-            (
-                "gossip_vote_old",
-                vote_stats.gossip_vote_old.clear(),
-                i64
-            ),
-            (
-                "replay_vote_new",
-                vote_stats.replay_vote_new.clear(),
-                i64
-            ),
-            (
-                "replay_vote_old",
-                vote_stats.replay_vote_old.clear(),
-                i64
-            ),
-        );
+        vote_stats.report_metrics();
 
         // Process all the slots accumulated from replay and gossip.
         for (slot, mut slot_diff) in diff {
