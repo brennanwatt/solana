@@ -732,7 +732,7 @@ impl ClusterInfoVoteListener {
         let mut new_optimistic_confirmed_slots = vec![];
 
         // Process votes from gossip and ReplayStage
-        let vote_stats : VoteStats::default();
+        let vote_stats = VoteStats::default();
         let votes = gossip_vote_txs
             .iter()
             .filter_map(vote_parser::parse_vote_transaction)
