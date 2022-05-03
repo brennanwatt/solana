@@ -627,12 +627,18 @@ impl ClusterInfoVoteListener {
                     total_stake,
                 );
 
-                if is_gossip_vote && is_new && stake > 0 {
-                    let _ = gossip_verified_vote_hash_sender.send((
-                        *vote_pubkey,
-                        last_vote_slot,
-                        last_vote_hash,
-                    ));
+                if is_gossip_vote {
+                    if is_new && stake > 0 {
+                        let _ = gossip_verified_vote_hash_sender.send((
+                            *vote_pubkey,
+                            last_vote_slot,
+                            last_vote_hash,
+                        ));
+                        stats.gossip_vote_new.add_relaxed(1);
+                    }
+                    else {
+                        stats.gossip_vote_old.add_relaxed(1);
+                    }
                 }
 
                 if reached_threshold_results[0] {
@@ -652,17 +658,23 @@ impl ClusterInfoVoteListener {
                     }
                 }
 
-                if !is_new && !is_gossip_vote {
-                    // By now:
-                    // 1) The vote must have come from ReplayStage,
-                    // 2) We've seen this vote from replay for this hash before
-                    // (`track_optimistic_confirmation_vote()` will not set `is_new == true`
-                    // for same slot different hash), so short circuit because this vote
-                    // has no new information
+                if !is_gossip_vote {
+                    if !is_new {
+                        // By now:
+                        // 1) The vote must have come from ReplayStage,
+                        // 2) We've seen this vote from replay for this hash before
+                        // (`track_optimistic_confirmation_vote()` will not set `is_new == true`
+                        // for same slot different hash), so short circuit because this vote
+                        // has no new information
 
-                    // Note gossip votes will always be processed because those should be unique
-                    // and we need to update the gossip-only stake in the `VoteTracker`.
-                    return;
+                        // Note gossip votes will always be processed because those should be unique
+                        // and we need to update the gossip-only stake in the `VoteTracker`.
+                        stats.replay_vote_old.add_relaxed(1);
+                        return;
+                    }
+                    else {
+                        stats.replay_vote_new.add_relaxed(1);
+                    }
                 }
 
                 is_new_vote = is_new;
