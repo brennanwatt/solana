@@ -220,7 +220,7 @@ impl QuicClient {
     async fn make_connection(&self, stats: &ClientStats) -> Result<Arc<NewConnection>, WriteError> {
         let connecting = self.endpoint.connect(self.addr, "connect").unwrap();
         stats.total_connections.fetch_add(1, Ordering::Relaxed);
-        let into_0rtt_result = connecting.into_0rtt();
+        let into_0rtt_result = connecting.into_0rtt().await;
         let connection = into_0rtt_result?;
         Ok(Arc::new(connection))
     }
