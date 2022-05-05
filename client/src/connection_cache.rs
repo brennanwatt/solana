@@ -131,6 +131,27 @@ impl ConnectionCacheStats {
                 i64
             ),
             (
+                "connection_errors",
+                self.total_client_stats
+                    .connection_errors
+                    .swap(0, Ordering::Relaxed),
+                i64
+            ),
+            (
+                "zero_rtt_accepts",
+                self.total_client_stats
+                    .zero_rtt_accepts
+                    .swap(0, Ordering::Relaxed),
+                i64
+            ),
+            (
+                "zero_rtt_rejects",
+                self.total_client_stats
+                    .zero_rtt_rejects
+                    .swap(0, Ordering::Relaxed),
+                i64
+            ),
+            (
                 "congestion_events",
                 self.total_client_stats.congestion_events.load_and_reset(),
                 i64

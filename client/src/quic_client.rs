@@ -217,21 +217,23 @@ impl QuicClient {
         Ok(Arc::new(connection))
     }
 
-    /*async fn make_connection(&self, stats: &ClientStats) -> Result<Arc<NewConnection>, WriteError> {
+    async fn make_connection_zero_rtt(&self, stats: &ClientStats) -> Result<Arc<NewConnection>, WriteError> {
         let connecting = self.endpoint.connect(self.addr, "connect").unwrap().into_0rtt();
+        stats.total_connections.fetch_add(1, Ordering::Relaxed);
+        if connecting.is_err() {
+            stats.connection_errors.fetch_add(1, Ordering::Relaxed);
+            return self.make_connection(stats);
+        }
         let (connection, zero_rtt_result) = connecting.unwrap();
         let zero_rtt_result = zero_rtt_result.await;
-        if zero_rtt_result
-        {
-            println!("0RTT Accepted!")
+        if zero_rtt_result {
+            stats.zero_rtt_accepts.fetch_add(1, Ordering::Relaxed);
         }
-        else
-        {
-            println!("0RTT Rejected!")
+        else {
+            stats.zero_rtt_rejects.fetch_add(1, Ordering::Relaxed);
         }
-        stats.total_connections.fetch_add(1, Ordering::Relaxed);
         Ok(Arc::new(connection))
-    }*/
+    }
 
     // Attempts to send data, connecting/reconnecting as necessary
     // On success, returns the connection used to successfully send the data
@@ -250,7 +252,7 @@ impl QuicClient {
                     conn.clone()
                 }
                 None => {
-                    let connection = self.make_connection(stats).await?;
+                    let connection = self.make_connection_zero_rtt(stats).await?;
                     *conn_guard = Some(connection.clone());
                     connection
                 }
@@ -260,7 +262,7 @@ impl QuicClient {
             Ok(()) => Ok(connection),
             _ => {
                 let connection = {
-                    let connection = self.make_connection(stats).await?;
+                    let connection = self.make_connection_zero_rtt(stats).await?;
                     let mut conn_guard = self.connection.lock().await;
                     *conn_guard = Some(connection.clone());
                     connection
