@@ -12,7 +12,7 @@ use {
     lazy_static::lazy_static,
     log::*,
     quinn::{
-        ClientConfig, Endpoint, EndpointConfig, IdleTimeout, NewConnection, VarInt, WriteError,
+        ClientConfig, Endpoint, EndpointConfig, IdleTimeout, NewConnection, VarInt, WriteError, Connecting,
     },
     quinn_proto::ConnectionStats,
     solana_sdk::{
@@ -206,7 +206,7 @@ impl QuicClient {
         Ok(())
     }
 
-    async fn make_connection(&self, stats: &ClientStats) -> Result<Arc<NewConnection>, WriteError> {
+    async fn make_connection(&self, stats: &ClientStats) -> Result<Arc<NewConnection>, ZeroRttAccepted> {
         let connecting = self.endpoint.connect(self.addr, "connect").unwrap();
         stats.total_connections.fetch_add(1, Ordering::Relaxed);
         //let connecting_result = connecting.await;
@@ -217,7 +217,7 @@ impl QuicClient {
         }
         
         if into_0rtt_result.is_err() {
-            connecting_result?
+            println!("0RTT connection error!");
         }
 
         let connection = into_0rtt_result?;
