@@ -206,7 +206,7 @@ impl QuicClient {
         Ok(())
     }
 
-    async fn make_connection(&self, stats: &ClientStats) -> Result<Arc<NewConnection>, WriteError> {
+    async fn make_connection2(&self, stats: &ClientStats) -> Result<Arc<NewConnection>, WriteError> {
         let connecting = self.endpoint.connect(self.addr, "connect").unwrap();
         stats.total_connections.fetch_add(1, Ordering::Relaxed);
         let connecting_result = connecting.await;
