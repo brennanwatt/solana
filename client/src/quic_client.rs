@@ -222,17 +222,19 @@ impl QuicClient {
         stats.total_connections.fetch_add(1, Ordering::Relaxed);
         if connecting.is_err() {
             stats.connection_errors.fetch_add(1, Ordering::Relaxed);
-            return self.make_connection(stats);
-        }
-        let (connection, zero_rtt_result) = connecting.unwrap();
-        let zero_rtt_result = zero_rtt_result.await;
-        if zero_rtt_result {
-            stats.zero_rtt_accepts.fetch_add(1, Ordering::Relaxed);
+            self.make_connection(stats).await
         }
         else {
-            stats.zero_rtt_rejects.fetch_add(1, Ordering::Relaxed);
+            let (connection, zero_rtt_result) = connecting.unwrap();
+            let zero_rtt_result = zero_rtt_result.await;
+            if zero_rtt_result {
+                stats.zero_rtt_accepts.fetch_add(1, Ordering::Relaxed);
+            }
+            else {
+                stats.zero_rtt_rejects.fetch_add(1, Ordering::Relaxed);
+            }
+            Ok(Arc::new(connection))
         }
-        Ok(Arc::new(connection))
     }
 
     // Attempts to send data, connecting/reconnecting as necessary
