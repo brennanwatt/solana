@@ -244,7 +244,11 @@ impl QuicClient {
         data: &[u8],
         stats: &ClientStats,
     ) -> Result<Arc<NewConnection>, WriteError> {
-        let connection = {
+        
+        let connection = self.make_connection_zero_rtt(stats).await?;
+        *conn_guard = Some(connection.clone());
+        
+        /*let connection = {
             let mut conn_guard = self.connection.lock().await;
 
             let maybe_conn = (*conn_guard).clone();
@@ -259,7 +263,7 @@ impl QuicClient {
                     connection
                 }
             }
-        };
+        };*/
         match Self::_send_buffer_using_conn(data, &connection).await {
             Ok(()) => Ok(connection),
             _ => {
