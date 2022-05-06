@@ -238,18 +238,19 @@ impl QuicClient {
             },
             Err(error) => {
                 match error {
-                    /// The endpoint can no longer create new connections
+                    // The endpoint can no longer create new connections
                     EndpointStopping => stats.endpoint_stopping.fetch_add(1, Ordering::Relaxed),
-                    /// The number of active connections on the local endpoint is at the limit
+                    // The number of active connections on the local endpoint is at the limit
                     TooManyConnections => stats.too_many_conns.fetch_add(1, Ordering::Relaxed),
-                    /// The domain name supplied was malformed
+                    // The domain name supplied was malformed
                     InvalidDnsName(String) => stats.invalid_dns.fetch_add(1, Ordering::Relaxed),
-                    /// The remote [`SocketAddr`] supplied was malformed
+                    // The remote [`SocketAddr`] supplied was malformed
                     InvalidRemoteAddress(SocketAddr) => stats.invalid_remote_addr.fetch_add(1, Ordering::Relaxed),
-                    /// No default client configuration was set up
+                    // No default client configuration was set up
                     NoDefaultClientConfig => stats.no_def_client_config.fetch_add(1, Ordering::Relaxed),
-                    /// The cryptographic layer does not support the specified QUIC version
+                    // The cryptographic layer does not support the specified QUIC version
                     UnsupportedVersion => stats.unsupported_version.fetch_add(1, Ordering::Relaxed),
+                    _ => (),
                 }
                 return Err(ZeroRttRejected);
             },
@@ -268,7 +269,7 @@ impl QuicClient {
             Err(connecting) => {
                 stats.connection_errors.fetch_add(1, Ordering::Relaxed);
                 let connecting = connecting.await;
-                return connecting;
+                connecting
             }
         };
 
