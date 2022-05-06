@@ -29,7 +29,12 @@ use {
     tokio::runtime::Runtime,
 };
 
+use quinn::ConnectError::EndpointStopping;
+use quinn::ConnectError::TooManyConnections;
+use quinn::ConnectError::InvalidDnsName;
+use quinn::ConnectError::InvalidRemoteAddress;
 use quinn::ConnectError::NoDefaultClientConfig;
+use quinn::ConnectError::UnsupportedVersion;
 use quinn::WriteError::ZeroRttRejected;
 
 struct SkipServerVerification;
@@ -166,6 +171,7 @@ impl QuicClient {
             .with_safe_defaults()
             .with_custom_certificate_verifier(SkipServerVerification::new())
             .with_no_client_auth();
+        crypto.enable_early_data = true;
 
         let create_endpoint = QuicClient::create_endpoint(EndpointConfig::default(), client_socket);
 
@@ -227,11 +233,23 @@ impl QuicClient {
             .connect(self.addr, "connect");
 
         let connecting = match connecting_result {
-            Ok(connecting) => connecting,
+            Ok(connecting) => {
+                connecting
+            },
             Err(error) => {
-                stats.zero_rtt_rejects.fetch_add(1, Ordering::Relaxed);
-                if error == NoDefaultClientConfig {
-                    stats.zero_rtt_accepts.fetch_add(1, Ordering::Relaxed);
+                match error {
+                    /// The endpoint can no longer create new connections
+                    EndpointStopping => stats.endpoint_stopping.fetch_add(1, Ordering::Relaxed),
+                    /// The number of active connections on the local endpoint is at the limit
+                    TooManyConnections => stats.too_many_conns.fetch_add(1, Ordering::Relaxed),
+                    /// The domain name supplied was malformed
+                    InvalidDnsName(String) => stats.invalid_dns.fetch_add(1, Ordering::Relaxed),
+                    /// The remote [`SocketAddr`] supplied was malformed
+                    InvalidRemoteAddress(SocketAddr) => stats.invalid_remote_addr.fetch_add(1, Ordering::Relaxed),
+                    /// No default client configuration was set up
+                    NoDefaultClientConfig => stats.no_def_client_config.fetch_add(1, Ordering::Relaxed),
+                    /// The cryptographic layer does not support the specified QUIC version
+                    UnsupportedVersion => stats.unsupported_version.fetch_add(1, Ordering::Relaxed),
                 }
                 return Err(ZeroRttRejected);
             },
@@ -249,7 +267,8 @@ impl QuicClient {
             }
             Err(connecting) => {
                 stats.connection_errors.fetch_add(1, Ordering::Relaxed);
-                connecting.await?
+                let connecting = connecting.await;
+                return connecting;
             }
         };
 

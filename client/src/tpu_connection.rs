@@ -15,6 +15,12 @@ pub struct ClientStats {
     pub connection_errors: AtomicU64,
     pub zero_rtt_accepts: AtomicU64,
     pub zero_rtt_rejects: AtomicU64,
+    pub endpoint_stopping: AtomicU64,
+    pub too_many_conns: AtomicU64,
+    pub invalid_dns: AtomicU64,
+    pub invalid_remote_addr: AtomicU64,
+    pub no_def_client_config: AtomicU64,
+    pub unsupported_version: AtomicU64,
 
     // these will be the last values of these stats
     pub congestion_events: MovingStat,
