@@ -5,7 +5,6 @@ use {
     crate::{
         client_error::ClientErrorKind,
         tpu_connection::{ClientStats, TpuConnection},
-        rustls_native_certs::*,
     },
     async_mutex::Mutex,
     futures::future::join_all,
@@ -30,13 +29,8 @@ use {
     tokio::runtime::Runtime,
 };
 
-use quinn::ConnectError::EndpointStopping;
-use quinn::ConnectError::TooManyConnections;
-use quinn::ConnectError::InvalidDnsName;
-use quinn::ConnectError::InvalidRemoteAddress;
-use quinn::ConnectError::NoDefaultClientConfig;
-use quinn::ConnectError::UnsupportedVersion;
 use quinn::WriteError::ZeroRttRejected;
+use rustls_native_certs;
 
 struct SkipServerVerification;
 
