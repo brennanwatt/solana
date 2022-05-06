@@ -30,6 +30,10 @@ use {
     tokio::runtime::Runtime,
 };
 
+use quinn::crypto::rustls::TlsSession;
+use quinn::generic::{SendStream, RecvStream, Connection};
+use quinn::{Endpoint, NewConnection, Incoming, IncomingBiStreams};
+
 struct SkipServerVerification;
 
 impl SkipServerVerification {
@@ -219,7 +223,11 @@ impl QuicClient {
 
     async fn make_connection_zero_rtt(&self, stats: &ClientStats) -> Result<Arc<NewConnection>, WriteError> {
         stats.total_connections.fetch_add(1, Ordering::Relaxed);
-        let connecting = self.endpoint.connect(self.addr, "connect").map_err(|e| Error::new(ErrorKind::ConnectionRefused, e))?;
+        let connecting = self
+            .endpoint
+            .connect(self.addr, "connect")
+            .map_err(|e| Error::new(ErrorKind::ConnectionRefused, e))?;
+
         let new_conn = match connecting.into_0rtt() {
             Ok((new_conn, zero_rtt)) => {
                 if zero_rtt.await {
