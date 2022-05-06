@@ -167,17 +167,26 @@ impl QuicClient {
     pub fn new(client_socket: UdpSocket, addr: SocketAddr) -> Self {
         let _guard = RUNTIME.enter();
 
-        let mut crypto = rustls::ClientConfig::builder()
+        /*let mut crypto = rustls::ClientConfig::builder()
             .with_safe_defaults()
             .with_custom_certificate_verifier(SkipServerVerification::new())
             .with_no_client_auth();
-        crypto.enable_early_data = true;
+        crypto.enable_early_data = true;*/
+
+        let cert = rcgen::generate_simple_self_signed(vec!["localhost".into()]).unwrap();
+        let key = rustls::PrivateKey(cert.serialize_private_key_der());
+        let cert = rustls::Certificate(cert.serialize_der().unwrap());
+        let server_config = crate::ServerConfig::with_single_cert(vec![cert.clone()], key).unwrap();
+
+        let mut roots = rustls::RootCertStore::empty();
+        roots.add(&cert).unwrap();
+        let client_config = ClientConfig::with_root_certificates(roots);
 
         let create_endpoint = QuicClient::create_endpoint(EndpointConfig::default(), client_socket);
 
         let mut endpoint = RUNTIME.block_on(create_endpoint);
 
-        let mut config = ClientConfig::new(Arc::new(crypto));
+        let mut config = ClientConfig::new(Arc::new(client_config));
         let transport_config = Arc::get_mut(&mut config.transport).unwrap();
         let timeout = IdleTimeout::from(VarInt::from_u32(QUIC_MAX_TIMEOUT_MS));
         transport_config.max_idle_timeout(Some(timeout));
