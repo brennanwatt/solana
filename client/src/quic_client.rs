@@ -25,7 +25,7 @@ use {
         net::{SocketAddr, UdpSocket},
         sync::{atomic::Ordering, Arc},
         time::Duration,
-        io::{Result, Error, ErrorKind},
+        io::{Error, ErrorKind},
     },
     tokio::runtime::Runtime,
 };
