@@ -5,6 +5,7 @@ use {
     crate::{
         client_error::ClientErrorKind,
         tpu_connection::{ClientStats, TpuConnection},
+        rustls_native_certs::*,
     },
     async_mutex::Mutex,
     futures::future::join_all,
@@ -174,17 +175,10 @@ impl QuicClient {
         crypto.enable_early_data = true;*/
 
         let mut roots = rustls::RootCertStore::empty();
-        match rustls_native_certs::load_native_certs() {
-            Ok(certs) => {
-                for cert in certs {
-                    if let Err(e) = roots.add(&rustls::Certificate(cert.0)) {
-                        tracing::warn!("failed to parse trust anchor: {}", e);
-                    }
-                }
-            }
-            Err(e) => {
-                tracing::warn!("couldn't load any default trust roots: {}", e);
-            }
+        for cert in rustls_native_certs::load_native_certs().expect("could not load platform certs") {
+            roots
+                .add(&rustls::Certificate(cert.0))
+                .unwrap();
         }
 
         let client_config = ClientConfig::with_root_certificates(roots);
