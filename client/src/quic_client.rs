@@ -269,7 +269,7 @@ impl QuicClient {
             Err(connecting) => {
                 stats.connection_errors.fetch_add(1, Ordering::Relaxed);
                 let connecting = connecting.await;
-                connecting
+                connecting?
             }
         };
 
