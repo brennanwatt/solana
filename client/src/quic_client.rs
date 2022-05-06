@@ -237,7 +237,7 @@ impl QuicClient {
                 connecting
             },
             Err(error) => {
-                match error {
+                /*match error {
                     // The endpoint can no longer create new connections
                     EndpointStopping => stats.endpoint_stopping.fetch_add(1, Ordering::Relaxed),
                     // The number of active connections on the local endpoint is at the limit
@@ -251,7 +251,7 @@ impl QuicClient {
                     // The cryptographic layer does not support the specified QUIC version
                     UnsupportedVersion => stats.unsupported_version.fetch_add(1, Ordering::Relaxed),
                     _ => (),
-                }
+                }*/
                 return Err(ZeroRttRejected);
             },
         };
