@@ -246,7 +246,6 @@ impl QuicClient {
     ) -> Result<Arc<NewConnection>, WriteError> {
         
         let connection = self.make_connection_zero_rtt(stats).await?;
-        *conn_guard = Some(connection.clone());
         
         /*let connection = {
             let mut conn_guard = self.connection.lock().await;
