@@ -25,6 +25,7 @@ use {
         net::{SocketAddr, UdpSocket},
         sync::{atomic::Ordering, Arc},
         time::Duration,
+        io::{Result, Error, ErrorKind},
     },
     tokio::runtime::Runtime,
 };
@@ -218,11 +219,10 @@ impl QuicClient {
 
     async fn make_connection_zero_rtt(&self, stats: &ClientStats) -> Result<Arc<NewConnection>, WriteError> {
         stats.total_connections.fetch_add(1, Ordering::Relaxed);
-        let connecting = self.endpoint.connect(self.addr, "connect")?;
+        let connecting = self.endpoint.connect(self.addr, "connect");.map_err(|e| Error::new(ErrorKind::ConnectionRefused, e))?;
         let new_conn = match connecting.into_0rtt() {
             Ok((new_conn, zero_rtt)) => {
-                zero_rtt.await;
-                if zero_rtt {
+                if zero_rtt.await {
                     stats.zero_rtt_accepts.fetch_add(1, Ordering::Relaxed);
                 }
                 else {
