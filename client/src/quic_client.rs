@@ -233,7 +233,7 @@ impl QuicClient {
                 if error == NoDefaultClientConfig {
                     stats.zero_rtt_accepts.fetch_add(1, Ordering::Relaxed);
                 }
-                return ZeroRttRejected;
+                return Err(ZeroRttRejected);
             },
         };
 
