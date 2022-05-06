@@ -174,16 +174,18 @@ impl QuicClient {
                 .add(&rustls::Certificate(cert.0))
                 .unwrap();
         }
-        let mut config = ClientConfig::with_root_certificates(roots);
+        let mut client_config = ClientConfig::with_root_certificates(roots);
 
         let create_endpoint = QuicClient::create_endpoint(EndpointConfig::default(), client_socket);
+
         let mut endpoint = RUNTIME.block_on(create_endpoint);
 
+        let transport_config = Arc::get_mut(&mut client_config.transport).unwrap();
         let timeout = IdleTimeout::from(VarInt::from_u32(QUIC_MAX_TIMEOUT_MS));
-        config.transport.max_idle_timeout(Some(timeout));
-        config.transport.keep_alive_interval(Some(Duration::from_millis(QUIC_KEEP_ALIVE_MS)));
+        transport_config.max_idle_timeout(Some(timeout));
+        transport_config.keep_alive_interval(Some(Duration::from_millis(QUIC_KEEP_ALIVE_MS)));
 
-        endpoint.set_default_client_config(config);
+        endpoint.set_default_client_config(client_config);
 
         Self {
             endpoint,
