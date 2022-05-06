@@ -173,13 +173,20 @@ impl QuicClient {
             .with_no_client_auth();
         crypto.enable_early_data = true;*/
 
-        let cert = rcgen::generate_simple_self_signed(vec!["localhost".into()]).unwrap();
-        let key = rustls::PrivateKey(cert.serialize_private_key_der());
-        let cert = rustls::Certificate(cert.serialize_der().unwrap());
-        let server_config = crate::ServerConfig::with_single_cert(vec![cert.clone()], key).unwrap();
-
         let mut roots = rustls::RootCertStore::empty();
-        roots.add(&cert).unwrap();
+        match rustls_native_certs::load_native_certs() {
+            Ok(certs) => {
+                for cert in certs {
+                    if let Err(e) = roots.add(&rustls::Certificate(cert.0)) {
+                        tracing::warn!("failed to parse trust anchor: {}", e);
+                    }
+                }
+            }
+            Err(e) => {
+                tracing::warn!("couldn't load any default trust roots: {}", e);
+            }
+        }
+
         let client_config = ClientConfig::with_root_certificates(roots);
 
         let create_endpoint = QuicClient::create_endpoint(EndpointConfig::default(), client_socket);
