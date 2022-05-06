@@ -217,16 +217,25 @@ impl QuicClient {
     }
 
     async fn make_connection_zero_rtt(&self, stats: &ClientStats) -> Result<Arc<NewConnection>, WriteError> {
-        let connecting = self.endpoint.connect(self.addr, "connect").unwrap().into_0rtt();
         stats.total_connections.fetch_add(1, Ordering::Relaxed);
-        let (connection, zero_rtt_result) = connecting.unwrap();
-        if zero_rtt_result.await {
-            stats.zero_rtt_accepts.fetch_add(1, Ordering::Relaxed);
-        }
-        else {
-            stats.zero_rtt_rejects.fetch_add(1, Ordering::Relaxed);
-        }
-        Ok(Arc::new(connection))
+        let connecting = self.endpoint.connect(self.addr, "connect").map_err(|e| Error::new(ErrorKind::ConnectionRefused, e))?;
+        let new_conn = match connecting.into_0rtt() {
+            Ok((new_conn, zero_rtt)) => {
+                zero_rtt.await;
+                if zero_rtt {
+                    stats.zero_rtt_accepts.fetch_add(1, Ordering::Relaxed);
+                }
+                else {
+                    stats.zero_rtt_rejects.fetch_add(1, Ordering::Relaxed);
+                }
+                new_conn
+            }
+            Err(connecting) => {
+                stats.connection_errors.fetch_add(1, Ordering::Relaxed);
+                connecting.await?
+            }
+        };
+        Ok(Arc::new(new_conn))
     }
 
     // Attempts to send data, connecting/reconnecting as necessary
