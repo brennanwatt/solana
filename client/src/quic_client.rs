@@ -219,10 +219,24 @@ impl QuicClient {
 
     async fn make_connection_zero_rtt(&self, stats: &ClientStats) -> Result<Arc<NewConnection>, WriteError> {
         stats.total_connections.fetch_add(1, Ordering::Relaxed);
-        let connecting = self
+
+        let connecting_result = self
             .endpoint
-            .connect(self.addr, "connect")
-            .unwrap();
+            .connect(self.addr, "connect");
+
+        let connecting = match connecting_result {
+            Ok(connecting) => connecting,
+            Err(error) => {
+                stats.zero_rtt_rejects.fetch_add(1, Ordering::Relaxed);
+                if error == NoDefaultClientConfig {
+                    stats.zero_rtt_accepts.fetch_add(1, Ordering::Relaxed);
+                }
+            },
+        };
+
+        if None(connecting) {
+            return ZeroRttRejected;
+        }
 
         let new_conn = match connecting.into_0rtt() {
             Ok((new_conn, zero_rtt)) => {
@@ -239,6 +253,7 @@ impl QuicClient {
                 connecting.await?
             }
         };
+
         Ok(Arc::new(new_conn))
     }
 
@@ -272,7 +287,7 @@ impl QuicClient {
             Ok(()) => Ok(connection),
             _ => {
                 let connection = {
-                    let connection = self.make_connection_zero_rtt(stats).await?;
+                    let connection = self.make_connection(stats).await?;
                     let mut conn_guard = self.connection.lock().await;
                     *conn_guard = Some(connection.clone());
                     connection
