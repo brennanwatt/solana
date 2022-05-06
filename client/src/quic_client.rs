@@ -25,10 +25,12 @@ use {
         net::{SocketAddr, UdpSocket},
         sync::{atomic::Ordering, Arc},
         time::Duration,
-        io::{Error, ErrorKind},
     },
     tokio::runtime::Runtime,
 };
+
+use quinn::ConnectError::NoDefaultClientConfig;
+use quinn::WriteError::ZeroRttRejected;
 
 struct SkipServerVerification;
 
@@ -231,12 +233,9 @@ impl QuicClient {
                 if error == NoDefaultClientConfig {
                     stats.zero_rtt_accepts.fetch_add(1, Ordering::Relaxed);
                 }
+                return ZeroRttRejected;
             },
         };
-
-        if None(connecting) {
-            return ZeroRttRejected;
-        }
 
         let new_conn = match connecting.into_0rtt() {
             Ok((new_conn, zero_rtt)) => {
