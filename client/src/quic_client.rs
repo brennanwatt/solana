@@ -208,11 +208,11 @@ impl QuicClient {
         Ok(())
     }
 
-    async fn make_connection(&self, stats: &ClientStats) -> Result<Arc<NewConnection>, WriteError> {
+    async fn make_connection(&self, stats: &mut ClientStats) -> Result<Arc<NewConnection>, WriteError> {
         let mut make_connection_time = Measure::start("make_connection");
         let connecting = self.endpoint.connect(self.addr, "connect").unwrap();
         stats.total_connections.fetch_add(1, Ordering::Relaxed);
-        let (connection, &mut latency_stats) = match connecting.into_0rtt() {
+        let (connection, latency_stats) = match connecting.into_0rtt() {
             Ok((connection, zero_rtt)) => {
                 // zero_rtt completes when connection is fully established
                 if zero_rtt.await {
