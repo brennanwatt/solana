@@ -79,9 +79,18 @@ impl ConnectionCacheStats {
             client_stats.zero_rtt_rejects.load(Ordering::Relaxed),
             Ordering::Relaxed,
         );
-        self.total_client_stats.connection_0rtt_time_us += client_stats.connection_0rtt_time_us;
-        self.total_client_stats.connection_no_0rtt_time_us += client_stats.connection_no_0rtt_time_us;
-        self.total_client_stats.connection_new_time_us += client_stats.connection_new_time_us;
+        self.total_client_stats.connection_0rtt_time_us.fetch_add(
+            client_stats.connection_0rtt_time_us.load(Ordering::Relaxed),
+            Ordering::Relaxed,
+        );
+        self.total_client_stats.connection_no_0rtt_time_us.fetch_add(
+            client_stats.connection_no_0rtt_time_us.load(Ordering::Relaxed),
+            Ordering::Relaxed,
+        );
+        self.total_client_stats.connection_new_time_us.fetch_add(
+            client_stats.connection_new_time_us.load(Ordering::Relaxed),
+            Ordering::Relaxed,
+        );
         self.sent_packets
             .fetch_add(num_packets as u64, Ordering::Relaxed);
         self.total_batches.fetch_add(1, Ordering::Relaxed);
@@ -180,19 +189,19 @@ impl ConnectionCacheStats {
             (
                 "connection_0rtt_time_us",
                 self.total_client_stats
-                    .connection_0rtt_time_us,
+                    .connection_0rtt_time_us.swap(0, Ordering::Relaxed),
                 i64
             ),
             (
                 "connection_no_0rtt_time_us",
                 self.total_client_stats
-                    .connection_no_0rtt_time_us,
+                    .connection_no_0rtt_time_us.swap(0, Ordering::Relaxed),
                 i64
             ),
             (
                 "connection_new_time_us",
                 self.total_client_stats
-                    .connection_new_time_us,
+                    .connection_new_time_us.swap(0, Ordering::Relaxed),
                 i64
             ),
             (
