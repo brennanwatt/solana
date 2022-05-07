@@ -217,17 +217,17 @@ impl QuicClient {
                 // zero_rtt completes when connection is fully established
                 if zero_rtt.await {
                     stats.zero_rtt_accepts.fetch_add(1, Ordering::Relaxed);
-                    (connection, &stats.connection_0rtt_time_us)
+                    (connection, &mut stats.connection_0rtt_time_us)
                 } else {
                     stats.zero_rtt_rejects.fetch_add(1, Ordering::Relaxed);
-                    (connection, &stats.connection_no_0rtt_time_us)
+                    (connection, &mut stats.connection_no_0rtt_time_us)
                 }
             }
             Err(connecting) => {
                 // crypto session ticket cached from previous connection to the same server is unavailable or does not include a 0-RTT key
                 stats.connection_errors.fetch_add(1, Ordering::Relaxed);
                 let connecting = connecting.await;
-                (connecting?, &stats.connection_new_time_us)
+                (connecting?, &mut stats.connection_new_time_us)
             }
         };
 
