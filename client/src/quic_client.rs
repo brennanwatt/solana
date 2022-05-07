@@ -165,14 +165,23 @@ impl QuicClient {
             .with_custom_certificate_verifier(SkipServerVerification::new())
             .with_no_client_auth();
         crypto.enable_early_data = true;*/
+
+        let mut crypto = rustls::ClientConfig::builder()
+            .with_safe_default_cipher_suites()
+            .with_safe_default_kx_groups()
+            .with_protocol_versions(&[&rustls::version::TLS13])
+            .unwrap()
+            .with_custom_certificate_verifier(SkipServerVerification::new())
+            .with_no_client_auth();
+        crypto.enable_early_data = true;
         
 
         let create_endpoint = QuicClient::create_endpoint(EndpointConfig::default(), client_socket);
 
         let mut endpoint = RUNTIME.block_on(create_endpoint);
 
-        //let mut config = ClientConfig::new(Arc::new(crypto));
-        let mut config = ClientConfig::with_native_roots();
+        let mut config = ClientConfig::new(Arc::new(crypto));
+        //let mut config = ClientConfig::with_native_roots();
         let transport_config = Arc::get_mut(&mut config.transport).unwrap();
         let timeout = IdleTimeout::from(VarInt::from_u32(QUIC_MAX_TIMEOUT_MS));
         transport_config.max_idle_timeout(Some(timeout));
