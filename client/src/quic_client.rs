@@ -27,6 +27,7 @@ use {
         time::Duration,
     },
     tokio::runtime::Runtime,
+    solana_measure::measure::Measure,
 };
 
 struct SkipServerVerification;
