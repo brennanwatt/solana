@@ -12,9 +12,13 @@ use {
 pub struct ClientStats {
     pub total_connections: AtomicU64,
     pub connection_reuse: AtomicU64,
+    pub did_not_get_guard: AtomicU64,
     pub connection_errors: AtomicU64,
     pub zero_rtt_accepts: AtomicU64,
     pub zero_rtt_rejects: AtomicU64,
+    pub connection_0rtt_time_us: u64,
+    pub connection_no_0rtt_time_us: u64,
+    pub connection_new_time_us: u64,
     pub endpoint_stopping: AtomicU64,
     pub too_many_conns: AtomicU64,
     pub invalid_dns: AtomicU64,
