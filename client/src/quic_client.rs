@@ -29,9 +29,6 @@ use {
     tokio::runtime::Runtime,
 };
 
-use quinn::WriteError::ZeroRttRejected;
-use rustls_native_certs;
-
 struct SkipServerVerification;
 
 impl SkipServerVerification {
@@ -162,30 +159,23 @@ impl QuicClient {
     pub fn new(client_socket: UdpSocket, addr: SocketAddr) -> Self {
         let _guard = RUNTIME.enter();
 
-        /*let mut crypto = rustls::ClientConfig::builder()
+        let mut crypto = rustls::ClientConfig::builder()
             .with_safe_defaults()
             .with_custom_certificate_verifier(SkipServerVerification::new())
             .with_no_client_auth();
-        crypto.enable_early_data = true;*/
-
-        let mut roots = rustls::RootCertStore::empty();
-        for cert in rustls_native_certs::load_native_certs().expect("could not load platform certs") {
-            roots
-                .add(&rustls::Certificate(cert.0))
-                .unwrap();
-        }
-        let mut client_config = ClientConfig::with_root_certificates(roots);
+        crypto.enable_early_data = true;
 
         let create_endpoint = QuicClient::create_endpoint(EndpointConfig::default(), client_socket);
 
         let mut endpoint = RUNTIME.block_on(create_endpoint);
 
-        let transport_config = Arc::get_mut(&mut client_config.transport).unwrap();
+        let mut config = ClientConfig::new(Arc::new(crypto));
+        let transport_config = Arc::get_mut(&mut config.transport).unwrap();
         let timeout = IdleTimeout::from(VarInt::from_u32(QUIC_MAX_TIMEOUT_MS));
         transport_config.max_idle_timeout(Some(timeout));
         transport_config.keep_alive_interval(Some(Duration::from_millis(QUIC_KEEP_ALIVE_MS)));
 
-        endpoint.set_default_client_config(client_config);
+        endpoint.set_default_client_config(config);
 
         Self {
             endpoint,
@@ -219,54 +209,15 @@ impl QuicClient {
 
     async fn make_connection(&self, stats: &ClientStats) -> Result<Arc<NewConnection>, WriteError> {
         let connecting = self.endpoint.connect(self.addr, "connect").unwrap();
-        let connecting_result = connecting.await;
-        if connecting_result.is_err() {
-            stats.connection_errors.fetch_add(1, Ordering::Relaxed);
-        }
-        let connection = connecting_result?;
-        Ok(Arc::new(connection))
-    }
-
-    async fn make_connection_zero_rtt(&self, stats: &ClientStats) -> Result<Arc<NewConnection>, WriteError> {
         stats.total_connections.fetch_add(1, Ordering::Relaxed);
-
-        let connecting_result = self
-            .endpoint
-            .connect(self.addr, "connect");
-
-        let connecting = match connecting_result {
-            Ok(connecting) => {
-                connecting
-            },
-            Err(error) => {
-                /*match error {
-                    // The endpoint can no longer create new connections
-                    EndpointStopping => stats.endpoint_stopping.fetch_add(1, Ordering::Relaxed),
-                    // The number of active connections on the local endpoint is at the limit
-                    TooManyConnections => stats.too_many_conns.fetch_add(1, Ordering::Relaxed),
-                    // The domain name supplied was malformed
-                    InvalidDnsName(String) => stats.invalid_dns.fetch_add(1, Ordering::Relaxed),
-                    // The remote [`SocketAddr`] supplied was malformed
-                    InvalidRemoteAddress(SocketAddr) => stats.invalid_remote_addr.fetch_add(1, Ordering::Relaxed),
-                    // No default client configuration was set up
-                    NoDefaultClientConfig => stats.no_def_client_config.fetch_add(1, Ordering::Relaxed),
-                    // The cryptographic layer does not support the specified QUIC version
-                    UnsupportedVersion => stats.unsupported_version.fetch_add(1, Ordering::Relaxed),
-                    _ => (),
-                }*/
-                return Err(ZeroRttRejected);
-            },
-        };
-
-        let new_conn = match connecting.into_0rtt() {
-            Ok((new_conn, zero_rtt)) => {
+        let connection = match connecting.into_0rtt() {
+            Ok((connection, zero_rtt)) => {
                 if zero_rtt.await {
                     stats.zero_rtt_accepts.fetch_add(1, Ordering::Relaxed);
-                }
-                else {
+                } else {
                     stats.zero_rtt_rejects.fetch_add(1, Ordering::Relaxed);
                 }
-                new_conn
+                connection
             }
             Err(connecting) => {
                 stats.connection_errors.fetch_add(1, Ordering::Relaxed);
@@ -275,7 +226,7 @@ impl QuicClient {
             }
         };
 
-        Ok(Arc::new(new_conn))
+        Ok(Arc::new(connection))
     }
 
     // Attempts to send data, connecting/reconnecting as necessary
@@ -285,10 +236,7 @@ impl QuicClient {
         data: &[u8],
         stats: &ClientStats,
     ) -> Result<Arc<NewConnection>, WriteError> {
-        
-        let connection = self.make_connection_zero_rtt(stats).await?;
-        
-        /*let connection = {
+        let connection = {
             let mut conn_guard = self.connection.lock().await;
 
             let maybe_conn = (*conn_guard).clone();
@@ -298,12 +246,12 @@ impl QuicClient {
                     conn.clone()
                 }
                 None => {
-                    let connection = self.make_connection_zero_rtt(stats).await?;
+                    let connection = self.make_connection(stats).await?;
                     *conn_guard = Some(connection.clone());
                     connection
                 }
             }
-        };*/
+        };
         match Self::_send_buffer_using_conn(data, &connection).await {
             Ok(()) => Ok(connection),
             _ => {
