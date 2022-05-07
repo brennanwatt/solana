@@ -208,7 +208,7 @@ impl QuicClient {
         Ok(())
     }
 
-    async fn make_connection(&self, stats: &mut ClientStats) -> Result<Arc<NewConnection>, WriteError> {
+    async fn make_connection(&self, stats: &ClientStats) -> Result<Arc<NewConnection>, WriteError> {
         let mut make_connection_time = Measure::start("make_connection");
         let connecting = self.endpoint.connect(self.addr, "connect").unwrap();
         stats.total_connections.fetch_add(1, Ordering::Relaxed);
@@ -217,22 +217,22 @@ impl QuicClient {
                 // zero_rtt completes when connection is fully established
                 if zero_rtt.await {
                     stats.zero_rtt_accepts.fetch_add(1, Ordering::Relaxed);
-                    (connection, &mut stats.connection_0rtt_time_us)
+                    (connection, &stats.connection_0rtt_time_us)
                 } else {
                     stats.zero_rtt_rejects.fetch_add(1, Ordering::Relaxed);
-                    (connection, &mut stats.connection_no_0rtt_time_us)
+                    (connection, &stats.connection_no_0rtt_time_us)
                 }
             }
             Err(connecting) => {
                 // crypto session ticket cached from previous connection to the same server is unavailable or does not include a 0-RTT key
                 stats.connection_errors.fetch_add(1, Ordering::Relaxed);
                 let connecting = connecting.await;
-                (connecting?, &mut stats.connection_new_time_us)
+                (connecting?, &stats.connection_new_time_us)
             }
         };
 
         make_connection_time.stop();
-        latency_stats += make_connection_time.as_us();
+        latency_stats.fetch_add(make_connection_time.as_us(), Ordering::Relaxed);
 
         Ok(Arc::new(connection))
     }
