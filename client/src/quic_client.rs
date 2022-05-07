@@ -160,17 +160,19 @@ impl QuicClient {
     pub fn new(client_socket: UdpSocket, addr: SocketAddr) -> Self {
         let _guard = RUNTIME.enter();
 
-        let mut crypto = rustls::ClientConfig::builder()
+        /*let mut crypto = rustls::ClientConfig::builder()
             .with_safe_defaults()
             .with_custom_certificate_verifier(SkipServerVerification::new())
             .with_no_client_auth();
-        crypto.enable_early_data = true;
+        crypto.enable_early_data = true;*/
+        
 
         let create_endpoint = QuicClient::create_endpoint(EndpointConfig::default(), client_socket);
 
         let mut endpoint = RUNTIME.block_on(create_endpoint);
 
-        let mut config = ClientConfig::new(Arc::new(crypto));
+        //let mut config = ClientConfig::new(Arc::new(crypto));
+        let mut config = ClientConfig::with_native_roots();
         let transport_config = Arc::get_mut(&mut config.transport).unwrap();
         let timeout = IdleTimeout::from(VarInt::from_u32(QUIC_MAX_TIMEOUT_MS));
         transport_config.max_idle_timeout(Some(timeout));
