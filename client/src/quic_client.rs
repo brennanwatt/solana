@@ -255,6 +255,8 @@ impl QuicClient {
         data: &[u8],
         stats: &ClientStats,
     ) -> Result<Arc<NewConnection>, WriteError> {
+        let mut measure = Measure::start("conn_start");
+        
         let connection = {
             let mut conn_guard = self.connection.lock().await;
 
@@ -262,12 +264,26 @@ impl QuicClient {
             match maybe_conn {
                 Some(conn) => {
                     stats.connection_reuse.fetch_add(1, Ordering::Relaxed);
+                    measure.stop();
+                    inc_new_counter_info!(
+                        "conn-start-reuse",
+                        measure.as_us() as usize,
+                        1000,
+                        1000
+                    );
                     conn.clone()
                 }
                 None => {
                     stats.did_not_get_guard.fetch_add(1, Ordering::Relaxed);
                     let connection = self.make_connection(stats).await?;
                     *conn_guard = Some(connection.clone());
+                    measure.stop();
+                    inc_new_counter_info!(
+                        "conn-start-new",
+                        measure.as_us() as usize,
+                        1000,
+                        1000
+                    );
                     connection
                 }
             }
