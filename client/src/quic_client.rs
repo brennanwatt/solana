@@ -266,10 +266,8 @@ impl QuicClient {
                     stats.connection_reuse.fetch_add(1, Ordering::Relaxed);
                     measure.stop();
                     inc_new_counter_info!(
-                        "conn-start-reuse",
-                        measure.as_us() as usize,
-                        1000,
-                        1000
+                        "conn-start-reuse-us",
+                        measure.as_us() as usize
                     );
                     conn.clone()
                 }
@@ -279,10 +277,8 @@ impl QuicClient {
                     *conn_guard = Some(connection.clone());
                     measure.stop();
                     inc_new_counter_info!(
-                        "conn-start-new",
-                        measure.as_us() as usize,
-                        1000,
-                        1000
+                        "conn-start-new-ms",
+                        measure.as_ms() as usize
                     );
                     connection
                 }
