@@ -270,16 +270,18 @@ impl QuicClient {
             match maybe_conn {
                 Some(conn) => {
                     stats.connection_reuse.fetch_add(1, Ordering::Relaxed);
+                    let connection = self.make_connection_0rtt(stats).await?;
+                    *conn_guard = Some(connection.clone());
                     measure.stop();
                     datapoint_info!(
-                        "conn-start-reuse",
+                        "conn-start-0rtt",
                         ("us", measure.as_us(), i64),
                     );
-                    conn.clone()
+                    connection
                 }
                 None => {
                     stats.did_not_get_guard.fetch_add(1, Ordering::Relaxed);
-                    let connection = self.make_connection_0rtt(stats).await?;
+                    let connection = self.make_connection(stats).await?;
                     *conn_guard = Some(connection.clone());
                     measure.stop();
                     datapoint_info!(
