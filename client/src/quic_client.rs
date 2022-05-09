@@ -219,32 +219,38 @@ impl QuicClient {
         Ok(())
     }
 
-    async fn make_connection(&self, stats: &ClientStats) -> Result<Arc<NewConnection>, WriteError> {
-        let mut make_connection_time = Measure::start("make_connection");
+    async fn make_connection_0rtt(&self, stats: &ClientStats) -> Result<Arc<NewConnection>, WriteError> {
         let connecting = self.endpoint.connect(self.addr, "connect").unwrap();
         stats.total_connections.fetch_add(1, Ordering::Relaxed);
-        let (connection, latency_stats) = match connecting.into_0rtt() {
+        let connection = match connecting.into_0rtt() {
             Ok((connection, zero_rtt)) => {
                 // zero_rtt completes when connection is fully established
                 if zero_rtt.await {
                     stats.zero_rtt_accepts.fetch_add(1, Ordering::Relaxed);
-                    (connection, &stats.connection_0rtt_time_us)
                 } else {
                     stats.zero_rtt_rejects.fetch_add(1, Ordering::Relaxed);
-                    (connection, &stats.connection_no_0rtt_time_us)
                 }
+                connection
             }
             Err(connecting) => {
                 // crypto session ticket cached from previous connection to the same server is unavailable or does not include a 0-RTT key
                 stats.connection_errors.fetch_add(1, Ordering::Relaxed);
                 let connecting = connecting.await;
-                (connecting?, &stats.connection_new_time_us)
+                connecting?
             }
         };
 
-        make_connection_time.stop();
-        latency_stats.fetch_add(make_connection_time.as_us(), Ordering::Relaxed);
+        Ok(Arc::new(connection))
+    }
 
+    async fn make_connection(&self, stats: &ClientStats) -> Result<Arc<NewConnection>, WriteError> {
+        let connecting = self.endpoint.connect(self.addr, "connect").unwrap();
+        stats.total_connections.fetch_add(1, Ordering::Relaxed);
+        let connecting_result = connecting.await;
+        if connecting_result.is_err() {
+            stats.connection_errors.fetch_add(1, Ordering::Relaxed);
+        }
+        let connection = connecting_result?;
         Ok(Arc::new(connection))
     }
 
@@ -265,9 +271,9 @@ impl QuicClient {
                 Some(conn) => {
                     stats.connection_reuse.fetch_add(1, Ordering::Relaxed);
                     measure.stop();
-                    inc_new_counter_info!(
-                        "conn-start-reuse-us",
-                        measure.as_us() as usize
+                    datapoint_info!(
+                        "conn-start-reuse",
+                        ("us", measure.as_us() as usize, i64),
                     );
                     conn.clone()
                 }
@@ -276,9 +282,9 @@ impl QuicClient {
                     let connection = self.make_connection(stats).await?;
                     *conn_guard = Some(connection.clone());
                     measure.stop();
-                    inc_new_counter_info!(
-                        "conn-start-new-ms",
-                        measure.as_ms() as usize
+                    datapoint_info!(
+                        "conn-start-new",
+                        ("us", measure.as_us() as usize, i64),
                     );
                     connection
                 }
@@ -288,7 +294,7 @@ impl QuicClient {
             Ok(()) => Ok(connection),
             _ => {
                 let connection = {
-                    let connection = self.make_connection(stats).await?;
+                    let connection = self.make_connection_0rtt(stats).await?;
                     let mut conn_guard = self.connection.lock().await;
                     *conn_guard = Some(connection.clone());
                     connection
