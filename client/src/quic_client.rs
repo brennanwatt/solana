@@ -273,7 +273,7 @@ impl QuicClient {
                     measure.stop();
                     datapoint_info!(
                         "conn-start-reuse",
-                        ("us", measure.as_us() as usize, i64),
+                        ("us", measure.as_us(), i64),
                     );
                     conn.clone()
                 }
@@ -284,7 +284,7 @@ impl QuicClient {
                     measure.stop();
                     datapoint_info!(
                         "conn-start-new",
-                        ("us", measure.as_us() as usize, i64),
+                        ("us", measure.as_us(), i64),
                     );
                     connection
                 }
