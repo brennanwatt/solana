@@ -285,11 +285,11 @@ fn run_dos(
             if params.data_type == DataType::Random {
                 thread_rng().fill(&mut data[..]);
             }
-            if let Some(tg) = transaction_generator.as_mut() {
+            /*if let Some(tg) = transaction_generator.as_mut() {
                 let tx = tg.generate(payer, &rpc_client);
                 debug!("{:?}", tx);
                 data = bincode::serialize(&tx).unwrap();
-            }
+            }*/
             let res = socket.send_to(&data, target);
             if res.is_err() {
                 error_count += 1;
