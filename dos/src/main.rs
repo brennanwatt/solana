@@ -217,7 +217,7 @@ fn run_dos(
     let socket = UdpSocket::bind("0.0.0.0:0").unwrap();
 
     let mut data = Vec::new();
-    let mut transaction_generator = None;
+    let mut _transaction_generator = None;
 
     match params.data_type {
         DataType::RepairHighest => {
@@ -248,7 +248,7 @@ fn run_dos(
             info!("{:?}", tx);
             data = bincode::serialize(&tx).unwrap();
             if params.transaction_params.unique_transactions {
-                transaction_generator = Some(tg);
+                _transaction_generator = Some(tg);
             }
         }
         DataType::GetAccountInfo => {}

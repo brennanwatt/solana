@@ -70,7 +70,7 @@ struct SigVerifierStats {
 
 impl SigVerifierStats {
     fn report(&self, name: &'static str) {
-        datapoint_info!(
+        datapoint_warn!(
             name,
             (
                 "recv_batches_us_90pct",
@@ -357,7 +357,7 @@ impl SigVerifyStage {
                             _ => error!("{:?}", e),
                         }
                     }
-                    if last_print.elapsed().as_secs() > 2 {
+                    if last_print.elapsed().as_secs() > 1 {
                         stats.report(name);
                         stats = SigVerifierStats::default();
                         last_print = Instant::now();
