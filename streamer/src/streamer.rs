@@ -64,7 +64,7 @@ impl StreamerReceiveStats {
     }
 
     pub fn report(&self) {
-        datapoint_info!(
+        datapoint_warn!(
             self.name,
             (
                 "packets_count",
