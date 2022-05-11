@@ -994,6 +994,7 @@ impl Validator {
             cluster_confirmed_slot_sender,
             &cost_model,
             &identity_keypair,
+            use_quic,
         );
 
         datapoint_info!("validator-new", ("id", id.to_string(), String));
