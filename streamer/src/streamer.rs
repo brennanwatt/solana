@@ -7,7 +7,7 @@ use {
         sendmmsg::{batch_send, SendPktsError},
         socket::SocketAddrSpace,
     },
-    crossbeam_channel::{Receiver, RecvTimeoutError, SendError, Sender, TrySendError},
+    crossbeam_channel::{Receiver, RecvTimeoutError, SendError, Sender},
     histogram::Histogram,
     solana_sdk::{packet::Packet, timing::timestamp},
     std::{
@@ -128,18 +128,7 @@ fn recv_loop(
                         full_packet_batches_count.fetch_add(1, Ordering::Relaxed);
                     }
 
-                    match packet_batch_sender.try_send(packet_batch) {
-                        Ok(_) => break,
-                        Err(TrySendError::Full(unsent_batch)) => {
-                            drop_count += len;
-                            // reuse the memory
-                            packet_batch = unsent_batch;
-                            packet_batch.packets.truncate(0);
-                        }
-                        Err(TrySendError::Disconnected(unsent_batch)) => {
-                            return Err(SendError(unsent_batch).into());
-                        }
-                    }
+                    packet_batch_sender.send(packet_batch)?;
                 }
                 break;
             }

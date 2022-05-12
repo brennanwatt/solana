@@ -41,12 +41,6 @@ use {
 
 pub const DEFAULT_TPU_COALESCE_MS: u64 = 5;
 
-/// The default maximum number of batches in the queue that leaves the
-/// fetch stage.
-///
-/// 10k batches means up to 1.3M packets or ~1.6GB of memory
-pub const DEFAULT_TPU_MAX_QUEUED_BATCHES_UDP: usize = 10_000;
-
 /// Timeout interval when joining threads during TPU close
 const TPU_THREADS_JOIN_TIMEOUT_SECONDS: u64 = 10;
 
@@ -99,7 +93,6 @@ impl Tpu {
         cluster_confirmed_slot_sender: GossipDuplicateConfirmedSlotsSender,
         cost_model: &Arc<RwLock<CostModel>>,
         keypair: &Keypair,
-        use_quic: bool,
     ) -> Self {
         let TpuSockets {
             transactions: transactions_sockets,
@@ -109,14 +102,8 @@ impl Tpu {
             transactions_quic: transactions_quic_sockets,
         } = sockets;
 
-        let (packet_sender, packet_receiver) = match use_quic {
-            true => unbounded(),
-            false => bounded(DEFAULT_TPU_MAX_QUEUED_BATCHES_UDP),
-        };
-        let (vote_packet_sender, vote_packet_receiver) = match use_quic {
-            true => unbounded(),
-            false => bounded(DEFAULT_TPU_MAX_QUEUED_BATCHES_UDP),
-        };
+        let (packet_sender, packet_receiver) = unbounded();
+        let (vote_packet_sender, vote_packet_receiver) = unbounded();
         let fetch_stage = FetchStage::new_with_sender(
             transactions_sockets,
             tpu_forwards_sockets,
@@ -128,10 +115,7 @@ impl Tpu {
             tpu_coalesce_ms,
         );
 
-        let (find_packet_sender_stake_sender, find_packet_sender_stake_receiver) = match use_quic {
-            true => unbounded(),
-            false => bounded(DEFAULT_TPU_MAX_QUEUED_BATCHES_UDP),
-        };
+        let (find_packet_sender_stake_sender, find_packet_sender_stake_receiver) = unbounded();
 
         let find_packet_sender_stake_stage = FindPacketSenderStakeStage::new(
             packet_receiver,
@@ -142,10 +126,7 @@ impl Tpu {
         );
 
         let (vote_find_packet_sender_stake_sender, vote_find_packet_sender_stake_receiver) =
-            match use_quic {
-                true => unbounded(),
-                false => bounded(DEFAULT_TPU_MAX_QUEUED_BATCHES_UDP),
-            };
+            unbounded();
 
         let vote_find_packet_sender_stake_stage = FindPacketSenderStakeStage::new(
             vote_packet_receiver,
@@ -155,10 +136,7 @@ impl Tpu {
             "tpu-vote-find-packet-sender-stake",
         );
 
-        let (verified_sender, verified_receiver) = match use_quic {
-            true => unbounded(),
-            false => bounded(DEFAULT_TPU_MAX_QUEUED_BATCHES_UDP),
-        };
+        let (verified_sender, verified_receiver) = unbounded();
 
         let staked_nodes = Arc::new(RwLock::new(HashMap::new()));
         let staked_nodes_updater_service = StakedNodesUpdaterService::new(
