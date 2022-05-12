@@ -87,7 +87,7 @@ impl StreamerReceiveStats {
                 i64
             ),
             (
-                "channel_len",
+                "dropped_packet_count",
                 self.dropped_packet_count.swap(0, Ordering::Relaxed) as i64,
                 i64
             ),
