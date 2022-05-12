@@ -128,10 +128,7 @@ impl Tpu {
             tpu_coalesce_ms,
         );
 
-        let (find_packet_sender_stake_sender, find_packet_sender_stake_receiver) = match use_quic {
-            true => unbounded(),
-            false => bounded(DEFAULT_TPU_MAX_QUEUED_BATCHES_UDP),
-        };
+        let (find_packet_sender_stake_sender, find_packet_sender_stake_receiver) = unbounded();
 
         let find_packet_sender_stake_stage = FindPacketSenderStakeStage::new(
             packet_receiver,
@@ -141,11 +138,7 @@ impl Tpu {
             "tpu-find-packet-sender-stake",
         );
 
-        let (vote_find_packet_sender_stake_sender, vote_find_packet_sender_stake_receiver) =
-            match use_quic {
-                true => unbounded(),
-                false => bounded(DEFAULT_TPU_MAX_QUEUED_BATCHES_UDP),
-            };
+        let (vote_find_packet_sender_stake_sender, vote_find_packet_sender_stake_receiver) = unbounded();
 
         let vote_find_packet_sender_stake_stage = FindPacketSenderStakeStage::new(
             vote_packet_receiver,
@@ -155,10 +148,7 @@ impl Tpu {
             "tpu-vote-find-packet-sender-stake",
         );
 
-        let (verified_sender, verified_receiver) = match use_quic {
-            true => unbounded(),
-            false => bounded(DEFAULT_TPU_MAX_QUEUED_BATCHES_UDP),
-        };
+        let (verified_sender, verified_receiver) = unbounded();
 
         let staked_nodes = Arc::new(RwLock::new(HashMap::new()));
         let staked_nodes_updater_service = StakedNodesUpdaterService::new(

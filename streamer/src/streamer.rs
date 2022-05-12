@@ -139,7 +139,7 @@ fn recv_loop(
                     match packet_batch_sender.try_send(packet_batch) {
                         Ok(_) => break,
                         Err(TrySendError::Full(unsent_batch)) => {
-                            dropped_packet_count.fetch_max(len, Ordering::Relaxed);
+                            dropped_packet_count.fetch_add(len, Ordering::Relaxed);
                             // reuse the memory
                             packet_batch = unsent_batch;
                             packet_batch.packets.truncate(0);
