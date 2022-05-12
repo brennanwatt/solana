@@ -26,7 +26,7 @@ use {
     thiserror::Error,
 };
 
-struct MyPacketBatchChannelData {
+struct BoundedPacketBatchChannelData {
     queue: VecDeque<PacketBatch>,
     packet_count: usize,
     work_unit_packet_size: usize,
@@ -34,19 +34,19 @@ struct MyPacketBatchChannelData {
 }
 
 #[derive(Clone)]
-pub struct MyPacketBatchReceiver {
+pub struct BoundedPacketBatchReceiver {
     receiver: Receiver<()>,
     sender: Sender<()>,
-    data: Arc<RwLock<MyPacketBatchChannelData>>,
+    data: Arc<RwLock<BoundedPacketBatchChannelData>>,
 }
 
 #[derive(Clone)]
-pub struct MyPacketBatchSender {
+pub struct BoundedPacketBatchSender {
     sender: Sender<()>,
-    data: Arc<RwLock<MyPacketBatchChannelData>>,
+    data: Arc<RwLock<BoundedPacketBatchChannelData>>,
 }
 
-impl MyPacketBatchChannelData {
+impl BoundedPacketBatchChannelData {
     fn add_packet_count(&mut self, amount: usize) {
         self.packet_count = self.packet_count.saturating_add(amount);
     }
@@ -55,7 +55,7 @@ impl MyPacketBatchChannelData {
     }
 }
 
-impl MyPacketBatchReceiver {
+impl BoundedPacketBatchReceiver {
     // TODO: can return Ok(no-batches)
     pub fn recv_timeout(
         &self,
@@ -140,7 +140,7 @@ impl MyPacketBatchReceiver {
     }
 }
 
-impl MyPacketBatchSender {
+impl BoundedPacketBatchSender {
     // Ok(true) means an existing batch was discarded
     pub fn send_batch(&self, batch: PacketBatch) -> std::result::Result<bool, SendError<()>> {
         if batch.packets.len() == 0 {
@@ -216,19 +216,20 @@ impl MyPacketBatchSender {
     }
 }
 
-pub fn my_packet_batch_channel(work_unit_packet_size: usize, max_queued_batches: usize) -> (MyPacketBatchSender, MyPacketBatchReceiver) {
+pub fn create_packet_batch_channel(work_unit_packet_size: usize, max_queued_batches: usize)
+-> (BoundedPacketBatchSender, BoundedPacketBatchReceiver) {
     let (sig_sender, sig_receiver) = crossbeam_channel::unbounded::<()>();
-    let data = Arc::new(RwLock::new(MyPacketBatchChannelData {
+    let data = Arc::new(RwLock::new(BoundedPacketBatchChannelData {
         queue: VecDeque::new(),
         packet_count: 0,
         max_queued_batches,
         work_unit_packet_size,
     }));
-    let sender = MyPacketBatchSender {
+    let sender = BoundedPacketBatchSender {
         sender: sig_sender.clone(),
         data: data.clone(),
     };
-    let receiver = MyPacketBatchReceiver {
+    let receiver = BoundedPacketBatchReceiver {
         sender: sig_sender,
         receiver: sig_receiver,
         data: data,

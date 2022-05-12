@@ -7,11 +7,9 @@ use {
         sendmmsg::{batch_send, SendPktsError},
         socket::SocketAddrSpace,
     },
-    crossbeam_channel::{Receiver, RecvTimeoutError, SendError, RecvError, Sender},
+    crossbeam_channel::{Receiver, RecvTimeoutError, SendError, Sender},
     histogram::Histogram,
     solana_sdk::{packet::Packet, timing::timestamp},
-    std::collections::VecDeque,
-    std::sync::RwLock,
     std::{
         cmp::Reverse,
         collections::HashMap,
