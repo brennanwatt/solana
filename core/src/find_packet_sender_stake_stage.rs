@@ -18,10 +18,6 @@ use {
     },
 };
 
-/// Maximum number of packets that can be received from the input channel before
-/// applying stake and forwarding to sigverify stage.
-const MAX_RECEIVED_PACKETS_PER_LOOP: usize = 100_000;
-
 const IP_TO_STAKE_REFRESH_DURATION: Duration = Duration::from_secs(5);
 
 lazy_static! {
@@ -109,10 +105,7 @@ impl FindPacketSenderStakeStage {
                         .refresh_ip_to_stake_time
                         .saturating_add(refresh_ip_to_stake_time.as_us());
 
-                        match streamer::recv_packet_batches(
-                            &packet_receiver,
-                            MAX_RECEIVED_PACKETS_PER_LOOP,
-                        ) {
+                    match streamer::recv_packet_batches(&packet_receiver) {
                         Ok((mut batches, num_packets, recv_duration)) => {
                             let num_batches = batches.len();
                             let mut apply_sender_stakes_time =
