@@ -35,7 +35,10 @@ use {
         timing::{duration_as_us, timestamp},
         transaction::{Transaction, VersionedTransaction},
     },
-    solana_streamer::{bounded_streamer::{packet_batch_channel, DEFAULT_MAX_QUEUED_BATCHES}, socket::SocketAddrSpace},
+    solana_streamer::{
+        bounded_streamer::{packet_batch_channel, DEFAULT_MAX_QUEUED_BATCHES},
+        socket::SocketAddrSpace,
+    },
     std::{
         sync::{atomic::Ordering, Arc, RwLock},
         time::{Duration, Instant},
