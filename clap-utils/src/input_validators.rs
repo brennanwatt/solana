@@ -64,7 +64,7 @@ where
 {
     match string.parse::<T>() {
         Ok(input) => {
-            if !(input >= min) {
+            if input < min {
                 Err(format!("input '{:?}' must be >= {:?}", input, min))
             } else {
                 Ok(())
