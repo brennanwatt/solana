@@ -331,7 +331,7 @@ mod test {
 
         // Case 1: Send a single batch
         match sender.send_batch(packet_batch.clone()) {
-            Ok(dropped_packet) => assert_eq!(dropped_packet, false),
+            Ok(dropped_packet) => assert!(dropped_packet),
             Err(_err) => (),
         }
 
@@ -352,7 +352,7 @@ mod test {
 
         // One batch should get dropped because queue is full.
         match sender.send_batch(packet_batch.clone()) {
-            Ok(dropped_packet) => assert_eq!(dropped_packet, true),
+            Ok(dropped_packet) => assert!(dropped_packet),
             Err(_err) => (),
         }
 
