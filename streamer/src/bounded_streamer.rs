@@ -8,11 +8,10 @@ use {
     solana_perf::packet::PACKETS_PER_BATCH,
     std::{
         cmp::min,
-        collections::VecDeque,
         result::Result,
         sync::{
             atomic::{AtomicUsize, Ordering},
-            Arc, RwLock,
+            Arc,
         },
         time::{Duration, Instant},
     },
