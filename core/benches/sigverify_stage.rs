@@ -165,7 +165,9 @@ fn bench_sigverify_stage(bencher: &mut Bencher) {
         let mut received = 0;
         trace!("sent: {}", sent_len);
         loop {
-            if let Ok((mut verifieds, _)) = verified_r.recv_timeout(usize::MAX, Duration::from_millis(10)) {
+            if let Ok((mut verifieds, _)) =
+                verified_r.recv_timeout(usize::MAX, Duration::from_millis(10))
+            {
                 while let Some(v) = verifieds.pop() {
                     received += v.packets.len();
                     batches.push(v);
