@@ -331,7 +331,7 @@ mod test {
 
         // Case 1: Send a single batch
         match sender.send_batch(packet_batch.clone()) {
-            Ok(dropped_packet) => assert!(dropped_packet),
+            Ok(dropped_packet) => assert!(!dropped_packet),
             Err(_err) => (),
         }
 
