@@ -55,7 +55,7 @@ impl Clone for BoundedPacketBatchSender {
 
 impl Drop for BoundedPacketBatchSender {
     fn drop(&mut self) {
-        let dropping_last_sender = { self.data.sender_count.fetch_sub(1, Ordering::SeqCst) == 1 };
+        let dropping_last_sender = self.data.sender_count.fetch_sub(1, Ordering::SeqCst) == 1;
         if dropping_last_sender {
             // notify receivers, otherwise they may be waiting forever on a
             // disconnected channel
@@ -140,7 +140,7 @@ impl BoundedPacketBatchReceiver {
             }
         }
 
-        if batches.len() == 0 {
+        if batches.is_empty() {
             return if disconnected {
                 // Wake up ourselves or other receivers again
                 self.signal_sender.try_send(()).unwrap_or(());
@@ -151,7 +151,7 @@ impl BoundedPacketBatchReceiver {
         }
 
         self.data.sub_packet_count(packets);
-        let has_more = self.data.queue.len() > 0;
+        let has_more = !self.data.queue.is_empty();
 
         // If there's more data in the queue, then notify another receiver.
         // Also, if we're disconnected but still return data, wake up again to
@@ -202,7 +202,7 @@ impl BoundedPacketBatchSender {
     ///
     /// SendErrors happen when all receivers have been dropped.
     pub fn send_batch(&self, batch: PacketBatch) -> Result<bool, SendError<()>> {
-        if batch.packets.len() == 0 {
+        if batch.packets.is_empty() {
             return Ok(false);
         }
         let mut discarded_batches = 0;
@@ -225,7 +225,7 @@ impl BoundedPacketBatchSender {
         &self,
         batches: Vec<PacketBatch>,
     ) -> std::result::Result<usize, SendError<()>> {
-        if batches.len() == 0 {
+        if batches.is_empty() {
             return Ok(0);
         }
 
