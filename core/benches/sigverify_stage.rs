@@ -5,7 +5,6 @@ extern crate solana_core;
 extern crate test;
 
 use {
-    crossbeam_channel::unbounded,
     log::*,
     rand::{thread_rng, Rng},
     solana_core::{sigverify::TransactionSigVerifier, sigverify_stage::SigVerifyStage},
