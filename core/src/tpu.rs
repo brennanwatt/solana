@@ -169,7 +169,7 @@ impl Tpu {
             let verifier = TransactionSigVerifier::default();
             SigVerifyStage::new(
                 find_packet_sender_stake_receiver,
-                verified_sender.clone(),
+                verified_sender,
                 verifier,
                 "tpu-verifier",
             )
