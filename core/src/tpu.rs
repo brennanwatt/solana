@@ -106,8 +106,7 @@ impl Tpu {
             transactions_quic: transactions_quic_sockets,
         } = sockets;
 
-        let (packet_sender, packet_receiver) =
-            packet_batch_channel(tpu_max_queued_batches);
+        let (packet_sender, packet_receiver) = packet_batch_channel(tpu_max_queued_batches);
         let (vote_packet_sender, vote_packet_receiver) =
             packet_batch_channel(tpu_max_queued_batches);
         let fetch_stage = FetchStage::new_with_sender(
