@@ -76,18 +76,16 @@ pub const FORWARD_TRANSACTIONS_TO_LEADER_AT_SLOT_OFFSET: u64 = 2;
 pub const HOLD_TRANSACTIONS_SLOT_OFFSET: u64 = 20;
 
 // Fixed thread size seems to be fastest on GCP setup
-pub const NUM_THREADS: u32 = 4;
+pub const NUM_THREADS: u32 = 6;
 
-const TOTAL_BUFFERED_PACKETS: usize = 500_000;
+const TOTAL_BUFFERED_PACKETS: usize = 700_000;
 
-const MAX_NUM_TRANSACTIONS_PER_BATCH: usize = 128;
+const MAX_NUM_TRANSACTIONS_PER_BATCH: usize = 64;
 
 const NUM_VOTE_PROCESSING_THREADS: u32 = 2;
 const MIN_THREADS_BANKING: u32 = 1;
 const MIN_TOTAL_THREADS: u32 = NUM_VOTE_PROCESSING_THREADS + MIN_THREADS_BANKING;
 const UNPROCESSED_BUFFER_STEP_SIZE: usize = 128;
-
-const MAX_RECEIVE_PACKETS_PER_ITERATION: usize = 100_000;
 
 pub struct ProcessTransactionBatchOutput {
     // The number of transactions filtered out by the cost model
@@ -1979,6 +1977,34 @@ impl BankingStage {
             .collect()
     }
 
+    fn receive_until(
+        verified_receiver: &CrossbeamReceiver<Vec<PacketBatch>>,
+        recv_timeout: Duration,
+        packet_count_upperbound: usize,
+    ) -> Result<Vec<PacketBatch>, RecvTimeoutError> {
+        let start = Instant::now();
+        let mut packet_batches = verified_receiver.recv_timeout(recv_timeout)?;
+        let mut num_packets_received: usize =
+            packet_batches.iter().map(|batch| batch.packets.len()).sum();
+        while let Ok(packet_batch) = verified_receiver.try_recv() {
+            trace!("got more packet batches in banking stage");
+            let (packets_received, packet_count_overflowed) = num_packets_received
+                .overflowing_add(packet_batch.iter().map(|batch| batch.packets.len()).sum());
+            packet_batches.extend(packet_batch);
+
+            // Spend any leftover receive time budget to greedily receive more packet batches,
+            // until the upperbound of the packet count is reached.
+            if start.elapsed() >= recv_timeout
+                || packet_count_overflowed
+                || packets_received >= packet_count_upperbound
+            {
+                break;
+            }
+            num_packets_received = packets_received;
+        }
+        Ok(packet_batches)
+    }
+
     #[allow(clippy::too_many_arguments)]
     /// Receive incoming packets, push into unprocessed buffer with packet indexes
     fn receive_and_buffer_packets(
@@ -1992,7 +2018,7 @@ impl BankingStage {
     ) -> Result<(), RecvTimeoutError> {
         let mut recv_time = Measure::start("receive_and_buffer_packets_recv");
         let (packet_batches, packet_count) =
-            verified_receiver.recv_timeout(MAX_RECEIVE_PACKETS_PER_ITERATION, recv_timeout)?;
+            verified_receiver.recv_timeout(buffered_packet_batches.capacity() - buffered_packet_batches.len(), recv_timeout)?;
         recv_time.stop();
 
         let packet_batches_len = packet_batches.len();
@@ -2081,7 +2107,7 @@ impl BankingStage {
 
             let number_of_dropped_packets = unprocessed_packet_batches.insert_batch(
                 // Passing `None` for bank for now will make all packet weights 0
-                unprocessed_packet_batches::deserialize_packets(packet_batch, packet_indexes, None),
+                unprocessed_packet_batches::deserialize_packets(packet_batch, packet_indexes),
             );
 
             saturating_add_assign!(*dropped_packets_count, number_of_dropped_packets);
@@ -3214,7 +3240,7 @@ mod tests {
                 let transaction = system_transaction::transfer(&keypair, &pubkey, 1, blockhash);
                 let mut p = Packet::from_data(None, &transaction).unwrap();
                 p.meta.port = packets_id;
-                DeserializedPacket::new(p, None).unwrap()
+                DeserializedPacket::new(p).unwrap()
             })
             .collect_vec();
 
@@ -4000,7 +4026,7 @@ mod tests {
             Hash::new_unique(),
         );
         let packet = Packet::from_data(None, &tx).unwrap();
-        let deserialized_packet = DeserializedPacket::new(packet, None).unwrap();
+        let deserialized_packet = DeserializedPacket::new(packet).unwrap();
 
         let genesis_config_info = create_slow_genesis_config(10_000);
         let GenesisConfigInfo {
@@ -4079,14 +4105,14 @@ mod tests {
             let transaction = system_transaction::transfer(&keypair, &pubkey, 1, fwd_block_hash);
             let mut packet = Packet::from_data(None, &transaction).unwrap();
             packet.meta.flags |= PacketFlags::FORWARDED;
-            DeserializedPacket::new(packet, None).unwrap()
+            DeserializedPacket::new(packet).unwrap()
         };
 
         let normal_block_hash = Hash::new_unique();
         let normal_packet = {
             let transaction = system_transaction::transfer(&keypair, &pubkey, 1, normal_block_hash);
             let packet = Packet::from_data(None, &transaction).unwrap();
-            DeserializedPacket::new(packet, None).unwrap()
+            DeserializedPacket::new(packet).unwrap()
         };
 
         let mut unprocessed_packet_batches: UnprocessedPacketBatches =
@@ -4207,7 +4233,7 @@ mod tests {
 
         packet_vector
             .into_iter()
-            .map(|p| DeserializedPacket::new(p, None).unwrap())
+            .map(|p| DeserializedPacket::new(p).unwrap())
             .collect()
     }
 

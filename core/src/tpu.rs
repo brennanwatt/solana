@@ -121,6 +121,7 @@ impl Tpu {
             &udp_vote_packet_sender,
             poh_recorder,
             tpu_coalesce_ms,
+            Some(bank_forks.read().unwrap().get_vote_only_mode_signal()),
         );
 
         let (udp_find_packet_sender_stake_sender, udp_find_packet_sender_stake_receiver) =

@@ -14,6 +14,7 @@ use {
         offline::{blockhash_arg, BLOCKHASH_ARG},
     },
     solana_cli_output::{
+        cli_version::CliVersion,
         display::{
             build_balance_message, format_labeled_address, new_spinner_progress_bar,
             println_transaction, unix_timestamp_to_string, writeln_name_value,
@@ -33,7 +34,6 @@ use {
         rpc_request::DELINQUENT_VALIDATOR_SLOT_DISTANCE,
         rpc_response::SlotInfo,
     },
-    solana_program_runtime::compute_budget,
     solana_remote_wallet::remote_wallet::RemoteWalletManager,
     solana_sdk::{
         account::from_account,
@@ -272,11 +272,11 @@ impl ClusterQuerySubCommands for App<'_, '_> {
                         .help("Wait up to timeout seconds for transaction confirmation"),
                 )
                 .arg(
-                    Arg::with_name("additional_fee")
-                        .long("additional-fee")
-                        .value_name("NUMBER")
+                    Arg::with_name("compute_unit_price")
+                        .long("compute-unit-price")
+                        .value_name("MICRO-LAMPORTS")
                         .takes_value(true)
-                        .help("Request additional-fee for transaction"),
+                        .help("Set the price in micro-lamports of each transaction compute unit"),
                 )
                 .arg(blockhash_arg()),
         )
@@ -523,7 +523,7 @@ pub fn parse_cluster_ping(
     let timeout = Duration::from_secs(value_t_or_exit!(matches, "timeout", u64));
     let blockhash = value_of(matches, BLOCKHASH_ARG.name);
     let print_timestamp = matches.is_present("print_timestamp");
-    let additional_fee = value_of(matches, "additional_fee");
+    let compute_unit_price = value_of(matches, "compute_unit_price");
     Ok(CliCommandInfo {
         command: CliCommand::Ping {
             interval,
@@ -531,7 +531,7 @@ pub fn parse_cluster_ping(
             timeout,
             blockhash,
             print_timestamp,
-            additional_fee,
+            compute_unit_price,
         },
         signers: vec![default_signer.signer_from_path(matches, wallet_manager)?],
     })
@@ -1364,7 +1364,7 @@ pub fn process_ping(
     timeout: &Duration,
     fixed_blockhash: &Option<Hash>,
     print_timestamp: bool,
-    additional_fee: &Option<u32>,
+    compute_unit_price: &Option<u64>,
 ) -> ProcessResult {
     let (signal_sender, signal_receiver) = unbounded();
     ctrlc::set_handler(move || {
@@ -1409,10 +1409,9 @@ pub fn process_ping(
                 &to,
                 lamports,
             )];
-            if let Some(additional_fee) = additional_fee {
-                ixs.push(ComputeBudgetInstruction::request_units(
-                    compute_budget::DEFAULT_UNITS,
-                    *additional_fee,
+            if let Some(compute_unit_price) = compute_unit_price {
+                ixs.push(ComputeBudgetInstruction::set_compute_unit_price(
+                    *compute_unit_price,
                 ));
             }
             Message::new(&ixs, Some(&config.signers[0].pubkey()))
@@ -1874,13 +1873,13 @@ pub fn process_show_validators(
 
     progress_bar.set_message("Fetching version information...");
     let mut node_version = HashMap::new();
-    let unknown_version = "unknown".to_string();
     for contact_info in rpc_client.get_cluster_nodes()? {
         node_version.insert(
             contact_info.pubkey,
             contact_info
                 .version
-                .unwrap_or_else(|| unknown_version.clone()),
+                .and_then(|version| CliVersion::from_str(&version).ok())
+                .unwrap_or_else(CliVersion::unknown_version),
         );
     }
 
@@ -1909,8 +1908,8 @@ pub fn process_show_validators(
                 epoch_info.epoch,
                 node_version
                     .get(&vote_account.node_pubkey)
-                    .unwrap_or(&unknown_version)
-                    .clone(),
+                    .cloned()
+                    .unwrap_or_else(CliVersion::unknown_version),
                 skip_rate.get(&vote_account.node_pubkey).cloned(),
                 &config.address_labels,
             )
@@ -1925,15 +1924,15 @@ pub fn process_show_validators(
                 epoch_info.epoch,
                 node_version
                     .get(&vote_account.node_pubkey)
-                    .unwrap_or(&unknown_version)
-                    .clone(),
+                    .cloned()
+                    .unwrap_or_else(CliVersion::unknown_version),
                 skip_rate.get(&vote_account.node_pubkey).cloned(),
                 &config.address_labels,
             )
         })
         .collect();
 
-    let mut stake_by_version: BTreeMap<_, CliValidatorsStakeByVersion> = BTreeMap::new();
+    let mut stake_by_version: BTreeMap<CliVersion, CliValidatorsStakeByVersion> = BTreeMap::new();
     for validator in current_validators.iter() {
         let mut entry = stake_by_version
             .entry(validator.version.clone())
@@ -2339,7 +2338,7 @@ mod tests {
                         Hash::from_str("4CCNp28j6AhGq7PkjPDP4wbQWBS8LLbQin2xV5n8frKX").unwrap()
                     ),
                     print_timestamp: true,
-                    additional_fee: None,
+                    compute_unit_price: None,
                 },
                 signers: vec![default_keypair.into()],
             }

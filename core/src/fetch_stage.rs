@@ -60,6 +60,7 @@ impl FetchStage {
                 &vote_sender,
                 poh_recorder,
                 coalesce_ms,
+                None,
             ),
             receiver,
             vote_receiver,
@@ -75,6 +76,7 @@ impl FetchStage {
         vote_sender: &BoundedPacketBatchSender,
         poh_recorder: &Arc<Mutex<PohRecorder>>,
         coalesce_ms: u64,
+        in_vote_only_mode: Option<Arc<AtomicBool>>,
     ) -> Self {
         let tx_sockets = sockets.into_iter().map(Arc::new).collect();
         let tpu_forwards_sockets = tpu_forwards_sockets.into_iter().map(Arc::new).collect();
@@ -88,6 +90,7 @@ impl FetchStage {
             vote_sender,
             poh_recorder,
             coalesce_ms,
+            in_vote_only_mode,
         )
     }
 
@@ -128,6 +131,7 @@ impl FetchStage {
         vote_sender: &BoundedPacketBatchSender,
         poh_recorder: &Arc<Mutex<PohRecorder>>,
         coalesce_ms: u64,
+        in_vote_only_mode: Option<Arc<AtomicBool>>,
     ) -> Self {
         let recycler: PacketBatchRecycler = Recycler::warmed(1000, 1024);
 
@@ -143,6 +147,7 @@ impl FetchStage {
                     tpu_stats.clone(),
                     coalesce_ms,
                     true,
+                    in_vote_only_mode.clone(),
                 )
             })
             .collect();
@@ -160,6 +165,7 @@ impl FetchStage {
                     tpu_forward_stats.clone(),
                     coalesce_ms,
                     true,
+                    in_vote_only_mode.clone(),
                 )
             })
             .collect();
@@ -176,6 +182,7 @@ impl FetchStage {
                     tpu_vote_stats.clone(),
                     coalesce_ms,
                     true,
+                    None,
                 )
             })
             .collect();

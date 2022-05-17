@@ -368,6 +368,12 @@ pub fn archive_snapshot_package(
                 do_archive_files(&mut encoder)?;
                 encoder.finish()?;
             }
+            ArchiveFormat::TarLz4 => {
+                let mut encoder = lz4::EncoderBuilder::new().level(1).build(archive_file)?;
+                do_archive_files(&mut encoder)?;
+                let (_output, result) = encoder.finish();
+                result?
+            }
             ArchiveFormat::Tar => {
                 do_archive_files(&mut archive_file)?;
             }
@@ -399,6 +405,11 @@ pub fn archive_snapshot_package(
     datapoint_info!(
         "archive-snapshot-package",
         ("slot", snapshot_package.slot(), i64),
+        (
+            "archive_format",
+            snapshot_package.archive_format().to_string(),
+            String
+        ),
         ("duration_ms", timer.as_ms(), i64),
         (
             if snapshot_package.snapshot_type.is_full_snapshot() {
@@ -1451,6 +1462,7 @@ fn unpack_snapshot_local<T: 'static + Read + std::marker::Send, F: Fn() -> T>(
             unpack_snapshot(&mut archive, ledger_dir, account_paths, parallel_selector)
         })
         .collect::<Vec<_>>();
+
     let mut unpacked_append_vec_map = UnpackedAppendVecMap::new();
     for h in all_unpacked_append_vec_map {
         unpacked_append_vec_map.extend(h?);
@@ -1459,8 +1471,8 @@ fn unpack_snapshot_local<T: 'static + Read + std::marker::Send, F: Fn() -> T>(
     Ok(unpacked_append_vec_map)
 }
 
-fn untar_snapshot_in<P: AsRef<Path>>(
-    snapshot_tar: P,
+fn untar_snapshot_file(
+    snapshot_tar: &Path,
     unpack_dir: &Path,
     account_paths: &[PathBuf],
     archive_format: ArchiveFormat,
@@ -1486,6 +1498,12 @@ fn untar_snapshot_in<P: AsRef<Path>>(
             account_paths,
             parallel_divisions,
         )?,
+        ArchiveFormat::TarLz4 => unpack_snapshot_local(
+            || lz4::Decoder::new(BufReader::new(open_file())).unwrap(),
+            unpack_dir,
+            account_paths,
+            parallel_divisions,
+        )?,
         ArchiveFormat::Tar => unpack_snapshot_local(
             || BufReader::new(open_file()),
             unpack_dir,
@@ -1494,6 +1512,22 @@ fn untar_snapshot_in<P: AsRef<Path>>(
         )?,
     };
     Ok(account_paths_map)
+}
+
+fn untar_snapshot_in<P: AsRef<Path>>(
+    snapshot_tar: P,
+    unpack_dir: &Path,
+    account_paths: &[PathBuf],
+    archive_format: ArchiveFormat,
+    parallel_divisions: usize,
+) -> Result<UnpackedAppendVecMap> {
+    untar_snapshot_file(
+        snapshot_tar.as_ref(),
+        unpack_dir,
+        account_paths,
+        archive_format,
+        parallel_divisions,
+    )
 }
 
 fn verify_unpacked_snapshots_dir_and_version(

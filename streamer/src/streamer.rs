@@ -19,7 +19,7 @@ use {
             atomic::{AtomicBool, AtomicUsize, Ordering},
             Arc,
         },
-        thread::{Builder, JoinHandle},
+        thread::{sleep, Builder, JoinHandle},
         time::{Duration, Instant},
     },
     thiserror::Error,
@@ -106,6 +106,7 @@ fn recv_loop(
     stats: &StreamerReceiveStats,
     coalesce_ms: u64,
     use_pinned_memory: bool,
+    in_vote_only_mode: Option<Arc<AtomicBool>>,
 ) -> Result<()> {
     loop {
         let mut packet_batch = if use_pinned_memory {
@@ -119,6 +120,14 @@ fn recv_loop(
             if exit.load(Ordering::Relaxed) {
                 return Ok(());
             }
+
+            if let Some(ref in_vote_only_mode) = in_vote_only_mode {
+                if in_vote_only_mode.load(Ordering::Relaxed) {
+                    sleep(Duration::from_millis(1));
+                    continue;
+                }
+            }
+
             if let Ok(len) = packet::recv_from(&mut packet_batch, socket, coalesce_ms) {
                 if len > 0 {
                     let StreamerReceiveStats {
@@ -151,6 +160,7 @@ pub fn receiver(
     stats: Arc<StreamerReceiveStats>,
     coalesce_ms: u64,
     use_pinned_memory: bool,
+    in_vote_only_mode: Option<Arc<AtomicBool>>,
 ) -> JoinHandle<()> {
     let res = socket.set_read_timeout(Some(Duration::new(1, 0)));
     assert!(res.is_ok(), "streamer::receiver set_read_timeout error");
@@ -165,6 +175,7 @@ pub fn receiver(
                 &stats,
                 coalesce_ms,
                 use_pinned_memory,
+                in_vote_only_mode,
             );
         })
         .unwrap()
@@ -461,6 +472,7 @@ mod test {
             stats.clone(),
             1,
             true,
+            None,
         );
         const NUM_PACKETS: usize = 5;
         let t_responder = {
