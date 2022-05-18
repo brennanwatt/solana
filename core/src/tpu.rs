@@ -143,7 +143,7 @@ impl Tpu {
             "tpu-vote-find-packet-sender-stake",
         );
 
-        let (verified_sender, verified_receiver) = packet_batch_channel(DEFAULT_MAX_QUEUED_BATCHES);
+        let (verified_sender, verified_receiver) = packet_batch_channel(tpu_max_queued_batches);
 
         let staked_nodes = Arc::new(RwLock::new(HashMap::new()));
         let staked_nodes_updater_service = StakedNodesUpdaterService::new(
@@ -176,7 +176,7 @@ impl Tpu {
         };
 
         let (verified_tpu_vote_packets_sender, verified_tpu_vote_packets_receiver) =
-            packet_batch_channel(50_000);
+            packet_batch_channel(tpu_max_queued_batches);
 
         let vote_sigverify_stage = {
             let verifier = TransactionSigVerifier::new_reject_non_vote();
@@ -189,7 +189,7 @@ impl Tpu {
         };
 
         let (verified_gossip_vote_packets_sender, verified_gossip_vote_packets_receiver) =
-            packet_batch_channel(DEFAULT_MAX_QUEUED_BATCHES);
+            packet_batch_channel(tpu_max_queued_batches);
         let cluster_info_vote_listener = ClusterInfoVoteListener::new(
             exit.clone(),
             cluster_info.clone(),
