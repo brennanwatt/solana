@@ -2815,12 +2815,8 @@ impl Node {
             Self::get_gossip_port(gossip_addr, port_range, bind_ip_addr);
         let (tvu_port, tvu) = Self::bind(bind_ip_addr, port_range);
         let (tvu_forwards_port, tvu_forwards) = Self::bind(bind_ip_addr, port_range);
-        let (tpu_port, tpu_sockets) =
-            multi_bind_in_range(bind_ip_addr, port_range, 32).expect("tpu multi_bind");
-        let (_tpu_port_quic, tpu_quic) = Self::bind(
-            bind_ip_addr,
-            (tpu_port + QUIC_PORT_OFFSET, tpu_port + QUIC_PORT_OFFSET + 1),
-        );
+        let ((tpu_port, tpu), (_tpu_quic_port, tpu_quic)) =
+            bind_two_consecutive_in_range(bind_ip_addr, port_range).unwrap();
         let (tpu_forwards_port, tpu_forwards) = Self::bind(bind_ip_addr, port_range);
         let (tpu_vote_port, tpu_vote) = Self::bind(bind_ip_addr, port_range);
         let (_, retransmit_socket) = Self::bind(bind_ip_addr, port_range);
@@ -2856,7 +2852,7 @@ impl Node {
                 ip_echo: Some(ip_echo),
                 tvu: vec![tvu],
                 tvu_forwards: vec![tvu_forwards],
-                tpu: tpu_sockets,
+                tpu: vec![tpu],
                 tpu_forwards: vec![tpu_forwards],
                 tpu_vote: vec![tpu_vote],
                 broadcast: vec![broadcast],
