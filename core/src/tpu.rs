@@ -30,7 +30,7 @@ use {
     },
     solana_sdk::signature::Keypair,
     solana_streamer::{
-        bounded_streamer::{packet_batch_channel, DEFAULT_MAX_QUEUED_BATCHES},
+        bounded_streamer::packet_batch_channel,
         quic::{spawn_server, MAX_STAKED_CONNECTIONS, MAX_UNSTAKED_CONNECTIONS},
     },
     std::{

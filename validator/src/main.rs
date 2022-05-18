@@ -2158,8 +2158,8 @@ pub fn main() {
         value_t!(matches, "rocksdb_max_compaction_jitter", u64).ok();
     let tpu_coalesce_ms =
         value_t!(matches, "tpu_coalesce_ms", u64).unwrap_or(DEFAULT_TPU_COALESCE_MS);
-    let tpu_max_queued_batches = value_t!(matches, "tpu_max_queued_batches", usize)
-        .unwrap_or(DEFAULT_MAX_QUEUED_BATCHES);
+    let tpu_max_queued_batches =
+        value_t!(matches, "tpu_max_queued_batches", usize).unwrap_or(DEFAULT_MAX_QUEUED_BATCHES);
     let wal_recovery_mode = matches
         .value_of("wal_recovery_mode")
         .map(BlockstoreRecoveryMode::from);
