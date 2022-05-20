@@ -1,5 +1,6 @@
 use {
     crate::tower_storage::{SavedTowerVersions, TowerStorage},
+    chrono::prelude::*,
     crossbeam_channel::Receiver,
     solana_gossip::cluster_info::ClusterInfo,
     solana_measure::measure::Measure,
@@ -80,7 +81,14 @@ impl VotingService {
             measure.stop();
             inc_new_counter_info!("tower_save-ms", measure.as_ms() as usize);
         }
-
+        let time_now = Utc::now().timestamp_nanos() as u64;
+        let message = vote_op.tx().message();
+        warn!("{:?} Voting: hash={:?}, key0={:?}, key1={:?}",
+            time_now,
+            message.recent_blockhash,
+            message.account_keys[0],
+            message.account_keys[1],
+        );
         let target_address = if send_to_tpu_vote_port {
             crate::banking_stage::next_leader_tpu_vote(cluster_info, poh_recorder)
         } else {
@@ -93,12 +101,14 @@ impl VotingService {
                 tx, tower_slots, ..
             } => {
                 cluster_info.push_vote(&tower_slots, tx);
+                warn!("Vote was push");
             }
             VoteOp::RefreshVote {
                 tx,
                 last_voted_slot,
             } => {
                 cluster_info.refresh_vote(tx, last_voted_slot);
+                warn!("Vote was refresh");
             }
         }
     }

@@ -4994,6 +4994,7 @@ version = "1.11.0"
 dependencies = [
  "bincode",
  "bv",
+ "chrono",
  "clap 2.34.0",
  "crossbeam-channel",
  "flate2",

@@ -41,6 +41,7 @@ use {
     },
     bincode::{serialize, serialized_size},
     crossbeam_channel::{Receiver, RecvTimeoutError, Sender},
+    chrono::prelude::*,
     itertools::Itertools,
     rand::{seq::SliceRandom, thread_rng, CryptoRng, Rng},
     rayon::{prelude::*, ThreadPool, ThreadPoolBuilder},
@@ -990,6 +991,8 @@ impl ClusterInfo {
         if let Err(err) = gossip_crds.insert(vote, now, GossipRoute::LocalMessage) {
             error!("push_vote failed: {:?}", err);
         }
+        let time_now = Utc::now().timestamp_nanos() as u64;
+        warn!("{:?} Gossip vote pushed",time_now);
     }
 
     pub fn push_vote(&self, tower: &[Slot], vote: Transaction) {

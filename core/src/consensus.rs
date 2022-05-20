@@ -536,7 +536,7 @@ impl Tower {
         if current_slot > self.last_timestamp.slot
             || self.last_timestamp.slot == 0 && current_slot == self.last_timestamp.slot
         {
-            let timestamp = Utc::now().timestamp();
+            let timestamp = Utc::now().timestamp_nanos();
             if timestamp >= self.last_timestamp.timestamp {
                 self.last_timestamp = BlockTimestamp {
                     slot: current_slot,

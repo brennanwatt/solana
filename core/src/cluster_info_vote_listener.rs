@@ -9,6 +9,7 @@ use {
         },
         vote_stake_tracker::VoteStakeTracker,
     },
+    chrono::prelude::*,
     crossbeam_channel::{unbounded, Receiver, RecvTimeoutError, Select, Sender},
     log::*,
     solana_gossip::{
@@ -276,9 +277,11 @@ impl ClusterInfoVoteListener {
             if !votes.is_empty() {
                 let (vote_txs, packets) = Self::verify_votes(votes, bank_forks);
                 verified_vote_transactions_sender.send(vote_txs)?;
+                let time_now = Utc::now().timestamp_nanos() as u64;
+                warn!("{:?} recv_loop sent vote",time_now);
                 verified_vote_label_packets_sender.send(packets)?;
             }
-            sleep(Duration::from_millis(GOSSIP_SLEEP_MILLIS));
+            sleep(Duration::from_millis(1));
         }
         Ok(())
     }
@@ -542,6 +545,8 @@ impl ClusterInfoVoteListener {
             // will return if channels either have something, or are
             // disconnected. `ready_timeout` can wake up spuriously,
             // hence the loop
+            let time_now = Utc::now().timestamp_nanos() as u64;
+            warn!("{:?} waiting to receive vote",time_now);
             let _ = sel.ready_timeout(remaining_wait_time)?;
 
             // Should not early return from this point onwards until `process_votes()`
@@ -560,6 +565,10 @@ impl ClusterInfoVoteListener {
                     bank_notification_sender,
                     cluster_confirmed_slot_sender,
                 ));
+            }
+            else
+            {
+                warn!("No votes");
             }
             remaining_wait_time = remaining_wait_time.saturating_sub(start.elapsed());
         }
@@ -696,6 +705,12 @@ impl ClusterInfoVoteListener {
     ) -> ThresholdConfirmedSlots {
         let mut diff: HashMap<Slot, HashMap<Pubkey, bool>> = HashMap::new();
         let mut new_optimistic_confirmed_slots = vec![];
+        let time_now = Utc::now().timestamp_nanos() as u64;
+        warn!("{:?} gossip={:?}, replay={:?}",
+            time_now,
+            gossip_vote_txs.len(),
+            replayed_votes.len()
+        );
 
         // Process votes from gossip and ReplayStage
         let votes = gossip_vote_txs
@@ -703,7 +718,14 @@ impl ClusterInfoVoteListener {
             .filter_map(vote_parser::parse_vote_transaction)
             .zip(repeat(/*is_gossip:*/ true))
             .chain(replayed_votes.into_iter().zip(repeat(/*is_gossip:*/ false)));
+        
         for ((vote_pubkey, vote, _), is_gossip) in votes {
+            warn!("Vote pubkey={:?}, hash={:?}, latency={:?}, gossip={:?}",
+                vote_pubkey,
+                vote.hash(),
+                (time_now - (vote.timestamp().unwrap_or(0) as u64))/1000,
+                is_gossip,
+            );
             Self::track_new_votes_and_notify_confirmations(
                 vote,
                 &vote_pubkey,
