@@ -481,6 +481,10 @@ impl CachedExecutors {
         let _ = self.executors.remove(pubkey);
     }
 
+    fn clear(&mut self) {
+        *self = CachedExecutors::default();
+    }
+
     fn get_primer_count_upper_bound_inclusive(counts: &[(&Pubkey, u64)]) -> u64 {
         const PRIMER_COUNT_TARGET_PERCENTILE: u64 = 85;
         #[allow(clippy::assertions_on_constants)]
@@ -4163,6 +4167,11 @@ impl Bank {
         Arc::make_mut(&mut cache).remove(pubkey);
     }
 
+    pub fn clear_executors(&self) {
+        let mut cache = self.cached_executors.write().unwrap();
+        Arc::make_mut(&mut cache).clear();
+    }
+
     /// Execute a transaction using the provided loaded accounts and update
     /// the executors cache if the transaction was successful.
     #[allow(clippy::too_many_arguments)]
@@ -6397,7 +6406,8 @@ impl Bank {
         Ok(sanitized_tx)
     }
 
-    pub fn calculate_capitalization(&self, debug_verify: bool) -> u64 {
+    /// only called at startup vs steady-state runtime
+    fn calculate_capitalization(&self, debug_verify: bool) -> u64 {
         let can_cached_slot_be_unflushed = true; // implied yes
         self.rc.accounts.calculate_capitalization(
             &self.ancestors,
@@ -6409,6 +6419,7 @@ impl Bank {
         )
     }
 
+    /// only called at startup vs steady-state runtime
     pub fn calculate_and_verify_capitalization(&self, debug_verify: bool) -> bool {
         let calculated = self.calculate_capitalization(debug_verify);
         let expected = self.capitalization();
@@ -6526,10 +6537,15 @@ impl Bank {
         }
         shrink_all_slots_time.stop();
 
-        info!("verify_bank_hash..");
-        let mut verify_time = Measure::start("verify_bank_hash");
-        let mut verify = self.verify_bank_hash(test_hash_calculation, false);
-        verify_time.stop();
+        let (mut verify, verify_time_us) = if !self.rc.accounts.accounts_db.skip_initial_hash_calc {
+            info!("verify_bank_hash..");
+            let mut verify_time = Measure::start("verify_bank_hash");
+            let verify = self.verify_bank_hash(test_hash_calculation, false);
+            verify_time.stop();
+            (verify, verify_time.as_us())
+        } else {
+            (true, 0)
+        };
 
         info!("verify_hash..");
         let mut verify2_time = Measure::start("verify_hash");
@@ -6541,7 +6557,7 @@ impl Bank {
             "verify_snapshot_bank",
             ("clean_us", clean_time.as_us(), i64),
             ("shrink_all_slots_us", shrink_all_slots_time.as_us(), i64),
-            ("verify_bank_hash_us", verify_time.as_us(), i64),
+            ("verify_bank_hash_us", verify_time_us, i64),
             ("verify_hash_us", verify2_time.as_us(), i64),
         );
 

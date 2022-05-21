@@ -128,6 +128,7 @@ macro_rules! register_feature_gated_syscall {
 
 pub fn register_syscalls(
     invoke_context: &mut InvokeContext,
+    disable_deploy_of_alloc_free_syscall: bool,
 ) -> Result<SyscallRegistry, EbpfError<BpfError>> {
     let secp256k1_recover_syscall_enabled = invoke_context
         .feature_set
@@ -328,7 +329,9 @@ pub fn register_syscalls(
     )?;
 
     // Memory allocator
-    syscall_registry.register_syscall_by_name(
+    register_feature_gated_syscall!(
+        syscall_registry,
+        !disable_deploy_of_alloc_free_syscall,
         b"sol_alloc_free_",
         SyscallAllocFree::init,
         SyscallAllocFree::call,
@@ -384,30 +387,28 @@ pub fn bind_syscall_context_objects<'a, 'b>(
     vm: &mut EbpfVm<'a, BpfError, crate::ThisInstructionMeter>,
     invoke_context: &'a mut InvokeContext<'b>,
     heap: AlignedMemory,
+    orig_account_lengths: Vec<usize>,
 ) -> Result<(), EbpfError<BpfError>> {
-    invoke_context.set_check_aligned(
-        bpf_loader_deprecated::id()
-            != invoke_context
-                .transaction_context
-                .get_current_instruction_context()
-                .and_then(|instruction_context| {
-                    instruction_context
-                        .try_borrow_program_account(invoke_context.transaction_context)
-                })
-                .map(|program_account| *program_account.get_owner())
-                .map_err(SyscallError::InstructionError)?,
-    );
-    invoke_context.set_check_size(
-        invoke_context
-            .feature_set
-            .is_active(&check_slice_translation_size::id()),
-    );
+    let check_aligned = bpf_loader_deprecated::id()
+        != invoke_context
+            .transaction_context
+            .get_current_instruction_context()
+            .and_then(|instruction_context| {
+                instruction_context.try_borrow_program_account(invoke_context.transaction_context)
+            })
+            .map(|program_account| *program_account.get_owner())
+            .map_err(SyscallError::InstructionError)?;
+    let check_size = invoke_context
+        .feature_set
+        .is_active(&check_slice_translation_size::id());
 
     invoke_context
-        .set_allocator(Rc::new(RefCell::new(BpfAllocator::new(
-            heap,
-            ebpf::MM_HEAP_START,
-        ))))
+        .set_syscall_context(
+            check_aligned,
+            check_size,
+            orig_account_lengths,
+            Rc::new(RefCell::new(BpfAllocator::new(heap, ebpf::MM_HEAP_START))),
+        )
         .map_err(SyscallError::InstructionError)?;
 
     let invoke_context = Rc::new(RefCell::new(invoke_context));
@@ -3253,7 +3254,7 @@ fn call<'a, 'b: 'a>(
                     memory_mapping,
                     caller_account.vm_data_addr,
                     new_len as u64,
-                    invoke_context.get_check_aligned(),
+                    false, // Don't care since it is byte aligned
                     invoke_context.get_check_size(),
                 )?;
                 *caller_account.ref_to_len_in_vm = new_len as u64;
@@ -4330,10 +4331,12 @@ mod tests {
             )
             .unwrap();
             invoke_context
-                .set_allocator(Rc::new(RefCell::new(BpfAllocator::new(
-                    heap,
-                    ebpf::MM_HEAP_START,
-                ))))
+                .set_syscall_context(
+                    true,
+                    true,
+                    vec![],
+                    Rc::new(RefCell::new(BpfAllocator::new(heap, ebpf::MM_HEAP_START))),
+                )
                 .unwrap();
             let mut syscall = SyscallAllocFree {
                 invoke_context: Rc::new(RefCell::new(&mut invoke_context)),
@@ -4370,12 +4373,13 @@ mod tests {
             )
             .unwrap();
             invoke_context
-                .set_allocator(Rc::new(RefCell::new(BpfAllocator::new(
-                    heap,
-                    ebpf::MM_HEAP_START,
-                ))))
+                .set_syscall_context(
+                    false,
+                    true,
+                    vec![],
+                    Rc::new(RefCell::new(BpfAllocator::new(heap, ebpf::MM_HEAP_START))),
+                )
                 .unwrap();
-            invoke_context.set_check_aligned(false);
             let mut syscall = SyscallAllocFree {
                 invoke_context: Rc::new(RefCell::new(&mut invoke_context)),
             };
@@ -4410,10 +4414,12 @@ mod tests {
             )
             .unwrap();
             invoke_context
-                .set_allocator(Rc::new(RefCell::new(BpfAllocator::new(
-                    heap,
-                    ebpf::MM_HEAP_START,
-                ))))
+                .set_syscall_context(
+                    true,
+                    true,
+                    vec![],
+                    Rc::new(RefCell::new(BpfAllocator::new(heap, ebpf::MM_HEAP_START))),
+                )
                 .unwrap();
             let mut syscall = SyscallAllocFree {
                 invoke_context: Rc::new(RefCell::new(&mut invoke_context)),
@@ -4451,17 +4457,19 @@ mod tests {
             )
             .unwrap();
             invoke_context
-                .set_allocator(Rc::new(RefCell::new(BpfAllocator::new(
-                    heap,
-                    ebpf::MM_HEAP_START,
-                ))))
+                .set_syscall_context(
+                    true,
+                    true,
+                    vec![],
+                    Rc::new(RefCell::new(BpfAllocator::new(heap, ebpf::MM_HEAP_START))),
+                )
                 .unwrap();
             let mut syscall = SyscallAllocFree {
                 invoke_context: Rc::new(RefCell::new(&mut invoke_context)),
             };
             let mut result: Result<u64, EbpfError<BpfError>> = Ok(0);
             syscall.call(
-                size_of::<u8>() as u64,
+                size_of::<T>() as u64,
                 0,
                 0,
                 0,
@@ -4472,7 +4480,7 @@ mod tests {
             let address = result.unwrap();
             assert_ne!(address, 0);
             assert_eq!(
-                (address as *const u8 as usize).wrapping_rem(align_of::<u8>()),
+                (address as *const u8 as usize).wrapping_rem(align_of::<T>()),
                 0
             );
         }
