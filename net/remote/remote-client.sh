@@ -49,11 +49,12 @@ solana-bench-tps)
     solana-bench-tps \
       --entrypoint $entrypointIp:8001 \
       --faucet $entrypointIp:9900 \
-      --duration 7500 \
+      --duration 180 \
       --sustained \
       --threads $threadCount \
       $benchTpsExtraArgs \
       --read-client-keys ./client-accounts.yml \
+      --tpu-use-quic \
   "
   ;;
 idle)
