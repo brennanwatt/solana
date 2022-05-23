@@ -5639,6 +5639,7 @@ dependencies = [
  "bytemuck",
  "byteorder",
  "bzip2",
+ "chrono",
  "crossbeam-channel",
  "dashmap",
  "dir-diff",

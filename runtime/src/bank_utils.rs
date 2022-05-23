@@ -49,12 +49,12 @@ pub fn find_and_send_votes(
                 if tx.is_simple_vote_transaction() && result.was_executed_successfully() {
                     if let Some(parsed_vote) = vote_parser::parse_sanitized_vote_transaction(tx) {
                         if parsed_vote.1.last_voted_slot().is_some() {
-                            let (vote_pubkey, vote, _switch_proof, signature) = parsed_vote;
                             let time_now = Utc::now().timestamp_nanos() as u64;
-                            warn!("Banking Vote pubkey={:?}, hash={:?}, latency={:?}",
-                                vote_pubkey,
-                                vote.hash(),
-                                (time_now - (vote.timestamp().unwrap_or(0) as u64))/1000,
+                            warn!("Banking Vote pubkey={:?}, hash={:?}, slot hash={:?}, latency={:?}",
+                                parsed_vote.0,
+                                parsed_vote.1.hash(),
+                                parsed_vote.1.last_voted_slot_hash(),
+                                (time_now - (parsed_vote.1.timestamp().unwrap_or(0) as u64))/1000,
                             );
                             let _ = vote_sender.send(parsed_vote);
                         }
