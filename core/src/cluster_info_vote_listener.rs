@@ -720,9 +720,10 @@ impl ClusterInfoVoteListener {
             .zip(repeat(/*is_gossip:*/ true))
             .chain(replayed_votes.into_iter().zip(repeat(/*is_gossip:*/ false)));
         for ((vote_pubkey, vote, _switch_proof, signature), is_gossip) in votes {
-            warn!("Vote pubkey={:?}, hash={:?}, latency={:?}, gossip={:?}",
+            warn!("Vote pubkey={:?}, hash={:?}, slot hash={:?}, latency={:?}, gossip={:?}",
                 vote_pubkey,
                 vote.hash(),
+                vote.last_voted_slot_hash(),
                 (time_now - (vote.timestamp().unwrap_or(0) as u64))/1000,
                 is_gossip,
             );

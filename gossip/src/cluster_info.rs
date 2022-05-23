@@ -991,7 +991,6 @@ impl ClusterInfo {
         if let Err(err) = gossip_crds.insert(vote, now, GossipRoute::LocalMessage) {
             error!("push_vote failed: {:?}", err);
         }
-        let time_now = Utc::now().timestamp_nanos() as u64;
     }
 
     pub fn push_vote(&self, tower: &[Slot], vote: Transaction) {
