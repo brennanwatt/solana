@@ -232,7 +232,7 @@ impl SlotMetaWorkingSetEntry {
 
 impl BlockstoreInsertionMetrics {
     pub fn report_metrics(&self, metric_name: &'static str) {
-        datapoint_info!(
+        datapoint_warn!(
             metric_name,
             ("num_shreds", self.num_shreds as i64, i64),
             ("total_elapsed", self.total_elapsed as i64, i64),
@@ -1399,6 +1399,7 @@ impl Blockstore {
 
         // Commit step: commit all changes to the mutable structures at once, or none at all.
         // We don't want only a subset of these changes going through.
+        warn!("Inserting coding shred");
         write_batch.put_bytes::<cf::ShredCode>((slot, shred_index), shred.payload())?;
         index_meta.coding_mut().insert(shred_index);
 
@@ -1599,6 +1600,7 @@ impl Blockstore {
 
         // Commit step: commit all changes to the mutable structures at once, or none at all.
         // We don't want only a subset of these changes going through.
+        warn!("Inserting data shred");
         write_batch.put_bytes::<cf::ShredData>((slot, index), shred.bytes_to_store())?;
         data_index.insert(index);
         let newly_completed_data_sets = update_slot_meta(

@@ -215,6 +215,7 @@ fn execute_batch(
         batch.sanitized_transactions(),
         &tx_results,
         replay_vote_sender,
+        false,
     );
 
     let TransactionResults {

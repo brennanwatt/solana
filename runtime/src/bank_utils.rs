@@ -37,6 +37,7 @@ pub fn find_and_send_votes(
     sanitized_txs: &[SanitizedTransaction],
     tx_results: &TransactionResults,
     vote_sender: Option<&ReplayVoteSender>,
+    is_tpu: bool,
 ) {
     let TransactionResults {
         execution_results, ..
@@ -50,11 +51,12 @@ pub fn find_and_send_votes(
                     if let Some(parsed_vote) = vote_parser::parse_sanitized_vote_transaction(tx) {
                         if parsed_vote.1.last_voted_slot().is_some() {
                             let time_now = Utc::now().timestamp_nanos() as u64;
-                            warn!("Banking Vote pubkey={:?}, hash={:?}, slot hash={:?}, latency={:?}",
+                            warn!("Banking Vote pubkey={:?}, hash={:?}, slot hash={:?}, latency={:?}, is_tpu={:?}",
                                 parsed_vote.0,
                                 parsed_vote.1.hash(),
                                 parsed_vote.1.last_voted_slot_hash(),
                                 (time_now - (parsed_vote.1.timestamp().unwrap_or(0) as u64))/1000,
+                                is_tpu,
                             );
                             let _ = vote_sender.send(parsed_vote);
                         }

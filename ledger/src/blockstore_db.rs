@@ -1515,6 +1515,7 @@ where
 
 impl<'a> WriteBatch<'a> {
     pub fn put_bytes<C: Column + ColumnName>(&mut self, key: C::Index, bytes: &[u8]) -> Result<()> {
+        warn!("blockstore writing {:?} bytes",bytes.len());
         self.write_batch
             .put_cf(self.get_cf::<C>(), &C::key(key), bytes);
         Ok(())

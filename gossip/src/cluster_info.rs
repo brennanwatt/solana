@@ -41,7 +41,6 @@ use {
     },
     bincode::{serialize, serialized_size},
     crossbeam_channel::{Receiver, RecvTimeoutError, Sender},
-    chrono::prelude::*,
     itertools::Itertools,
     rand::{seq::SliceRandom, thread_rng, CryptoRng, Rng},
     rayon::{prelude::*, ThreadPool, ThreadPoolBuilder},

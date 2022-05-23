@@ -1310,11 +1310,11 @@ impl BankingStage {
 
             let (_, find_and_send_votes_time) = Measure::this(
                 |_| {
-                    warn!("Calling find_and_send_votes from TPU flow");
                     bank_utils::find_and_send_votes(
                         sanitized_txs,
                         &tx_results,
                         Some(gossip_vote_sender),
+                        true,
                     );
                     if let Some(transaction_status_sender) = transaction_status_sender {
                         let txs = batch.sanitized_transactions().to_vec();

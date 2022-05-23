@@ -220,7 +220,7 @@ impl ReplayTiming {
         let now = timestamp();
         let elapsed_ms = now - self.last_print;
         if elapsed_ms > 1000 {
-            datapoint_info!(
+            datapoint_warn!(
                 "replay-loop-voting-stats",
                 ("vote_push_us", self.vote_push_us, i64),
                 ("vote_send_us", self.vote_send_us, i64),
@@ -231,7 +231,7 @@ impl ReplayTiming {
                     i64
                 ),
             );
-            datapoint_info!(
+            datapoint_warn!(
                 "replay-loop-timing-stats",
                 ("total_elapsed_us", elapsed_ms * 1000, i64),
                 (
@@ -1466,7 +1466,7 @@ impl ReplayStage {
                 } else {
                     ""
                 };
-                info!(
+                warn!(
                     "LEADER CHANGE at slot: {} leader: {}{}",
                     bank_slot, new_leader, msg
                 );
