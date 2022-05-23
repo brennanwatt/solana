@@ -17,6 +17,7 @@ bv = { version = "0.11.1", features = ["serde"] }
 bytemuck = "1.9.1"
 byteorder = "1.4.3"
 bzip2 = "0.4.3"
+chrono = { version = "0.4.11", features = ["serde"] }
 crossbeam-channel = "0.5"
 dashmap = { version = "4.0.2", features = ["rayon", "raw-api"] }
 dir-diff = "0.3.2"
