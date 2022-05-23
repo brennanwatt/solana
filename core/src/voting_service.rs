@@ -83,23 +83,15 @@ impl VotingService {
         }
         let time_now = Utc::now().timestamp_nanos() as u64;
         let message = vote_op.tx().message();
+        let poh_recorder_lock = poh_recorder.lock().unwrap();
         warn!("{:?} Voting: hash={:?}, key0={:?}, key1={:?}, leader0={:?}, leader1={:?}, leader2={:?}, send_to_tpu_vote_port={:?}",
             time_now,
             message.recent_blockhash,
             message.account_keys[0],
             message.account_keys[1],
-            poh_recorder
-                .lock()
-                .unwrap()
-                .leader_after_n_slots(0),
-            poh_recorder
-                .lock()
-                .unwrap()
-                .leader_after_n_slots(1),
-            poh_recorder
-                .lock()
-                .unwrap()
-                .leader_after_n_slots(2),
+            poh_recorder_lock.leader_after_n_slots(0),
+            poh_recorder_lock.leader_after_n_slots(1),
+            poh_recorder_lock.leader_after_n_slots(2),
             send_to_tpu_vote_port,
         );
         let target_address = if send_to_tpu_vote_port {
