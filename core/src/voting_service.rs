@@ -94,6 +94,7 @@ impl VotingService {
             poh_recorder_lock.leader_after_n_slots(2),
             send_to_tpu_vote_port,
         );
+        drop(poh_recorder_lock);
         let target_address = if send_to_tpu_vote_port {
             crate::banking_stage::next_leader_tpu_vote(cluster_info, poh_recorder)
         } else {
