@@ -351,7 +351,7 @@ fn generate_txs(
 ) {
     let blockhash = *blockhash.read().unwrap();
     let tx_count = source.len();
-    info!(
+    warn!(
         "Signing transactions... {} (reclaim={}, blockhash={})",
         tx_count, reclaim, &blockhash
     );
@@ -363,7 +363,7 @@ fn generate_txs(
     let ns = duration.as_secs() * 1_000_000_000 + u64::from(duration.subsec_nanos());
     let bsps = (tx_count) as f64 / ns as f64;
     let nsps = ns as f64 / (tx_count) as f64;
-    info!(
+    warn!(
         "Done. {:.2} thousand signatures per second, {:.2} us per signature, {} ms total time, {}",
         bsps * 1_000_000_f64,
         nsps / 1_000_f64,
@@ -745,8 +745,8 @@ fn compute_and_report_stats(
     let mut max_tx_count = 0;
     let mut nodes_with_zero_tps = 0;
     let mut total_maxes = 0.0;
-    info!(" Node address        |       Max TPS | Total Transactions");
-    info!("---------------------+---------------+--------------------");
+    warn!(" Node address        |       Max TPS | Total Transactions");
+    warn!("---------------------+---------------+--------------------");
 
     for (sock, stats) in maxes.read().unwrap().iter() {
         let maybe_flag = match stats.txs {
@@ -754,7 +754,7 @@ fn compute_and_report_stats(
             _ => "",
         };
 
-        info!(
+        warn!(
             "{:20} | {:13.2} | {} {}",
             sock, stats.tps, stats.txs, maybe_flag
         );
@@ -775,7 +775,7 @@ fn compute_and_report_stats(
     if total_maxes > 0.0 {
         let num_nodes_with_tps = maxes.read().unwrap().len() - nodes_with_zero_tps;
         let average_max = total_maxes / num_nodes_with_tps as f32;
-        info!(
+        warn!(
             "\nAverage max TPS: {:.2}, {} nodes had 0 TPS",
             average_max, nodes_with_zero_tps
         );
@@ -787,7 +787,7 @@ fn compute_and_report_stats(
     } else {
         0.0
     };
-    info!(
+    warn!(
         "\nHighest TPS: {:.2} sampling period {}s max transactions: {} clients: {} drop rate: {:.2}",
         max_of_maxes,
         sample_period,
@@ -795,7 +795,7 @@ fn compute_and_report_stats(
         maxes.read().unwrap().len(),
         drop_rate,
     );
-    info!(
+    warn!(
         "\tAverage TPS: {}",
         max_tx_count as f32 / duration_as_s(tx_send_elapsed)
     );
@@ -826,7 +826,7 @@ pub fn generate_and_fund_keypairs<T: 'static + BenchTpsClient + Send + Sync>(
     let rent = client.get_minimum_balance_for_rent_exemption(0)?;
     let lamports_per_account = lamports_per_account + rent;
 
-    info!("Creating {} keypairs...", keypair_count);
+    warn!("Creating {} keypairs...", keypair_count);
     let (mut keypairs, extra) = generate_keypairs(funding_key, keypair_count as u64);
     fund_keypairs(client, funding_key, &keypairs, extra, lamports_per_account)?;
 
@@ -844,7 +844,7 @@ pub fn fund_keypairs<T: 'static + BenchTpsClient + Send + Sync>(
     lamports_per_account: u64,
 ) -> Result<()> {
     let rent = client.get_minimum_balance_for_rent_exemption(0)?;
-    info!("Get lamports...");
+    warn!("Get lamports...");
 
     // Sample the first keypair, to prevent lamport loss on repeated solana-bench-tps executions
     let first_key = keypairs[0].pubkey();
@@ -875,7 +875,7 @@ pub fn fund_keypairs<T: 'static + BenchTpsClient + Send + Sync>(
         let total = lamports_per_account * total_keypairs + extra_fees;
 
         let funding_key_balance = client.get_balance(&funding_key.pubkey()).unwrap_or(0);
-        info!(
+        warn!(
             "Funding keypair balance: {} max_fee: {} lamports_per_account: {} extra: {} total: {}",
             funding_key_balance, max_fee, lamports_per_account, extra, total
         );

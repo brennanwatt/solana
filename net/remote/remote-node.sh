@@ -189,6 +189,7 @@ EOF
         # shellcheck disable=SC2086 # Do not want to quote $benchTpsExtraArgs
         solana-bench-tps --write-client-keys config/bench-tps"$i".yml \
           --target-lamports-per-signature "$lamports_per_signature" $benchTpsExtraArgs
+        #  >> bench-tps-output.log
         # Skip first line, as it contains header
         tail -n +2 -q config/bench-tps"$i".yml >> config/client-accounts.yml
         echo "" >> config/client-accounts.yml

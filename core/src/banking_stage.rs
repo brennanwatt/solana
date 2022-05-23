@@ -756,8 +756,8 @@ impl BankingStage {
         }
 
         proc_start.stop();
-        debug!(
-            "@{:?} done processing buffered batches: {} time: {:?}ms tx count: {} tx/s: {}",
+        warn!(
+            "@{:?}ms done processing buffered batches: {} time: {:?}ms tx count: {} tx/s: {}",
             timestamp(),
             buffered_packets_len,
             proc_start.as_ms(),

@@ -281,7 +281,7 @@ impl ClusterInfoVoteListener {
                 warn!("{:?} recv_loop sent vote",time_now);
                 verified_vote_label_packets_sender.send(packets)?;
             }
-            sleep(Duration::from_millis(1));
+            sleep(Duration::from_millis(GOSSIP_SLEEP_MILLIS));
         }
         Ok(())
     }
