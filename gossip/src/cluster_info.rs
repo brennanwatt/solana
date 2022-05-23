@@ -992,7 +992,6 @@ impl ClusterInfo {
             error!("push_vote failed: {:?}", err);
         }
         let time_now = Utc::now().timestamp_nanos() as u64;
-        warn!("{:?} Gossip vote pushed",time_now);
     }
 
     pub fn push_vote(&self, tower: &[Slot], vote: Transaction) {

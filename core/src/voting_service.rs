@@ -83,11 +83,24 @@ impl VotingService {
         }
         let time_now = Utc::now().timestamp_nanos() as u64;
         let message = vote_op.tx().message();
-        warn!("{:?} Voting: hash={:?}, key0={:?}, key1={:?}",
+        warn!("{:?} Voting: hash={:?}, key0={:?}, key1={:?}, leader0={:?}, leader1={:?}, leader2={:?}, send_to_tpu_vote_port={:?}",
             time_now,
             message.recent_blockhash,
             message.account_keys[0],
             message.account_keys[1],
+            poh_recorder
+                .lock()
+                .unwrap()
+                .leader_after_n_slots(0),
+            poh_recorder
+                .lock()
+                .unwrap()
+                .leader_after_n_slots(1),
+            poh_recorder
+                .lock()
+                .unwrap()
+                .leader_after_n_slots(2),
+            send_to_tpu_vote_port,
         );
         let target_address = if send_to_tpu_vote_port {
             crate::banking_stage::next_leader_tpu_vote(cluster_info, poh_recorder)
@@ -101,14 +114,12 @@ impl VotingService {
                 tx, tower_slots, ..
             } => {
                 cluster_info.push_vote(&tower_slots, tx);
-                warn!("Vote was push");
             }
             VoteOp::RefreshVote {
                 tx,
                 last_voted_slot,
             } => {
                 cluster_info.refresh_vote(tx, last_voted_slot);
-                warn!("Vote was refresh");
             }
         }
     }
