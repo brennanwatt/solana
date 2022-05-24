@@ -382,7 +382,7 @@ impl SigVerifyStage {
                             _ => error!("{:?}", e),
                         }
                     }
-                    if last_print.elapsed().as_secs() > 1 {
+                    if last_print.elapsed().as_secs() > 0 {
                         stats.report(name);
                         stats = SigVerifierStats::default();
                         last_print = Instant::now();
