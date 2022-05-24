@@ -75,7 +75,7 @@ pub const FORWARD_TRANSACTIONS_TO_LEADER_AT_SLOT_OFFSET: u64 = 2;
 pub const HOLD_TRANSACTIONS_SLOT_OFFSET: u64 = 20;
 
 // Fixed thread size seems to be fastest on GCP setup
-pub const NUM_THREADS: u32 = 12;
+pub const NUM_THREADS: u32 = 18;
 
 const TOTAL_BUFFERED_PACKETS: usize = 700_000;
 
