@@ -17,7 +17,7 @@ use {
     solana_gossip::cluster_info::{ClusterInfo, ClusterInfoError, DATA_PLANE_FANOUT},
     solana_ledger::{blockstore::Blockstore, shred::Shred},
     solana_measure::measure::Measure,
-    solana_metrics::{inc_new_counter_error, inc_new_counter_info},
+    solana_metrics::{inc_new_counter_error, inc_new_counter_warn},
     solana_poh::poh_recorder::WorkingBankEntry,
     solana_runtime::bank_forks::BankForks,
     solana_sdk::{

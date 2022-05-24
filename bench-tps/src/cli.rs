@@ -63,11 +63,11 @@ impl Default for Config {
             id: Keypair::new(),
             threads: 4,
             num_nodes: 1,
-            duration: Duration::new(std::u64::MAX, 0),
-            tx_count: 50_000,
+            duration: Duration::new(120, 0),
+            tx_count: 100_000,
             keypair_multiplier: 8,
             thread_batch_sleep_ms: 1000,
-            sustained: false,
+            sustained: true,
             client_ids_and_stake_file: String::new(),
             write_to_client_file: false,
             read_from_client_file: false,
@@ -77,7 +77,7 @@ impl Default for Config {
             target_slots_per_epoch: 0,
             target_node: None,
             external_client_type: ExternalClientType::default(),
-            use_quic: false,
+            use_quic: true,
         }
     }
 }
