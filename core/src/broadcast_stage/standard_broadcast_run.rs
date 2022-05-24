@@ -192,7 +192,7 @@ impl StandardBroadcastRun {
         let num_entries = receive_results.entries.len();
         let bank = receive_results.bank.clone();
         let last_tick_height = receive_results.last_tick_height;
-        inc_new_counter_info!("broadcast_service-entries_received", num_entries);
+        inc_new_counter_warn!("broadcast_service-entries_received", num_entries);
         let old_broadcast_start = self.slot_broadcast_start;
         let old_num_batches = self.num_batches;
         if self.current_slot_and_parent.is_none()
