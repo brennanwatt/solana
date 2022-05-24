@@ -66,7 +66,7 @@ impl Default for Config {
             duration: Duration::new(120, 0),
             tx_count: 150_000,
             keypair_multiplier: 8,
-            thread_batch_sleep_ms: 100,
+            thread_batch_sleep_ms: 1000,
             sustained: true,
             client_ids_and_stake_file: String::new(),
             write_to_client_file: false,
