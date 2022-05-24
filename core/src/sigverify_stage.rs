@@ -278,11 +278,11 @@ impl SigVerifyStage {
 
         let mut discard_time = Measure::start("sigverify_discard_time");
         let mut num_valid_packets = num_unique;
-        if num_unique > MAX_SIGVERIFY_BATCH {
+        /*if num_unique > MAX_SIGVERIFY_BATCH {
             Self::discard_excess_packets(&mut batches, MAX_SIGVERIFY_BATCH);
             num_valid_packets = MAX_SIGVERIFY_BATCH;
-        }
-        let excess_fail = num_unique.saturating_sub(MAX_SIGVERIFY_BATCH);
+        }*/
+        let excess_fail = 0;
         discard_time.stop();
 
         let mut verify_time = Measure::start("sigverify_batch_time");
