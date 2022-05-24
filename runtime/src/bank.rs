@@ -4337,7 +4337,7 @@ impl Bank {
     ) -> LoadAndExecuteTransactionsOutput {
         let sanitized_txs = batch.sanitized_transactions();
         debug!("processing transactions: {}", sanitized_txs.len());
-        inc_new_counter_info!("bank-process_transactions", sanitized_txs.len());
+        inc_new_counter_warn!("bank-process_transactions", sanitized_txs.len());
         let mut error_counters = TransactionErrorMetrics::default();
 
         let retryable_transaction_indexes: Vec<_> = batch
@@ -4357,6 +4357,7 @@ impl Bank {
                 Ok(_) => None,
             })
             .collect();
+        inc_new_counter_warn!("bank-account_in_use", error_counters.account_in_use);
 
         let mut check_time = Measure::start("check_transactions");
         let check_results = self.check_transactions(
@@ -4556,7 +4557,7 @@ impl Bank {
             }
         }
         if *err_count > 0 {
-            debug!(
+            warn!(
                 "{} errors of {} txs",
                 *err_count,
                 *err_count + executed_with_successful_result_count

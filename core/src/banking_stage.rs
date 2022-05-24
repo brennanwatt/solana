@@ -1460,14 +1460,6 @@ impl BankingStage {
         // reports qos service stats for this batch
         qos_service.report_metrics(bank.clone());
 
-        debug!(
-            "bank: {} lock: {}us unlock: {}us txs_len: {}",
-            bank.slot(),
-            lock_time.as_us(),
-            unlock_time.as_us(),
-            txs.len(),
-        );
-
         ProcessTransactionBatchOutput {
             cost_model_throttled_transactions_count,
             cost_model_us: cost_model_time.as_us(),
