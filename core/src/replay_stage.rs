@@ -2362,7 +2362,7 @@ impl ReplayStage {
                 .unwrap_or_else(|err| warn!("cost_update_sender failed: {:?}", err));
         }
 
-        inc_new_counter_info!("replay_stage-replay_transactions", tx_count);
+        inc_new_counter_warn!("replay_stage-replay_transactions", tx_count);
         did_complete_bank
     }
 
