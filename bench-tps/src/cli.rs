@@ -61,7 +61,7 @@ impl Default for Config {
             json_rpc_url: ConfigInput::default().json_rpc_url,
             websocket_url: ConfigInput::default().websocket_url,
             id: Keypair::new(),
-            threads: 4,
+            threads: 6,
             num_nodes: 1,
             duration: Duration::new(120, 0),
             tx_count: 150_000,
