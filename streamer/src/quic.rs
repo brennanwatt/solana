@@ -347,7 +347,7 @@ struct StreamStats {
 
 impl StreamStats {
     fn report(&self) {
-        datapoint_info!(
+        datapoint_warn!(
             "quic-connections",
             (
                 "active_connections",
@@ -523,7 +523,7 @@ pub fn spawn_server(
                 )
                 .await;
 
-                if last_datapoint.elapsed().as_secs() >= 5 {
+                if last_datapoint.elapsed().as_secs() >= 1 {
                     stats.report();
                     last_datapoint = Instant::now();
                 }

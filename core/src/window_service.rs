@@ -56,7 +56,7 @@ struct WindowServiceMetrics {
 
 impl WindowServiceMetrics {
     fn report_metrics(&self, metric_name: &'static str) {
-        datapoint_info!(
+        datapoint_warn!(
             metric_name,
             ("run_insert_count", self.run_insert_count as i64, i64),
             ("num_shreds_received", self.num_shreds_received as i64, i64),
@@ -119,12 +119,12 @@ struct ReceiveWindowStats {
 impl ReceiveWindowStats {
     fn maybe_submit(&mut self) {
         const MAX_NUM_ADDRS: usize = 5;
-        const SUBMIT_CADENCE: Duration = Duration::from_secs(2);
+        const SUBMIT_CADENCE: Duration = Duration::from_secs(1);
         let elapsed = self.since.as_ref().map(Instant::elapsed);
         if elapsed.unwrap_or(Duration::MAX) < SUBMIT_CADENCE {
             return;
         }
-        datapoint_info!(
+        datapoint_warn!(
             "receive_window_stats",
             ("num_packets", self.num_packets, i64),
             ("num_shreds", self.num_shreds, i64),
@@ -610,7 +610,7 @@ impl WindowService {
                         }
                     }
 
-                    if last_print.elapsed().as_secs() > 2 {
+                    if last_print.elapsed().as_secs() > 1 {
                         metrics.report_metrics("blockstore-insert-shreds");
                         metrics = BlockstoreInsertionMetrics::default();
                         ws_metrics.report_metrics("recv-window-insert-shreds");

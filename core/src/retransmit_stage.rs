@@ -92,7 +92,7 @@ impl RetransmitStats {
         cluster_info: &ClusterInfo,
         cluster_nodes_cache: &ClusterNodesCache<RetransmitStage>,
     ) {
-        const SUBMIT_CADENCE: Duration = Duration::from_secs(2);
+        const SUBMIT_CADENCE: Duration = Duration::from_secs(1);
         let elapsed = self.since.as_ref().map(Instant::elapsed);
         if elapsed.unwrap_or(Duration::MAX) < SUBMIT_CADENCE {
             return;
@@ -108,7 +108,7 @@ impl RetransmitStats {
             },
         );
         datapoint_info!("retransmit-num_nodes", ("count", num_peers, i64));
-        datapoint_info!(
+        datapoint_warn!(
             "retransmit-stage",
             ("total_time", stats.total_time, i64),
             ("epoch_fetch", stats.epoch_fetch, i64),

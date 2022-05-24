@@ -220,7 +220,7 @@ impl ReplayTiming {
         let now = timestamp();
         let elapsed_ms = now - self.last_print;
         if elapsed_ms > 1000 {
-            datapoint_info!(
+            datapoint_warn!(
                 "replay-loop-voting-stats",
                 ("vote_push_us", self.vote_push_us, i64),
                 ("vote_send_us", self.vote_send_us, i64),
@@ -231,7 +231,7 @@ impl ReplayTiming {
                     i64
                 ),
             );
-            datapoint_info!(
+            datapoint_warn!(
                 "replay-loop-timing-stats",
                 ("total_elapsed_us", elapsed_ms * 1000, i64),
                 (
@@ -2362,7 +2362,7 @@ impl ReplayStage {
                 .unwrap_or_else(|err| warn!("cost_update_sender failed: {:?}", err));
         }
 
-        inc_new_counter_info!("replay_stage-replay_transactions", tx_count);
+        inc_new_counter_warn!("replay_stage-replay_transactions", tx_count);
         did_complete_bank
     }
 

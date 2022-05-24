@@ -204,7 +204,7 @@ impl BankingStageStats {
             return;
         }
         if self.last_report.should_update(report_interval_ms) {
-            datapoint_info!(
+            datapoint_warn!(
                 "banking_stage-loop-stats",
                 ("id", self.id as i64, i64),
                 (

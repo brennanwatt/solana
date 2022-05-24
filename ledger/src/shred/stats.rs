@@ -43,7 +43,7 @@ impl ProcessShredsStats {
         let slot_broadcast_time = slot_broadcast_time
             .map(|t| t.as_micros() as i64)
             .unwrap_or(-1);
-        datapoint_info!(
+        datapoint_warn!(
             name,
             ("slot", slot, i64),
             ("shredding_time", self.shredding_elapsed, i64),
@@ -71,7 +71,7 @@ impl ShredFetchStats {
         if elapsed.unwrap_or(Duration::MAX) < cadence {
             return;
         }
-        datapoint_info!(
+        datapoint_warn!(
             name,
             ("index_overrun", self.index_overrun, i64),
             ("shred_count", self.shred_count, i64),

@@ -48,8 +48,8 @@ impl FindPacketSenderStakeStats {
     fn report(&mut self, name: &'static str) {
         let now = timestamp();
         let elapsed_ms = now - self.last_print;
-        if elapsed_ms > 2000 {
-            datapoint_info!(
+        if elapsed_ms > 1000 {
+            datapoint_warn!(
                 name,
                 (
                     "refresh_ip_to_stake_time_us",

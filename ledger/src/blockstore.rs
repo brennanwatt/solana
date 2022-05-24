@@ -234,7 +234,7 @@ impl SlotMetaWorkingSetEntry {
 
 impl BlockstoreInsertionMetrics {
     pub fn report_metrics(&self, metric_name: &'static str) {
-        datapoint_info!(
+        datapoint_warn!(
             metric_name,
             ("num_shreds", self.num_shreds as i64, i64),
             ("total_elapsed", self.total_elapsed as i64, i64),
