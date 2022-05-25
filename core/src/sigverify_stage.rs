@@ -556,7 +556,7 @@ impl SigVerifyStage {
     ) -> Vec<JoinHandle<()>> {
         let (filter_sender, filter_receiver) = unbounded();
         let verify_pending_packet_count = Arc::new(AtomicU64::new(0));
-        let thread_filter = Self::filter_service(packet_receiver, verifier.clone(), filter_sender, verify_pending_packet_count, name);
+        let thread_filter = Self::filter_service(packet_receiver, verifier.clone(), filter_sender, verify_pending_packet_count.clone(), name);
         let thread_verifier = Self::verifier_service(filter_receiver, verifier, verify_pending_packet_count, name);
         vec![thread_filter, thread_verifier]
     }
