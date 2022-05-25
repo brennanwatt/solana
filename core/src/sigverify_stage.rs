@@ -454,10 +454,11 @@ impl SigVerifyStage {
         shrink_time.stop();
 
         // Send to verifier
-        if batches.len() {
-            if let Err(e) = sender.send(batches)
-            {
+        if  num_valid_packets > 0 {
+            if let Err(e) = sender.send(batches) {
                 error!("{:?}", e);
+            } else {
+                verify_pending_packet_count += num_valid_packets;
             }
         }
 
