@@ -30,7 +30,7 @@ use {
 const MAX_DEDUP_BATCH: usize = 165_000;
 
 // 50ms/(25us/packet) = 2000 packets
-const MAX_SIGVERIFY_BATCH: usize = 2_000;
+const MAX_SIGVERIFY_BATCH: usize = 100_000;
 
 #[derive(Error, Debug)]
 pub enum SigVerifyServiceError<SendType> {
@@ -276,7 +276,7 @@ impl SigVerifyStage {
 
         let batches_len = batches.len();
         debug!(
-            "@{:?} verifier: verifying: {}",
+            "@{:?} verifier: verifying: {} packets",
             timing::timestamp(),
             num_packets,
         );
@@ -341,12 +341,19 @@ impl SigVerifyStage {
         verifier.send_packets(batches)?;
 
         debug!(
-            "@{:?} verifier: done. batches: {} total verify time: {:?} verified: {} v/s {}",
+            "@{:?} verifier done. batches: {}, packets: {}, ver/s: {}",
             timing::timestamp(),
             batches_len,
-            verify_time.as_ms(),
             num_packets,
             (num_packets as f32 / verify_time.as_s())
+        );
+        debug!(
+            "discard random={:?}ns\n dedup time ={:?}ns\n discard time={:?}ns\n verify time={:?}us\n shrink time={:?}ns",
+            discard_random_time.as_ns(),
+            dedup_time.as_ns(),
+            discard_time.as_ns(),
+            verify_time.as_us(),
+            shrink_time.as_ns(),
         );
 
         stats
@@ -414,7 +421,7 @@ impl SigVerifyStage {
                             _ => error!("{:?}", e),
                         }
                     }
-                    if last_print.elapsed().as_secs() > 2 {
+                    if last_print.elapsed().as_secs() > 0 {
                         stats.report(name);
                         stats = SigVerifierStats::default();
                         last_print = Instant::now();
@@ -524,7 +531,7 @@ mod tests {
         let use_same_tx = true;
         let now = Instant::now();
         let packets_per_batch = 128;
-        let total_packets = 1920;
+        let total_packets = MAX_SIGVERIFY_BATCH-100;
         // This is important so that we don't discard any packets and fail asserts below about
         // `total_excess_tracer_packets`
         assert!(total_packets < MAX_SIGVERIFY_BATCH);

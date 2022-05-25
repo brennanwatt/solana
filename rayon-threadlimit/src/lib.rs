@@ -1,6 +1,5 @@
 #[macro_use]
 extern crate lazy_static;
-
 use std::env;
 //TODO remove this hack when rayon fixes itself
 
@@ -14,6 +13,7 @@ lazy_static! {
 }
 
 pub fn get_thread_count() -> usize {
+    println!("sig verify thread count = {:?}",*MAX_RAYON_THREADS);
     *MAX_RAYON_THREADS
 }
 
