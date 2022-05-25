@@ -540,7 +540,7 @@ mod tests {
         let use_same_tx = false;
         let now = Instant::now();
         let packets_per_batch = 1;
-        let total_packets = MAX_SIGVERIFY_BATCH/packets_per_batch*packets_per_batch;
+        let total_packets = 2000/packets_per_batch*packets_per_batch;
         // This is important so that we don't discard any packets and fail asserts below about
         // `total_excess_tracer_packets`
         assert!(total_packets <= MAX_SIGVERIFY_BATCH);
