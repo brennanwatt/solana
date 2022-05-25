@@ -348,12 +348,21 @@ impl SigVerifyStage {
             (num_packets as f32 / verify_time.as_s())
         );
         debug!(
-            "discard random={:?}ns\n dedup time ={:?}ns\n discard time={:?}ns\n verify time={:?}us\n shrink time={:?}ns",
+            "discard random time={:?}ns\n dedup time ={:?}ns\n discard time={:?}ns\n verify time={:?}us\n shrink time={:?}ns",
             discard_random_time.as_ns(),
             dedup_time.as_ns(),
             discard_time.as_ns(),
             verify_time.as_us(),
             shrink_time.as_ns(),
+        );
+
+        debug!(
+            "discard random={:?} packets\n dedup ={:?} packets\n discard ={:?} packets\n verify={:?} packets\n shrink={:?} batches",
+            num_discarded_randomly,
+            discard_or_dedup_fail,
+            excess_fail,
+            num_valid_packets,
+            total_shrinks,
         );
 
         stats
@@ -531,7 +540,7 @@ mod tests {
         let use_same_tx = true;
         let now = Instant::now();
         let packets_per_batch = 128;
-        let total_packets = MAX_SIGVERIFY_BATCH-100;
+        let total_packets = MAX_SIGVERIFY_BATCH/packets_per_batch*packets_per_batch;
         // This is important so that we don't discard any packets and fail asserts below about
         // `total_excess_tracer_packets`
         assert!(total_packets < MAX_SIGVERIFY_BATCH);
