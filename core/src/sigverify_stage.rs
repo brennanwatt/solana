@@ -282,7 +282,7 @@ impl SigVerifyStage {
         );
 
         let mut verify_time = Measure::start("sigverify_batch_time");
-        let mut batches = verifier.verify_batches(batches, num_valid_packets);
+        let mut batches = verifier.verify_batches(batches, num_packets);
         verify_time.stop();
 
         let mut shrink_time = Measure::start("sigverify_shrink_time");
@@ -293,7 +293,7 @@ impl SigVerifyStage {
         );
         let start_len = batches.len();
         const MAX_EMPTY_BATCH_RATIO: usize = 4;
-        if non_discarded_packets > num_valid_packets.saturating_mul(MAX_EMPTY_BATCH_RATIO) {
+        if num_packets > num_valid_packets.saturating_mul(MAX_EMPTY_BATCH_RATIO) {
             let valid = shrink_batches(&mut batches);
             batches.truncate(valid);
         }
