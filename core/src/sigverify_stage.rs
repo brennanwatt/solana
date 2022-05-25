@@ -274,7 +274,6 @@ impl SigVerifyStage {
         stats: &mut SigVerifierStats,
     ) -> Result<(), T::SendType> {
         let (batches, num_packets, recv_duration) = streamer::recv_vec_packet_batches(recvr)?;
-        verify_pending_packet_count.fetch_sub(num_packets as u64, Ordering::SeqCst);
 
         let batches_len = batches.len();
         debug!(
@@ -289,6 +288,9 @@ impl SigVerifyStage {
             #[inline(always)]
             |valid_packet| verifier.process_passed_sigverify_packet(valid_packet),
         );
+
+        verify_pending_packet_count.fetch_sub(num_valid_packets_pre_verify as u64, Ordering::SeqCst);
+        debug!("Subtracted {} to verify_pending_packet_count now it = {}",num_valid_packets_pre_verify, verify_pending_packet_count.load(Ordering::SeqCst));
 
         // Verify packet signatures.
         let mut verify_time = Measure::start("sigverify_batch_time");
@@ -499,6 +501,7 @@ impl SigVerifyStage {
                 error!("{:?}", e);
             } else {
                 verify_pending_packet_count.fetch_add(num_valid_packets as u64, Ordering::SeqCst);
+                debug!("Added {} to verify_pending_packet_count now it = {}",num_valid_packets, verify_pending_packet_count.load(Ordering::SeqCst));
             }
         }
 
