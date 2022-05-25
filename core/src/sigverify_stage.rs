@@ -505,7 +505,7 @@ impl SigVerifyStage {
             "@{:?} filtering done. Counts = batches: {} packets: {} random discard: {} dedup: {} excess: {} shrink: {}",
             timing::timestamp(),
             total_batches.len(),
-            total_num_packets,
+            total_packets,
             num_discarded_randomly,
             discard_or_dedup_fail,
             excess_fail,
@@ -513,7 +513,7 @@ impl SigVerifyStage {
         );
 
         stats.total_batches += total_batches.len();
-        stats.total_packets += total_num_packets;
+        stats.total_packets += total_packets;
         stats.total_dedup += discard_or_dedup_fail;
         stats.total_valid_packets += num_valid_packets;
         stats.total_discard_random += num_discarded_randomly;
