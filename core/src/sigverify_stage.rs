@@ -33,7 +33,7 @@ const MAX_DEDUP_BATCH: usize = 165_000;
 const MAX_SIGVERIFY_BATCH: usize = 10_000;
 
 #[derive(Error, Debug)]
-pub enum SigVerifyServiceError<SendType> {
+pub enum SigVerifyServiceError<SendType: ?Sized> {
     #[error("send packets batch error")]
     Send(#[from] SendError<SendType>),
 
