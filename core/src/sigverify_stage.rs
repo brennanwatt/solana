@@ -8,7 +8,7 @@
 use {
     crate::{find_packet_sender_stake_stage, sigverify},
     core::time::Duration,
-    crossbeam_channel::{unbounded, RecvTimeoutError, SendError, Sender},
+    crossbeam_channel::{unbounded, RecvTimeoutError, SendError, Sender, Receiver},
     itertools::Itertools,
     solana_measure::measure::Measure,
     solana_perf::{
@@ -539,7 +539,12 @@ impl SigVerifyStage {
         stats.total_verify_time_us += verify_time.as_us() as usize;
         stats.total_shrink_time_us += shrink_time.as_us() as usize;*/
 
-        sender.send(batches)?;
+
+        if let Err(e) = sender.send(batches)
+        {
+            error!("{:?}", e);
+            SigVerifyServiceError::Send
+        }
 
         Ok(())
     }
