@@ -44,7 +44,7 @@ pub enum SigVerifyServiceError<SendType> {
 type Result<T, SendType> = std::result::Result<T, SigVerifyServiceError<SendType>>;
 
 pub struct SigVerifyStage {
-    thread_hdl: JoinHandle<()>,
+    thread_hdls: Vec<JoinHandle<()>>,
 }
 
 pub trait SigVerifier {
@@ -232,8 +232,8 @@ impl SigVerifyStage {
         verifier: T,
         name: &'static str,
     ) -> Self {
-        let thread_hdl = Self::verifier_services(packet_receiver, verifier, name);
-        Self { thread_hdl }
+        let thread_hdls = Self::verifier_services(packet_receiver, verifier, name);
+-       Self { thread_hdls }
     }
 
     pub fn discard_excess_packets(
@@ -424,16 +424,62 @@ impl SigVerifyStage {
             .unwrap()
     }
 
+    fn filter_service<T: SigVerifier + 'static + Send + Clone>(
+        packet_receiver: find_packet_sender_stake_stage::FindPacketSenderStakeReceiver,
+        mut verifier: T,
+        name: &'static str,
+    ) -> JoinHandle<()> {
+        let mut stats = SigVerifierStats::default();
+        let mut last_print = Instant::now();
+        const MAX_DEDUPER_AGE: Duration = Duration::from_secs(2);
+        const MAX_DEDUPER_ITEMS: u32 = 1_000_000;
+        Builder::new()
+            .name("solana-verifier".to_string())
+            .spawn(move || {
+                /*let mut deduper = Deduper::new(MAX_DEDUPER_ITEMS, MAX_DEDUPER_AGE);
+                loop {
+                    deduper.reset();
+                    if let Err(e) =
+                        Self::verifier(&deduper, &packet_receiver, &mut verifier, &mut stats)
+                    {
+                        match e {
+                            SigVerifyServiceError::Streamer(StreamerError::RecvTimeout(
+                                RecvTimeoutError::Disconnected,
+                            )) => break,
+                            SigVerifyServiceError::Streamer(StreamerError::RecvTimeout(
+                                RecvTimeoutError::Timeout,
+                            )) => (),
+                            SigVerifyServiceError::Send(_) => {
+                                break;
+                            }
+                            _ => error!("{:?}", e),
+                        }
+                    }
+                    if last_print.elapsed().as_secs() > 2 {
+                        stats.report(name);
+                        stats = SigVerifierStats::default();
+                        last_print = Instant::now();
+                    }
+                }*/
+            })
+            .unwrap()
+    }
+
     fn verifier_services<T: SigVerifier + 'static + Send + Clone>(
         packet_receiver: find_packet_sender_stake_stage::FindPacketSenderStakeReceiver,
         verifier: T,
         name: &'static str,
-    ) -> JoinHandle<()> {
-        Self::verifier_service(packet_receiver, verifier, name)
+    ) -> Vec<JoinHandle<()>> {
+        let thread_filter = Self::filter_service(packet_receiver, verifier, name);
+        let thread_verifier = Self::verifier_service(packet_receiver, verifier, name);
+        vec![thread_filter, thread_verifier]
     }
 
     pub fn join(self) -> thread::Result<()> {
-        self.thread_hdl.join()
+        for thread_hdl in self.thread_hdls {
+            thread_hdl.join()?;
+        }
+        Ok(())
     }
 }
 
