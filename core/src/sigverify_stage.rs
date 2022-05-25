@@ -395,7 +395,8 @@ impl SigVerifyStage {
         let mut num_discarded_randomly = 0;
         let mut discard_or_dedup_fail = 0;
         let mut excess_fail = 0;
-        let mut total_shrinks = 0; 
+        let mut total_shrinks = 0;
+        let mut num_valid_packets = 0;
 
         loop {
             let (mut batches, num_packets, recv_duration) = streamer::recv_vec_packet_batches(recvr)?;
@@ -450,7 +451,7 @@ impl SigVerifyStage {
 
             // Defragment packets in batches.
             let mut shrink_time = Measure::start("sigverify_shrink_time");
-            let num_valid_packets = count_valid_packets(
+            num_valid_packets = count_valid_packets(
                 &total_batches,
                 #[inline(always)]
                 |valid_packet| verifier.process_passed_sigverify_packet(valid_packet),
@@ -483,8 +484,11 @@ impl SigVerifyStage {
             stats.total_discard_time_us += discard_time.as_us() as usize;
             stats.total_shrink_time_us += shrink_time.as_us() as usize;
 
-            if verify_pending_packet_count.load(Ordering::SeqCst) < MAX_SIGVERIFY_BATCH {
+            if verify_pending_packet_count.load(Ordering::SeqCst) < MAX_SIGVERIFY_BATCH as u64 {
                 break;
+            }
+            else {
+                debug!("waiting for verifier to drain packets - currently at {}", verify_pending_packet_count.load(Ordering::SeqCst));
             }
         }
 
@@ -501,7 +505,7 @@ impl SigVerifyStage {
             "@{:?} filtering done. Counts = batches: {} packets: {} random discard: {} dedup: {} excess: {} shrink: {}",
             timing::timestamp(),
             total_batches.len(),
-            num_packets,
+            total_num_packets,
             num_discarded_randomly,
             discard_or_dedup_fail,
             excess_fail,
