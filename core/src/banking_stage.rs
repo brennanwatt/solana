@@ -151,6 +151,7 @@ pub struct BankingStageStats {
     packet_conversion_elapsed: AtomicU64,
     unprocessed_packet_conversion_elapsed: AtomicU64,
     transaction_processing_elapsed: AtomicU64,
+    leader_decision_us: AtomicU64,
 }
 
 impl BankingStageStats {
@@ -317,6 +318,12 @@ impl BankingStageStats {
                 (
                     "packet_batch_indices_len_90pct",
                     self.batch_packet_indexes_len.percentile(90.0).unwrap_or(0) as i64,
+                    i64
+                ),
+                (
+                    "leader_decision_us",
+                    self.leader_decision_us
+                        .swap(0, Ordering::Relaxed) as i64,
                     i64
                 )
             );
@@ -864,6 +871,7 @@ impl BankingStage {
             "make_decision",
         );
         slot_metrics_tracker.increment_make_decision_us(make_decision_time.as_us());
+        banking_stage_stats.leader_decision_us.fetch_add(make_decision_time.as_us(), Ordering::Relaxed);
 
         match decision {
             BufferedPacketsDecision::Consume(max_tx_ingestion_ns) => {
