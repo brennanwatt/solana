@@ -281,44 +281,6 @@ impl SigVerifyStage {
             num_packets,
         );
 
-        let mut discard_random_time = Measure::start("sigverify_discard_random_time");
-        let non_discarded_packets = solana_perf::discard::discard_batches_randomly(
-            &mut batches,
-            MAX_DEDUP_BATCH,
-            num_packets,
-        );
-        let num_discarded_randomly = num_packets.saturating_sub(non_discarded_packets);
-        discard_random_time.stop();
-
-        let mut dedup_time = Measure::start("sigverify_dedup_time");
-        let discard_or_dedup_fail = deduper.dedup_packets_and_count_discards(
-            &mut batches,
-            #[inline(always)]
-            |received_packet, removed_before_sigverify_stage, is_dup| {
-                verifier.process_received_packet(
-                    received_packet,
-                    removed_before_sigverify_stage,
-                    is_dup,
-                );
-            },
-        ) as usize;
-        dedup_time.stop();
-        let num_unique = non_discarded_packets.saturating_sub(discard_or_dedup_fail);
-
-        let mut discard_time = Measure::start("sigverify_discard_time");
-        let mut num_valid_packets = num_unique;
-        if num_unique > MAX_SIGVERIFY_BATCH {
-            Self::discard_excess_packets(
-                &mut batches,
-                MAX_SIGVERIFY_BATCH,
-                #[inline(always)]
-                |excess_packet| verifier.process_excess_packet(excess_packet),
-            );
-            num_valid_packets = MAX_SIGVERIFY_BATCH;
-        }
-        let excess_fail = num_unique.saturating_sub(MAX_SIGVERIFY_BATCH);
-        discard_time.stop();
-
         let mut verify_time = Measure::start("sigverify_batch_time");
         let mut batches = verifier.verify_batches(batches, num_valid_packets);
         verify_time.stop();
@@ -350,33 +312,15 @@ impl SigVerifyStage {
         );
 
         stats
-            .recv_batches_us_hist
-            .increment(recv_duration.as_micros() as u64)
-            .unwrap();
-        stats
             .verify_batches_pp_us_hist
             .increment(verify_time.as_us() / (num_packets as u64))
-            .unwrap();
-        stats
-            .discard_packets_pp_us_hist
-            .increment(discard_time.as_us() / (num_packets as u64))
-            .unwrap();
-        stats
-            .dedup_packets_pp_us_hist
-            .increment(dedup_time.as_us() / (num_packets as u64))
             .unwrap();
         stats.batches_hist.increment(batches_len as u64).unwrap();
         stats.packets_hist.increment(num_packets as u64).unwrap();
         stats.total_batches += batches_len;
         stats.total_packets += num_packets;
-        stats.total_dedup += discard_or_dedup_fail;
         stats.total_valid_packets += num_valid_packets;
-        stats.total_discard_random_time_us += discard_random_time.as_us() as usize;
-        stats.total_discard_random += num_discarded_randomly;
-        stats.total_excess_fail += excess_fail;
         stats.total_shrinks += total_shrinks;
-        stats.total_dedup_time_us += dedup_time.as_us() as usize;
-        stats.total_discard_time_us += discard_time.as_us() as usize;
         stats.total_verify_time_us += verify_time.as_us() as usize;
         stats.total_shrink_time_us += shrink_time.as_us() as usize;
 
@@ -669,7 +613,7 @@ mod tests {
         let now = Instant::now();
         let packets_per_batch = 128;
         let total_packets = 1920;
-        let mut expected_packets = if use_same_tx {
+        let expected_packets = if use_same_tx {
             1
         } else {
             total_packets
@@ -696,7 +640,6 @@ mod tests {
             }
         }
         let mut received = 0;
-        let mut total_tracer_packets_received_in_sigverify_stage = 0;
         trace!("sent: {}", sent_len);
         loop {
             if let Ok((mut verifieds, _tracer_packet_stats)) = verified_r.recv() {
