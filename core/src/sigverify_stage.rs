@@ -274,58 +274,59 @@ impl VerifyFilterStage {
         sender: &Sender<Vec<PacketBatch>>,
         stats: &mut SigVerifierStats,
     ) -> thread::Result<()> {
-        let (mut batches, num_packets, _recv_duration) = streamer::recv_vec_packet_batches(recvr)?;
-
-        debug!(
-            "@{:?} filter: filtering: {} packets",
-            timing::timestamp(),
-            num_packets,
-        );
-
-        let mut discard_random_time = Measure::start("sigverify_discard_random_time");
-        let non_discarded_packets = solana_perf::discard::discard_batches_randomly(
-            &mut batches,
-            MAX_DEDUP_BATCH,
-            num_packets,
-        );
-        let num_discarded_randomly = num_packets.saturating_sub(non_discarded_packets);
-        discard_random_time.stop();
-
-        let mut dedup_time = Measure::start("sigverify_dedup_time");
-        let discard_or_dedup_fail = deduper.dedup_packets_and_count_discards(
-            &mut batches,
-        ) as usize;
-        dedup_time.stop();
-        let num_unique = non_discarded_packets.saturating_sub(discard_or_dedup_fail);
-
-        let mut discard_time = Measure::start("sigverify_discard_time");
-        let mut num_valid_packets = num_unique;
-        if num_unique > MAX_SIGVERIFY_BATCH {
-            Self::discard_excess_packets(
-                &mut batches,
-                MAX_SIGVERIFY_BATCH,
+        if let Ok(mut batches, num_packets, _recv_duration) = streamer::recv_vec_packet_batches(recvr)
+        {
+            debug!(
+                "@{:?} filter: filtering: {} packets",
+                timing::timestamp(),
+                num_packets,
             );
-            num_valid_packets = MAX_SIGVERIFY_BATCH;
+
+            let mut discard_random_time = Measure::start("sigverify_discard_random_time");
+            let non_discarded_packets = solana_perf::discard::discard_batches_randomly(
+                &mut batches,
+                MAX_DEDUP_BATCH,
+                num_packets,
+            );
+            let num_discarded_randomly = num_packets.saturating_sub(non_discarded_packets);
+            discard_random_time.stop();
+
+            let mut dedup_time = Measure::start("sigverify_dedup_time");
+            let discard_or_dedup_fail = deduper.dedup_packets_and_count_discards(
+                &mut batches,
+            ) as usize;
+            dedup_time.stop();
+            let num_unique = non_discarded_packets.saturating_sub(discard_or_dedup_fail);
+
+            let mut discard_time = Measure::start("sigverify_discard_time");
+            let mut num_valid_packets = num_unique;
+            if num_unique > MAX_SIGVERIFY_BATCH {
+                Self::discard_excess_packets(
+                    &mut batches,
+                    MAX_SIGVERIFY_BATCH,
+                );
+                num_valid_packets = MAX_SIGVERIFY_BATCH;
+            }
+            let excess_fail = num_unique.saturating_sub(MAX_SIGVERIFY_BATCH);
+            discard_time.stop();
+
+            sender.send(batches).unwrap();
+
+            debug!(
+                "\ndiscard random time={:?}ns\ndedup time ={:?}us\ndiscard time={:?}ns",
+                discard_random_time.as_ns(),
+                dedup_time.as_us(),
+                discard_time.as_ns(),
+            );
+
+            debug!(
+                "\nnum packets={:?}\ndiscard random={:?} packets\ndedup ={:?} packets\ndiscard ={:?} packets",
+                num_packets,
+                num_discarded_randomly,
+                discard_or_dedup_fail,
+                excess_fail,
+            );
         }
-        let excess_fail = num_unique.saturating_sub(MAX_SIGVERIFY_BATCH);
-        discard_time.stop();
-
-        sender.send(batches)?;
-
-        debug!(
-            "\ndiscard random time={:?}ns\ndedup time ={:?}us\ndiscard time={:?}ns",
-            discard_random_time.as_ns(),
-            dedup_time.as_us(),
-            discard_time.as_ns(),
-        );
-
-        debug!(
-            "\nnum packets={:?}\ndiscard random={:?} packets\ndedup ={:?} packets\ndiscard ={:?} packets",
-            num_packets,
-            num_discarded_randomly,
-            discard_or_dedup_fail,
-            excess_fail,
-        );
 
         Ok(())
     }
