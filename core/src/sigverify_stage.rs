@@ -462,7 +462,7 @@ impl SigVerifyStage {
                             _ => error!("{:?}", e),
                         }
                     }
-                    if last_print.elapsed().as_secs() > 2 {
+                    if last_print.elapsed().as_secs() > 10 {
                         stats.report(name);
                         stats = SigVerifierStats::default();
                         last_print = Instant::now();
@@ -612,6 +612,8 @@ mod tests {
         trace!("received: {}", received);
 
         drop(packet_s);
+        filter.join().unwrap();
         stage.join().unwrap();
+
     }
 }
