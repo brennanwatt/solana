@@ -33,7 +33,7 @@ const MAX_DEDUP_BATCH: usize = 165_000;
 const MAX_SIGVERIFY_BATCH: usize = 10_000;
 
 #[derive(Error, Debug)]
-pub enum SigVerifyServiceError<SendType: ?Sized> {
+pub enum SigVerifyServiceError<SendType> {
     #[error("send packets batch error")]
     Send(#[from] SendError<SendType>),
 
@@ -273,7 +273,7 @@ impl VerifyFilterStage {
         recvr: &find_packet_sender_stake_stage::FindPacketSenderStakeReceiver,
         sender: &Sender<Vec<PacketBatch>>,
         stats: &mut SigVerifierStats,
-    ) -> Result<(), dyn std::fmt::Debug> {
+    ) -> Result<()> {
         let (mut batches, num_packets, _recv_duration) = streamer::recv_vec_packet_batches(recvr)?;
 
         debug!(
@@ -344,22 +344,7 @@ impl VerifyFilterStage {
                 let mut deduper = Deduper::new(MAX_DEDUPER_ITEMS, MAX_DEDUPER_AGE);
                 loop {
                     deduper.reset();
-                    if let Err(e) =
-                        Self::filter(&deduper, &packet_receiver, &sender, &mut stats)
-                    {
-                        match e {
-                            SigVerifyServiceError::Streamer(StreamerError::RecvTimeout(
-                                RecvTimeoutError::Disconnected,
-                            )) => break,
-                            SigVerifyServiceError::Streamer(StreamerError::RecvTimeout(
-                                RecvTimeoutError::Timeout,
-                            )) => (),
-                            SigVerifyServiceError::Send(_) => {
-                                break;
-                            }
-                            _ => error!("{:?}", e),
-                        }
-                    }
+                    let _ = Self::filter(&deduper, &packet_receiver, &sender, &mut stats);
                 }
             })
             .unwrap()
