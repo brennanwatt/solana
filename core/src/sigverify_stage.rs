@@ -27,10 +27,10 @@ use {
 // Try to target 50ms, rough timings from mainnet machines
 //
 // 50ms/(300ns/packet) = 166666 packets ~ 1300 batches
-const MAX_DEDUP_BATCH: usize = 165_000;
+const MAX_DEDUP_BATCH: usize = 1_000_000;
 
 // 50ms/(25us/packet) = 2000 packets
-const MAX_SIGVERIFY_BATCH: usize = 100_000;
+const MAX_SIGVERIFY_BATCH: usize = 1_000_000;
 
 #[derive(Error, Debug)]
 pub enum SigVerifyServiceError<SendType> {
@@ -348,16 +348,16 @@ impl SigVerifyStage {
             (num_packets as f32 / verify_time.as_s())
         );
         debug!(
-            "\ndiscard random time={:?}ns\n dedup time ={:?}ns\n discard time={:?}ns\n verify time={:?}us\n shrink time={:?}ns",
+            "\ndiscard random time={:?}ns\ndedup time ={:?}us\ndiscard time={:?}ns\nverify time={:?}us\nshrink time={:?}us",
             discard_random_time.as_ns(),
-            dedup_time.as_ns(),
+            dedup_time.as_us(),
             discard_time.as_ns(),
             verify_time.as_us(),
-            shrink_time.as_ns(),
+            shrink_time.as_us(),
         );
 
         debug!(
-            "\ndiscard random={:?} packets\n dedup ={:?} packets\n discard ={:?} packets\n verify={:?} packets\n shrink={:?} batches",
+            "\ndiscard random={:?} packets\ndedup ={:?} packets\ndiscard ={:?} packets\nverify={:?} packets\nshrink={:?} batches",
             num_discarded_randomly,
             discard_or_dedup_fail,
             excess_fail,
@@ -430,7 +430,7 @@ impl SigVerifyStage {
                             _ => error!("{:?}", e),
                         }
                     }
-                    if last_print.elapsed().as_secs() > 0 {
+                    if last_print.elapsed().as_secs() > 2 {
                         stats.report(name);
                         stats = SigVerifierStats::default();
                         last_print = Instant::now();
