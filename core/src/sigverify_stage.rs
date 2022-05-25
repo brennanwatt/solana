@@ -470,7 +470,8 @@ impl SigVerifyStage {
         verifier: T,
         name: &'static str,
     ) -> Vec<JoinHandle<()>> {
-        let thread_filter = Self::filter_service(packet_receiver, verifier, name);
+        let (filter_sender, filter_receiver) = unbounded();
+        let thread_filter = Self::filter_service(filter_receiver, verifier.clone(), name);
         let thread_verifier = Self::verifier_service(packet_receiver, verifier, name);
         vec![thread_filter, thread_verifier]
     }
