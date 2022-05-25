@@ -8,7 +8,7 @@
 use {
     crate::{find_packet_sender_stake_stage, sigverify},
     core::time::Duration,
-    crossbeam_channel::{RecvTimeoutError, SendError, Sender, unbounded},
+    crossbeam_channel::{RecvTimeoutError, SendError, Sender},
     itertools::Itertools,
     solana_measure::measure::Measure,
     solana_perf::{
@@ -231,7 +231,7 @@ impl SigVerifier for DisabledSigVerifier {
 
 impl VerifyFilterStage {
     #[allow(clippy::new_ret_no_self)]
-    pub fn new<T: SigVerifier + 'static + Send + Clone>(
+    pub fn new(
         packet_receiver: find_packet_sender_stake_stage::FindPacketSenderStakeReceiver,
         sender: Sender<Vec<PacketBatch>>,
         name: &'static str,
@@ -271,9 +271,9 @@ impl VerifyFilterStage {
     fn filter(
         deduper: &Deduper,
         recvr: &find_packet_sender_stake_stage::FindPacketSenderStakeReceiver,
-        sender: Sender<Vec<PacketBatch>>,
+        sender: &Sender<Vec<PacketBatch>>,
         stats: &mut SigVerifierStats,
-    ) -> Result<(), T::SendType> {
+    ) -> Result<()> {
         let (mut batches, num_packets, _recv_duration) = streamer::recv_vec_packet_batches(recvr)?;
 
         debug!(
@@ -345,7 +345,7 @@ impl VerifyFilterStage {
                 loop {
                     deduper.reset();
                     if let Err(e) =
-                        Self::filter(&deduper, &packet_receiver, &mut sender, &mut stats)
+                        Self::filter(&deduper, &packet_receiver, &sender, &mut stats)
                     {
                         match e {
                             SigVerifyServiceError::Streamer(StreamerError::RecvTimeout(
@@ -527,41 +527,6 @@ mod tests {
     }
 
     #[test]
-    fn test_packet_discard() {
-        solana_logger::setup();
-        let batch_size = 10;
-        let mut batch = PacketBatch::with_capacity(batch_size);
-        let mut tracer_packet = Packet::default();
-        tracer_packet.meta.flags |= PacketFlags::TRACER_PACKET;
-        batch.resize(batch_size, tracer_packet);
-        batch[3].meta.addr = std::net::IpAddr::from([1u16; 8]);
-        batch[3].meta.set_discard(true);
-        let num_discarded_before_filter = 1;
-        batch[4].meta.addr = std::net::IpAddr::from([2u16; 8]);
-        let total_num_packets = batch.len();
-        let mut batches = vec![batch];
-        let max = 3;
-        let mut total_tracer_packets_discarded = 0;
-        SigVerifyStage::discard_excess_packets(&mut batches, max, |packet| {
-            if packet.meta.is_tracer_packet() {
-                total_tracer_packets_discarded += 1;
-            }
-        });
-        let total_non_discard = count_non_discard(&batches);
-        let total_discarded = total_num_packets - total_non_discard;
-        // Every packet except the packets already marked `discard` before the call
-        // to `discard_excess_packets()` should count towards the
-        // `total_tracer_packets_discarded`
-        assert_eq!(
-            total_tracer_packets_discarded,
-            total_discarded - num_discarded_before_filter
-        );
-        assert_eq!(total_non_discard, max);
-        assert!(!batches[0][0].meta.discard());
-        assert!(batches[0][3].meta.discard());
-        assert!(!batches[0][4].meta.discard());
-    }
-
     fn gen_batches(
         use_same_tx: bool,
         packets_per_batch: usize,
