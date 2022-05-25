@@ -273,8 +273,8 @@ impl VerifyFilterStage {
         recvr: &find_packet_sender_stake_stage::FindPacketSenderStakeReceiver,
         sender: &Sender<Vec<PacketBatch>>,
         stats: &mut SigVerifierStats,
-    ) -> thread::Result<()> {
-        if let Ok(mut batches, num_packets, _recv_duration) = streamer::recv_vec_packet_batches(recvr)
+    ) {
+        if let Ok((mut batches, num_packets, _recv_duration)) = streamer::recv_vec_packet_batches(recvr)
         {
             debug!(
                 "@{:?} filter: filtering: {} packets",
@@ -327,8 +327,6 @@ impl VerifyFilterStage {
                 excess_fail,
             );
         }
-
-        Ok(())
     }
 
     fn filter_service(
