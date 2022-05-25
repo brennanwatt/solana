@@ -344,22 +344,7 @@ impl VerifyFilterStage {
                 let mut deduper = Deduper::new(MAX_DEDUPER_ITEMS, MAX_DEDUPER_AGE);
                 loop {
                     deduper.reset();
-                    if let Err(e) =
-                        Self::filter(&deduper, &packet_receiver, &sender, &mut stats)
-                    {
-                        match e {
-                            SigVerifyServiceError::Streamer(StreamerError::RecvTimeout(
-                                RecvTimeoutError::Disconnected,
-                            )) => break,
-                            SigVerifyServiceError::Streamer(StreamerError::RecvTimeout(
-                                RecvTimeoutError::Timeout,
-                            )) => (),
-                            SigVerifyServiceError::Send(_) => {
-                                break;
-                            }
-                            _ => error!("{:?}", e),
-                        }
-                    }
+                    Self::filter(&deduper, &packet_receiver, &sender, &mut stats);
                 }
             })
             .unwrap()
@@ -508,7 +493,7 @@ mod tests {
         crate::{sigverify::TransactionSigVerifier, sigverify_stage::timing::duration_as_ms},
         crossbeam_channel::unbounded,
         solana_perf::{
-            packet::{to_packet_batches, Packet},
+            packet::{to_packet_batches},
             test_tx::test_tx,
         },
         solana_sdk::packet::PacketFlags,
@@ -526,7 +511,6 @@ mod tests {
             .sum::<usize>()
     }
 
-    #[test]
     fn gen_batches(
         use_same_tx: bool,
         packets_per_batch: usize,
