@@ -18,7 +18,7 @@ use {
     solana_sdk::timing,
     solana_streamer::streamer::{self, StreamerError},
     std::{
-        sync::{Arc, atomic::AtomicU32},
+        sync::{Arc, atomic::AtomicU64},
         thread::{self, Builder, JoinHandle},
         time::Instant,
     },
@@ -345,7 +345,7 @@ impl SigVerifyStage {
     fn verifier_service<T: SigVerifier + 'static + Send + Clone>(
         filter_receiver: Receiver<Vec<PacketBatch>>,
         mut verifier: T,
-        verify_pending_packet_count: Arc<AtomicU32>,
+        verify_pending_packet_count: Arc<AtomicU64>,
         name: &'static str,
     ) -> JoinHandle<()> {
         let mut stats = SigVerifierStats::default();
@@ -510,7 +510,7 @@ impl SigVerifyStage {
         packet_receiver: find_packet_sender_stake_stage::FindPacketSenderStakeReceiver,
         mut verifier: T,
         filter_sender: Sender<Vec<PacketBatch>>,
-        verify_pending_packet_count: Arc<AtomicU32>,
+        verify_pending_packet_count: Arc<AtomicU64>,
         name: &'static str,
     ) -> JoinHandle<()> {
         let mut stats = SigVerifierStats::default();
@@ -555,7 +555,7 @@ impl SigVerifyStage {
         name: &'static str,
     ) -> Vec<JoinHandle<()>> {
         let (filter_sender, filter_receiver) = unbounded();
-        let verify_pending_packet_count = Arc::new(atomic::AtomicU32::new(0));
+        let verify_pending_packet_count = Arc::new(AtomicU64::new(0));
         let thread_filter = Self::filter_service(packet_receiver, verifier.clone(), filter_sender, verify_pending_packet_count, name);
         let thread_verifier = Self::verifier_service(filter_receiver, verifier, verify_pending_packet_count, name);
         vec![thread_filter, thread_verifier]
