@@ -18,6 +18,7 @@ use {
     solana_sdk::timing,
     solana_streamer::streamer::{self, StreamerError},
     std::{
+        sync::{Arc, atomic},
         thread::{self, Builder, JoinHandle},
         time::Instant,
     },
