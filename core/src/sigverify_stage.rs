@@ -677,7 +677,7 @@ mod tests {
         let use_same_tx = false;
         let now = Instant::now();
         let packets_per_batch = 128;
-        let total_packets = 192000;
+        let total_packets = 100_000;
         let expected_packets = if use_same_tx {
             1
         } else {
@@ -695,13 +695,11 @@ mod tests {
         for _ in 0..batches.len() {
             if let Some(mut batch) = batches.pop() {
                 sent_len += batch.len();
-                batch
-                    .iter_mut()
-                    .for_each(|packet| packet.meta.flags |= PacketFlags::TRACER_PACKET);
                 assert_eq!(batch.len(), packets_per_batch);
                 packet_s.send(vec![batch]).unwrap();
             }
         }
+
         let mut received = 0;
         trace!("sent: {}", sent_len);
         loop {
