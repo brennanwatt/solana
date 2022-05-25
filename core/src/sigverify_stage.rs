@@ -674,7 +674,7 @@ mod tests {
         let verifier = TransactionSigVerifier::new(verified_s);
         let stage = SigVerifyStage::new(packet_r, verifier, "test");
 
-        let use_same_tx = true;
+        let use_same_tx = false;
         let now = Instant::now();
         let packets_per_batch = 128;
         let total_packets = 192000;
