@@ -273,7 +273,7 @@ impl VerifyFilterStage {
         recvr: &find_packet_sender_stake_stage::FindPacketSenderStakeReceiver,
         sender: &Sender<Vec<PacketBatch>>,
         stats: &mut SigVerifierStats,
-    ) -> Result<()> {
+    ) {
         let (mut batches, num_packets, _recv_duration) = streamer::recv_vec_packet_batches(recvr)?;
 
         debug!(
@@ -310,7 +310,7 @@ impl VerifyFilterStage {
         let excess_fail = num_unique.saturating_sub(MAX_SIGVERIFY_BATCH);
         discard_time.stop();
 
-        sender.send(batches)?;
+        sender.send(batches).unwrap();
 
         debug!(
             "\ndiscard random time={:?}ns\ndedup time ={:?}us\ndiscard time={:?}ns",
@@ -326,8 +326,6 @@ impl VerifyFilterStage {
             discard_or_dedup_fail,
             excess_fail,
         );
-
-        Ok(())
     }
 
     fn filter_service(
