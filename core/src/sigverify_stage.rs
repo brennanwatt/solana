@@ -273,8 +273,8 @@ impl VerifyFilterStage {
         recvr: &find_packet_sender_stake_stage::FindPacketSenderStakeReceiver,
         sender: &Sender<Vec<PacketBatch>>,
         stats: &mut SigVerifierStats,
-    ) {
-        let (mut batches, num_packets, _recv_duration) = streamer::recv_vec_packet_batches(recvr).unwrap();
+    ) -> Result<(), std::fmt::Debug> {
+        let (mut batches, num_packets, _recv_duration) = streamer::recv_vec_packet_batches(recvr)?;
 
         debug!(
             "@{:?} filter: filtering: {} packets",
@@ -310,7 +310,7 @@ impl VerifyFilterStage {
         let excess_fail = num_unique.saturating_sub(MAX_SIGVERIFY_BATCH);
         discard_time.stop();
 
-        sender.send(batches).unwrap();
+        sender.send(batches)?;
 
         debug!(
             "\ndiscard random time={:?}ns\ndedup time ={:?}us\ndiscard time={:?}ns",
@@ -326,6 +326,8 @@ impl VerifyFilterStage {
             discard_or_dedup_fail,
             excess_fail,
         );
+
+        Ok(())
     }
 
     fn filter_service(
@@ -342,7 +344,22 @@ impl VerifyFilterStage {
                 let mut deduper = Deduper::new(MAX_DEDUPER_ITEMS, MAX_DEDUPER_AGE);
                 loop {
                     deduper.reset();
-                    Self::filter(&deduper, &packet_receiver, &sender, &mut stats);
+                    if let Err(e) =
+                        Self::filter(&deduper, &packet_receiver, &sender, &mut stats)
+                    {
+                        match e {
+                            SigVerifyServiceError::Streamer(StreamerError::RecvTimeout(
+                                RecvTimeoutError::Disconnected,
+                            )) => break,
+                            SigVerifyServiceError::Streamer(StreamerError::RecvTimeout(
+                                RecvTimeoutError::Timeout,
+                            )) => (),
+                            SigVerifyServiceError::Send(_) => {
+                                break;
+                            }
+                            _ => error!("{:?}", e),
+                        }
+                    }
                 }
             })
             .unwrap()
@@ -491,7 +508,7 @@ mod tests {
         crate::{sigverify::TransactionSigVerifier, sigverify_stage::timing::duration_as_ms},
         crossbeam_channel::unbounded,
         solana_perf::{
-            packet::{to_packet_batches},
+            packet::{to_packet_batches, Packet},
             test_tx::test_tx,
         },
         solana_sdk::packet::PacketFlags,
