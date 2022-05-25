@@ -8,7 +8,7 @@
 use {
     crate::{find_packet_sender_stake_stage, sigverify},
     core::time::Duration,
-    crossbeam_channel::{unbounded, RecvTimeoutError, SendError},
+    crossbeam_channel::{unbounded, RecvTimeoutError, SendError, Sender},
     itertools::Itertools,
     solana_measure::measure::Measure,
     solana_perf::{
@@ -384,7 +384,7 @@ impl SigVerifyStage {
     }
 
     fn verifier_service<T: SigVerifier + 'static + Send + Clone>(
-        packet_receiver: find_packet_sender_stake_stage::FindPacketSenderStakeReceiver,
+        filter_receiver: Receiver<Vec<PacketBatch>>,
         mut verifier: T,
         name: &'static str,
     ) -> JoinHandle<()> {
@@ -399,7 +399,7 @@ impl SigVerifyStage {
                 loop {
                     deduper.reset();
                     if let Err(e) =
-                        Self::verifier(&deduper, &packet_receiver, &mut verifier, &mut stats)
+                        Self::verifier(&deduper, &filter_receiver, &mut verifier, &mut stats)
                     {
                         match e {
                             SigVerifyServiceError::Streamer(StreamerError::RecvTimeout(
@@ -424,9 +424,130 @@ impl SigVerifyStage {
             .unwrap()
     }
 
+    fn filter<T: SigVerifier>(
+        deduper: &Deduper,
+        recvr: &find_packet_sender_stake_stage::FindPacketSenderStakeReceiver,
+        verifier: &mut T,
+        sender: &Sender<Vec<PacketBatch>>,
+        stats: &mut SigVerifierStats,
+    ) -> Result<(), T::SendType> {
+        let (mut batches, num_packets, recv_duration) = streamer::recv_vec_packet_batches(recvr)?;
+
+        let batches_len = batches.len();
+        debug!(
+            "@{:?} filter: filtering: {}",
+            timing::timestamp(),
+            num_packets,
+        );
+
+        /*let mut discard_random_time = Measure::start("sigverify_discard_random_time");
+        let non_discarded_packets = solana_perf::discard::discard_batches_randomly(
+            &mut batches,
+            MAX_DEDUP_BATCH,
+            num_packets,
+        );
+        let num_discarded_randomly = num_packets.saturating_sub(non_discarded_packets);
+        discard_random_time.stop();
+
+        let mut dedup_time = Measure::start("sigverify_dedup_time");
+        let discard_or_dedup_fail = deduper.dedup_packets_and_count_discards(
+            &mut batches,
+            #[inline(always)]
+            |received_packet, removed_before_sigverify_stage, is_dup| {
+                verifier.process_received_packet(
+                    received_packet,
+                    removed_before_sigverify_stage,
+                    is_dup,
+                );
+            },
+        ) as usize;
+        dedup_time.stop();
+        let num_unique = non_discarded_packets.saturating_sub(discard_or_dedup_fail);
+
+        let mut discard_time = Measure::start("sigverify_discard_time");
+        let mut num_valid_packets = num_unique;
+        if num_unique > MAX_SIGVERIFY_BATCH {
+            Self::discard_excess_packets(
+                &mut batches,
+                MAX_SIGVERIFY_BATCH,
+                #[inline(always)]
+                |excess_packet| verifier.process_excess_packet(excess_packet),
+            );
+            num_valid_packets = MAX_SIGVERIFY_BATCH;
+        }
+        let excess_fail = num_unique.saturating_sub(MAX_SIGVERIFY_BATCH);
+        discard_time.stop();
+
+        let mut verify_time = Measure::start("sigverify_batch_time");
+        let mut batches = verifier.verify_batches(batches, num_valid_packets);
+        verify_time.stop();
+
+        let mut shrink_time = Measure::start("sigverify_shrink_time");
+        let num_valid_packets = count_valid_packets(
+            &batches,
+            #[inline(always)]
+            |valid_packet| verifier.process_passed_sigverify_packet(valid_packet),
+        );
+        let start_len = batches.len();
+        const MAX_EMPTY_BATCH_RATIO: usize = 4;
+        if non_discarded_packets > num_valid_packets.saturating_mul(MAX_EMPTY_BATCH_RATIO) {
+            let valid = shrink_batches(&mut batches);
+            batches.truncate(valid);
+        }
+        let total_shrinks = start_len.saturating_sub(batches.len());
+        shrink_time.stop();
+
+        verifier.send_packets(batches)?;
+
+        debug!(
+            "@{:?} verifier: done. batches: {} total verify time: {:?} verified: {} v/s {}",
+            timing::timestamp(),
+            batches_len,
+            verify_time.as_ms(),
+            num_packets,
+            (num_packets as f32 / verify_time.as_s())
+        );
+
+        stats
+            .recv_batches_us_hist
+            .increment(recv_duration.as_micros() as u64)
+            .unwrap();
+        stats
+            .verify_batches_pp_us_hist
+            .increment(verify_time.as_us() / (num_packets as u64))
+            .unwrap();
+        stats
+            .discard_packets_pp_us_hist
+            .increment(discard_time.as_us() / (num_packets as u64))
+            .unwrap();
+        stats
+            .dedup_packets_pp_us_hist
+            .increment(dedup_time.as_us() / (num_packets as u64))
+            .unwrap();
+        stats.batches_hist.increment(batches_len as u64).unwrap();
+        stats.packets_hist.increment(num_packets as u64).unwrap();
+        stats.total_batches += batches_len;
+        stats.total_packets += num_packets;
+        stats.total_dedup += discard_or_dedup_fail;
+        stats.total_valid_packets += num_valid_packets;
+        stats.total_discard_random_time_us += discard_random_time.as_us() as usize;
+        stats.total_discard_random += num_discarded_randomly;
+        stats.total_excess_fail += excess_fail;
+        stats.total_shrinks += total_shrinks;
+        stats.total_dedup_time_us += dedup_time.as_us() as usize;
+        stats.total_discard_time_us += discard_time.as_us() as usize;
+        stats.total_verify_time_us += verify_time.as_us() as usize;
+        stats.total_shrink_time_us += shrink_time.as_us() as usize;*/
+
+        sender.send(batches)?;
+
+        Ok(())
+    }
+
     fn filter_service<T: SigVerifier + 'static + Send + Clone>(
         packet_receiver: find_packet_sender_stake_stage::FindPacketSenderStakeReceiver,
         mut verifier: T,
+        filter_sender: Sender<Vec<PacketBatch>>,
         name: &'static str,
     ) -> JoinHandle<()> {
         let mut stats = SigVerifierStats::default();
@@ -436,11 +557,11 @@ impl SigVerifyStage {
         Builder::new()
             .name("solana-verifier".to_string())
             .spawn(move || {
-                /*let mut deduper = Deduper::new(MAX_DEDUPER_ITEMS, MAX_DEDUPER_AGE);
+                let mut deduper = Deduper::new(MAX_DEDUPER_ITEMS, MAX_DEDUPER_AGE);
                 loop {
                     deduper.reset();
                     if let Err(e) =
-                        Self::verifier(&deduper, &packet_receiver, &mut verifier, &mut stats)
+                        Self::filter(&deduper, &packet_receiver, &mut verifier, &filter_sender, &mut stats)
                     {
                         match e {
                             SigVerifyServiceError::Streamer(StreamerError::RecvTimeout(
@@ -460,7 +581,7 @@ impl SigVerifyStage {
                         stats = SigVerifierStats::default();
                         last_print = Instant::now();
                     }
-                }*/
+                }
             })
             .unwrap()
     }
@@ -471,8 +592,8 @@ impl SigVerifyStage {
         name: &'static str,
     ) -> Vec<JoinHandle<()>> {
         let (filter_sender, filter_receiver) = unbounded();
-        let thread_filter = Self::filter_service(filter_receiver, verifier.clone(), name);
-        let thread_verifier = Self::verifier_service(packet_receiver, verifier, name);
+        let thread_filter = Self::filter_service(filter_receiver, verifier.clone(), filter_sender, name);
+        let thread_verifier = Self::verifier_service(filter_receiver, verifier, name);
         vec![thread_filter, thread_verifier]
     }
 
