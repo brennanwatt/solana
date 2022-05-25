@@ -233,7 +233,7 @@ impl SigVerifyStage {
         name: &'static str,
     ) -> Self {
         let thread_hdls = Self::verifier_services(packet_receiver, verifier, name);
--       Self { thread_hdls }
+        Self { thread_hdls }
     }
 
     pub fn discard_excess_packets(
