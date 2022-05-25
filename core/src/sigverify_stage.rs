@@ -543,7 +543,6 @@ impl SigVerifyStage {
         if let Err(e) = sender.send(batches)
         {
             error!("{:?}", e);
-            return Err(SigVerifyServiceError::Send);
         }
 
         Ok(())
