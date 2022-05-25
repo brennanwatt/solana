@@ -312,6 +312,10 @@ impl SigVerifyStage {
         );
 
         stats
+            .recv_batches_us_hist
+            .increment(recv_duration.as_micros() as u64)
+            .unwrap();
+        stats
             .verify_batches_pp_us_hist
             .increment(verify_time.as_us() / (num_packets as u64))
             .unwrap();
@@ -422,6 +426,21 @@ impl SigVerifyStage {
         let excess_fail = num_unique.saturating_sub(MAX_SIGVERIFY_BATCH);
         discard_time.stop();
 
+        let mut shrink_time = Measure::start("sigverify_shrink_time");
+        let num_valid_packets = count_valid_packets(
+            &batches,
+            #[inline(always)]
+            |valid_packet| verifier.process_passed_sigverify_packet(valid_packet),
+        );
+        let start_len = batches.len();
+        const MAX_EMPTY_BATCH_RATIO: usize = 4;
+        if non_discarded_packets > num_valid_packets.saturating_mul(MAX_EMPTY_BATCH_RATIO) {
+            let valid = shrink_batches(&mut batches);
+            batches.truncate(valid);
+        }
+        let total_shrinks = start_len.saturating_sub(batches.len());
+        shrink_time.stop();
+
         if let Err(e) = sender.send(batches)
         {
             error!("{:?}", e);
@@ -458,8 +477,10 @@ impl SigVerifyStage {
         stats.total_discard_random_time_us += discard_random_time.as_us() as usize;
         stats.total_discard_random += num_discarded_randomly;
         stats.total_excess_fail += excess_fail;
+        stats.total_shrinks += total_shrinks;
         stats.total_dedup_time_us += dedup_time.as_us() as usize;
         stats.total_discard_time_us += discard_time.as_us() as usize;
+        stats.total_shrink_time_us += shrink_time.as_us() as usize;
 
         Ok(())
     }
