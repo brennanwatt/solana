@@ -273,7 +273,7 @@ impl VerifyFilterStage {
         recvr: &find_packet_sender_stake_stage::FindPacketSenderStakeReceiver,
         sender: &Sender<Vec<PacketBatch>>,
         stats: &mut SigVerifierStats,
-    ) -> Result<()> {
+    ) -> thread::Result<()> {
         let (mut batches, num_packets, _recv_duration) = streamer::recv_vec_packet_batches(recvr)?;
 
         debug!(
