@@ -270,7 +270,7 @@ impl SigVerifyStage {
     fn verifier<T: SigVerifier>(
         recvr: &find_packet_sender_stake_stage::FindPacketSenderStakeReceiver,
         verifier: &mut T,
-        verify_pending_packet_count: Arc<AtomicU64>,
+        verify_pending_packet_count: &mut Arc<AtomicU64>,
         stats: &mut SigVerifierStats,
     ) -> Result<(), T::SendType> {
         let (batches, num_packets, recv_duration) = streamer::recv_vec_packet_batches(recvr)?;
@@ -386,7 +386,7 @@ impl SigVerifyStage {
         recvr: &find_packet_sender_stake_stage::FindPacketSenderStakeReceiver,
         verifier: &mut T,
         sender: &Sender<Vec<PacketBatch>>,
-        verify_pending_packet_count: Arc<AtomicU64>,
+        verify_pending_packet_count: &mut Arc<AtomicU64>,
         stats: &mut SigVerifierStats,
     ) -> Result<(), T::SendType> {
         let (mut batches, num_packets, recv_duration) = streamer::recv_vec_packet_batches(recvr)?;
