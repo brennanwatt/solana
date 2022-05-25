@@ -440,7 +440,7 @@ impl SigVerifyStage {
             num_packets,
         );
 
-        /*let mut discard_random_time = Measure::start("sigverify_discard_random_time");
+        let mut discard_random_time = Measure::start("sigverify_discard_random_time");
         let non_discarded_packets = solana_perf::discard::discard_batches_randomly(
             &mut batches,
             MAX_DEDUP_BATCH,
@@ -478,33 +478,19 @@ impl SigVerifyStage {
         let excess_fail = num_unique.saturating_sub(MAX_SIGVERIFY_BATCH);
         discard_time.stop();
 
-        let mut verify_time = Measure::start("sigverify_batch_time");
-        let mut batches = verifier.verify_batches(batches, num_valid_packets);
-        verify_time.stop();
-
-        let mut shrink_time = Measure::start("sigverify_shrink_time");
-        let num_valid_packets = count_valid_packets(
-            &batches,
-            #[inline(always)]
-            |valid_packet| verifier.process_passed_sigverify_packet(valid_packet),
-        );
-        let start_len = batches.len();
-        const MAX_EMPTY_BATCH_RATIO: usize = 4;
-        if non_discarded_packets > num_valid_packets.saturating_mul(MAX_EMPTY_BATCH_RATIO) {
-            let valid = shrink_batches(&mut batches);
-            batches.truncate(valid);
+        if let Err(e) = sender.send(batches)
+        {
+            error!("{:?}", e);
         }
-        let total_shrinks = start_len.saturating_sub(batches.len());
-        shrink_time.stop();
-
-        verifier.send_packets(batches)?;
 
         debug!(
-            "@{:?} verifier: done. batches: {} total verify time: {:?} verified: {} v/s {}",
+            "@{:?} filter: done. batches: {} packets: {} random discard: {} dedup: {} excess: {} f/s {}",
             timing::timestamp(),
             batches_len,
-            verify_time.as_ms(),
             num_packets,
+            num_discarded_randomly,
+            discard_or_dedup_fail,
+            excess_fail,
             (num_packets as f32 / verify_time.as_s())
         );
 
@@ -536,14 +522,6 @@ impl SigVerifyStage {
         stats.total_shrinks += total_shrinks;
         stats.total_dedup_time_us += dedup_time.as_us() as usize;
         stats.total_discard_time_us += discard_time.as_us() as usize;
-        stats.total_verify_time_us += verify_time.as_us() as usize;
-        stats.total_shrink_time_us += shrink_time.as_us() as usize;*/
-
-
-        if let Err(e) = sender.send(batches)
-        {
-            error!("{:?}", e);
-        }
 
         Ok(())
     }
