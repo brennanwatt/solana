@@ -8,7 +8,7 @@
 use {
     crate::{find_packet_sender_stake_stage, sigverify},
     core::time::Duration,
-    crossbeam_channel::{unbounded, RecvTimeoutError, SendError, Sender, Receiver},
+    crossbeam_channel::{unbounded, Receiver, RecvTimeoutError, SendError, Sender},
     itertools::Itertools,
     solana_measure::measure::Measure,
     solana_perf::{
@@ -18,7 +18,10 @@ use {
     solana_sdk::timing,
     solana_streamer::streamer::{self, StreamerError},
     std::{
-        sync::{Arc, atomic::{AtomicU64,Ordering}},
+        sync::{
+            atomic::{AtomicU64, Ordering},
+            Arc,
+        },
         thread::{self, Builder, JoinHandle},
         time::Instant,
     },
@@ -289,8 +292,13 @@ impl SigVerifyStage {
             |valid_packet| verifier.process_passed_sigverify_packet(valid_packet),
         );
 
-        verify_pending_packet_count.fetch_sub(num_valid_packets_pre_verify as u64, Ordering::SeqCst);
-        debug!("Subtracted {} to verify_pending_packet_count now it = {}",num_valid_packets_pre_verify, verify_pending_packet_count.load(Ordering::SeqCst));
+        verify_pending_packet_count
+            .fetch_sub(num_valid_packets_pre_verify as u64, Ordering::SeqCst);
+        debug!(
+            "Subtracted {} to verify_pending_packet_count now it = {}",
+            num_valid_packets_pre_verify,
+            verify_pending_packet_count.load(Ordering::SeqCst)
+        );
 
         // Verify packet signatures.
         let mut verify_time = Measure::start("sigverify_batch_time");
@@ -306,7 +314,9 @@ impl SigVerifyStage {
         );
         let start_len = batches.len();
         const MAX_EMPTY_BATCH_RATIO: usize = 4;
-        if num_valid_packets_pre_verify > num_valid_packets_post_verify.saturating_mul(MAX_EMPTY_BATCH_RATIO) {
+        if num_valid_packets_pre_verify
+            > num_valid_packets_post_verify.saturating_mul(MAX_EMPTY_BATCH_RATIO)
+        {
             let valid = shrink_batches(&mut batches);
             batches.truncate(valid);
         }
@@ -356,29 +366,30 @@ impl SigVerifyStage {
         let mut last_print = Instant::now();
         Builder::new()
             .name("solana-verifier".to_string())
-            .spawn(move || {
-                loop {
-                    if let Err(e) =
-                        Self::verifier(&filter_receiver, &mut verifier, &verify_pending_packet_count, &mut stats)
-                    {
-                        match e {
-                            SigVerifyServiceError::Streamer(StreamerError::RecvTimeout(
-                                RecvTimeoutError::Disconnected,
-                            )) => break,
-                            SigVerifyServiceError::Streamer(StreamerError::RecvTimeout(
-                                RecvTimeoutError::Timeout,
-                            )) => (),
-                            SigVerifyServiceError::Send(_) => {
-                                break;
-                            }
-                            _ => error!("{:?}", e),
+            .spawn(move || loop {
+                if let Err(e) = Self::verifier(
+                    &filter_receiver,
+                    &mut verifier,
+                    &verify_pending_packet_count,
+                    &mut stats,
+                ) {
+                    match e {
+                        SigVerifyServiceError::Streamer(StreamerError::RecvTimeout(
+                            RecvTimeoutError::Disconnected,
+                        )) => break,
+                        SigVerifyServiceError::Streamer(StreamerError::RecvTimeout(
+                            RecvTimeoutError::Timeout,
+                        )) => (),
+                        SigVerifyServiceError::Send(_) => {
+                            break;
                         }
+                        _ => error!("{:?}", e),
                     }
-                    if last_print.elapsed().as_secs() > 2 {
-                        stats.report(name);
-                        stats = SigVerifierStats::default();
-                        last_print = Instant::now();
-                    }
+                }
+                if last_print.elapsed().as_secs() > 2 {
+                    stats.report(name);
+                    stats = SigVerifierStats::default();
+                    last_print = Instant::now();
                 }
             })
             .unwrap()
@@ -401,7 +412,8 @@ impl SigVerifyStage {
         let mut num_valid_packets;
 
         loop {
-            let (mut batches, num_packets, recv_duration) = streamer::recv_vec_packet_batches(recvr)?;
+            let (mut batches, num_packets, recv_duration) =
+                streamer::recv_vec_packet_batches(recvr)?;
             total_batches.append(&mut batches);
             total_packets += num_packets;
 
@@ -478,7 +490,10 @@ impl SigVerifyStage {
                 .dedup_packets_pp_us_hist
                 .increment(dedup_time.as_us() / (num_packets as u64))
                 .unwrap();
-            stats.batches_hist.increment(total_batches.len() as u64).unwrap();
+            stats
+                .batches_hist
+                .increment(total_batches.len() as u64)
+                .unwrap();
             stats.packets_hist.increment(num_packets as u64).unwrap();
             stats.total_discard_random_time_us += discard_random_time.as_us() as usize;
             stats.total_dedup_time_us += dedup_time.as_us() as usize;
@@ -487,21 +502,27 @@ impl SigVerifyStage {
 
             if verify_pending_packet_count.load(Ordering::SeqCst) < MAX_SIGVERIFY_BATCH as u64 {
                 break;
-            }
-            else {
-                debug!("waiting for verifier to drain packets - currently at {}", verify_pending_packet_count.load(Ordering::SeqCst));
+            } else {
+                debug!(
+                    "waiting for verifier to drain packets - currently at {}",
+                    verify_pending_packet_count.load(Ordering::SeqCst)
+                );
             }
         }
 
         let batches_len = total_batches.len();
 
         // Send to verifier
-        if  num_valid_packets > 0 {
+        if num_valid_packets > 0 {
             if let Err(e) = sender.send(total_batches) {
                 error!("{:?}", e);
             } else {
                 verify_pending_packet_count.fetch_add(num_valid_packets as u64, Ordering::SeqCst);
-                debug!("Added {} to verify_pending_packet_count now it = {}",num_valid_packets, verify_pending_packet_count.load(Ordering::SeqCst));
+                debug!(
+                    "Added {} to verify_pending_packet_count now it = {}",
+                    num_valid_packets,
+                    verify_pending_packet_count.load(Ordering::SeqCst)
+                );
             }
         }
 
@@ -544,9 +565,14 @@ impl SigVerifyStage {
                 let mut deduper = Deduper::new(MAX_DEDUPER_ITEMS, MAX_DEDUPER_AGE);
                 loop {
                     deduper.reset();
-                    if let Err(e) =
-                        Self::filter(&deduper, &packet_receiver, &mut verifier, &filter_sender, &verify_pending_packet_count, &mut stats)
-                    {
+                    if let Err(e) = Self::filter(
+                        &deduper,
+                        &packet_receiver,
+                        &mut verifier,
+                        &filter_sender,
+                        &verify_pending_packet_count,
+                        &mut stats,
+                    ) {
                         match e {
                             SigVerifyServiceError::Streamer(StreamerError::RecvTimeout(
                                 RecvTimeoutError::Disconnected,
@@ -577,8 +603,15 @@ impl SigVerifyStage {
     ) -> Vec<JoinHandle<()>> {
         let (filter_sender, filter_receiver) = unbounded();
         let verify_pending_packet_count = Arc::new(AtomicU64::new(0));
-        let thread_filter = Self::filter_service(packet_receiver, verifier.clone(), filter_sender, verify_pending_packet_count.clone(), name);
-        let thread_verifier = Self::verifier_service(filter_receiver, verifier, verify_pending_packet_count, name);
+        let thread_filter = Self::filter_service(
+            packet_receiver,
+            verifier.clone(),
+            filter_sender,
+            verify_pending_packet_count.clone(),
+            name,
+        );
+        let thread_verifier =
+            Self::verifier_service(filter_receiver, verifier, verify_pending_packet_count, name);
         vec![thread_filter, thread_verifier]
     }
 
@@ -677,12 +710,8 @@ mod tests {
         let use_same_tx = false;
         let now = Instant::now();
         let packets_per_batch = 128;
-        let total_packets = 100_000;
-        let expected_packets = if use_same_tx {
-            1
-        } else {
-            total_packets
-        };
+        let total_packets = 100_000 * packets_per_batch / packets_per_batch;
+        let expected_packets = if use_same_tx { 1 } else { total_packets };
 
         let mut batches = gen_batches(use_same_tx, packets_per_batch, total_packets);
         trace!(
@@ -693,7 +722,7 @@ mod tests {
 
         let mut sent_len = 0;
         for _ in 0..batches.len() {
-            if let Some(mut batch) = batches.pop() {
+            if let Some(batch) = batches.pop() {
                 sent_len += batch.len();
                 assert_eq!(batch.len(), packets_per_batch);
                 packet_s.send(vec![batch]).unwrap();
