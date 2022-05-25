@@ -458,7 +458,7 @@ impl SigVerifyStage {
             if let Err(e) = sender.send(batches) {
                 error!("{:?}", e);
             } else {
-                verify_pending_packet_count += num_valid_packets;
+                verify_pending_packet_count.fetch_add(num_valid_packets, Ordering::SeqCst);
             }
         }
 
