@@ -543,7 +543,7 @@ mod tests {
         let total_packets = MAX_SIGVERIFY_BATCH/packets_per_batch*packets_per_batch;
         // This is important so that we don't discard any packets and fail asserts below about
         // `total_excess_tracer_packets`
-        assert!(total_packets < MAX_SIGVERIFY_BATCH);
+        assert!(total_packets <= MAX_SIGVERIFY_BATCH);
         let mut batches = gen_batches(use_same_tx, packets_per_batch, total_packets);
         trace!(
             "starting... generation took: {} ms batches: {}",
