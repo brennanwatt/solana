@@ -14,7 +14,8 @@ lazy_static! {
 
 pub fn get_thread_count() -> usize {
     //println!("sig verify thread count = {:?}",*MAX_RAYON_THREADS);
-    *MAX_RAYON_THREADS
+    //*MAX_RAYON_THREADS
+    48
 }
 
 // Only used in legacy code.
