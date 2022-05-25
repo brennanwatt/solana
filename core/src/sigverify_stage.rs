@@ -313,7 +313,7 @@ impl SigVerifyStage {
             batches_len,
             verify_time.as_ms(),
             num_packets,
-            (num_packets as f32 / verify_time.as_s())
+            (num_valid_packets_pre_verify as f32 / verify_time.as_s())
         );
 
         stats
@@ -343,8 +343,6 @@ impl SigVerifyStage {
     ) -> JoinHandle<()> {
         let mut stats = SigVerifierStats::default();
         let mut last_print = Instant::now();
-        const MAX_DEDUPER_AGE: Duration = Duration::from_secs(2);
-        const MAX_DEDUPER_ITEMS: u32 = 1_000_000;
         Builder::new()
             .name("solana-verifier".to_string())
             .spawn(move || {
@@ -453,13 +451,23 @@ impl SigVerifyStage {
         }
 
         debug!(
-            "@{:?} filter: done. batches: {} packets: {} random discard: {} dedup: {} excess: {}",
+            "@{:?} filtering done. Counts = batches: {} packets: {} random discard: {} dedup: {} excess: {} shrink: {}",
             timing::timestamp(),
             batches_len,
             num_packets,
             num_discarded_randomly,
             discard_or_dedup_fail,
-            excess_fail
+            excess_fail,
+            total_shrinks
+        );
+
+        debug!(
+            "@{:?} filtering done. Timing = random discard: {:?}us dedup: {:?}us excess: {:?}us shrink: {:?}us",
+            timing::timestamp(),
+            discard_random_time.as_us(),
+            dedup_time.as_us(),
+            discard_time.as_us(),
+            shrink_time.as_us(),
         );
 
         stats
