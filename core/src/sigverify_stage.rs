@@ -390,20 +390,19 @@ impl SigVerifyStage {
         verify_pending_packet_count: &Arc<AtomicU64>,
         stats: &mut SigVerifierStats,
     ) -> Result<(), T::SendType> {
-        let mut total_batches: Vec<PacketBatch>;
+        let mut total_batches: Vec<PacketBatch> = vec![];
         let mut total_packets = 0;
         let mut num_discarded_randomly = 0;
         let mut discard_or_dedup_fail = 0;
         let mut excess_fail = 0;
         let mut total_shrinks = 0;
-        let mut num_valid_packets = 0;
+        let mut num_valid_packets;
 
         loop {
             let (mut batches, num_packets, recv_duration) = streamer::recv_vec_packet_batches(recvr)?;
             total_batches.append(&mut batches);
             total_packets += num_packets;
 
-            let batches_len = total_batches.len();
             debug!(
                 "@{:?} filter: filtering: {}",
                 timing::timestamp(),
@@ -477,7 +476,7 @@ impl SigVerifyStage {
                 .dedup_packets_pp_us_hist
                 .increment(dedup_time.as_us() / (num_packets as u64))
                 .unwrap();
-            stats.batches_hist.increment(batches_len as u64).unwrap();
+            stats.batches_hist.increment(total_batches.len() as u64).unwrap();
             stats.packets_hist.increment(num_packets as u64).unwrap();
             stats.total_discard_random_time_us += discard_random_time.as_us() as usize;
             stats.total_dedup_time_us += dedup_time.as_us() as usize;
@@ -492,6 +491,8 @@ impl SigVerifyStage {
             }
         }
 
+        let batches_len = total_batches.len();
+
         // Send to verifier
         if  num_valid_packets > 0 {
             if let Err(e) = sender.send(total_batches) {
@@ -504,7 +505,7 @@ impl SigVerifyStage {
         debug!(
             "@{:?} filtering done. Counts = batches: {} packets: {} random discard: {} dedup: {} excess: {} shrink: {}",
             timing::timestamp(),
-            total_batches.len(),
+            batches_len,
             total_packets,
             num_discarded_randomly,
             discard_or_dedup_fail,
@@ -512,7 +513,7 @@ impl SigVerifyStage {
             total_shrinks
         );
 
-        stats.total_batches += total_batches.len();
+        stats.total_batches += batches_len;
         stats.total_packets += total_packets;
         stats.total_dedup += discard_or_dedup_fail;
         stats.total_valid_packets += num_valid_packets;
