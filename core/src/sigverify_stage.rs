@@ -18,7 +18,7 @@ use {
     solana_sdk::timing,
     solana_streamer::streamer::{self, StreamerError},
     std::{
-        sync::{Arc, atomic::AtomicU64},
+        sync::{Arc, atomic::{AtomicU64,Ordering}},
         thread::{self, Builder, JoinHandle},
         time::Instant,
     },
@@ -458,7 +458,7 @@ impl SigVerifyStage {
             if let Err(e) = sender.send(batches) {
                 error!("{:?}", e);
             } else {
-                verify_pending_packet_count.fetch_add(num_valid_packets, Ordering::SeqCst);
+                verify_pending_packet_count.fetch_add(num_valid_packets as u64, Ordering::SeqCst);
             }
         }
 
