@@ -673,7 +673,7 @@ mod tests {
             1
         } else {
             total_packets
-        }
+        };
         // This is important so that we don't discard any packets and fail asserts below about
         // `total_excess_tracer_packets`
         assert!(total_packets < MAX_SIGVERIFY_BATCH);
@@ -706,7 +706,7 @@ mod tests {
                 }
             }
 
-            if (received >= expected_packets) {
+            if received >= expected_packets {
                 break;
             }
         }
