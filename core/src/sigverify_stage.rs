@@ -30,7 +30,7 @@ use {
 const MAX_DEDUP_BATCH: usize = 1_000_000;
 
 // 50ms/(25us/packet) = 2000 packets
-const MAX_SIGVERIFY_BATCH: usize = 1_000_000;
+const MAX_SIGVERIFY_BATCH: usize = 10_000;
 
 #[derive(Error, Debug)]
 pub enum SigVerifyServiceError<SendType> {
