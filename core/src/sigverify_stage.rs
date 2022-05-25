@@ -30,7 +30,7 @@ use {
 const MAX_DEDUP_BATCH: usize = 165_000;
 
 // 50ms/(25us/packet) = 2000 packets
-const MAX_SIGVERIFY_BATCH: usize = 10_000;
+const MAX_SIGVERIFY_BATCH: usize = 2_000;
 
 #[derive(Error, Debug)]
 pub enum SigVerifyServiceError<SendType> {
@@ -44,11 +44,7 @@ pub enum SigVerifyServiceError<SendType> {
 type Result<T, SendType> = std::result::Result<T, SigVerifyServiceError<SendType>>;
 
 pub struct SigVerifyStage {
-    thread_hdl: JoinHandle<()>,
-}
-
-pub struct VerifyFilterStage {
-    thread_hdl: JoinHandle<()>,
+    thread_hdls: Vec<JoinHandle<()>>,
 }
 
 pub trait SigVerifier {
@@ -229,15 +225,17 @@ impl SigVerifier for DisabledSigVerifier {
     }
 }
 
-impl VerifyFilterStage {
+impl SigVerifyStage {
     #[allow(clippy::new_ret_no_self)]
-    pub fn new(
+    pub fn new<T: SigVerifier + 'static + Send + Clone>(
         packet_receiver: find_packet_sender_stake_stage::FindPacketSenderStakeReceiver,
-        sender: Sender<Vec<PacketBatch>>,
+        verifier: T,
         name: &'static str,
     ) -> Self {
-        let thread_hdl = Self::filter_services(packet_receiver, sender, name);
-        Self { thread_hdl }
+        let (filter_s, filter_r) = unbounded();
+        let thread_filter = Self::filter_services(packet_receiver, filter_s, name);
+        let thread_verifier = Self::verifier_services(filter_r, verifier, name);
+        Self { thread_hdls: vec![thread_filter, thread_verifier] }
     }
 
     pub fn discard_excess_packets(
@@ -357,22 +355,6 @@ impl VerifyFilterStage {
         Self::filter_service(packet_receiver, sender, name)
     }
 
-    pub fn join(self) -> thread::Result<()> {
-        self.thread_hdl.join()
-    }
-}
-
-impl SigVerifyStage {
-    #[allow(clippy::new_ret_no_self)]
-    pub fn new<T: SigVerifier + 'static + Send + Clone>(
-        packet_receiver: find_packet_sender_stake_stage::FindPacketSenderStakeReceiver,
-        verifier: T,
-        name: &'static str,
-    ) -> Self {
-        let thread_hdl = Self::verifier_services(packet_receiver, verifier, name);
-        Self { thread_hdl }
-    }
-
     fn verifier<T: SigVerifier>(
         deduper: &Deduper,
         recvr: &find_packet_sender_stake_stage::FindPacketSenderStakeReceiver,
@@ -481,7 +463,10 @@ impl SigVerifyStage {
     }
 
     pub fn join(self) -> thread::Result<()> {
-        self.thread_hdl.join()
+        for thread_hdl in self.thread_hdls {
+            thread_hdl.join()?;
+        }
+        Ok(())
     }
 }
 
@@ -529,7 +514,6 @@ mod tests {
         solana_logger::setup();
         trace!("start");
         let (packet_s, packet_r) = unbounded();
-        let (filter_s, filter_r) = unbounded();
         let (verified_s, verified_r) = unbounded();
 
         let filter = VerifyFilterStage::new(packet_r, filter_s, "test_filter");
@@ -539,7 +523,7 @@ mod tests {
         let use_same_tx = false;
         let now = Instant::now();
         let packets_per_batch = 1;
-        let total_packets = 200000/packets_per_batch*packets_per_batch;
+        let total_packets = 50000/packets_per_batch*packets_per_batch;
         
         // This is important so that we don't discard any packets and fail asserts below about
         // `total_excess_tracer_packets`
@@ -612,6 +596,7 @@ mod tests {
         trace!("received: {}", received);
 
         drop(packet_s);
+        drop(filter_s);
         filter.join().unwrap();
         stage.join().unwrap();
 
