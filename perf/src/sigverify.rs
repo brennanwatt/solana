@@ -517,7 +517,6 @@ impl Deduper {
         let mut num_removed: u64 = 0;
         batches.iter_mut().for_each(|batch| {
             batch.iter_mut().for_each(|p| {
-                let removed_before_sigverify = p.meta.discard();
                 let is_duplicate = self.dedup_packet(p);
                 if is_duplicate == 1 {
                     saturating_add_assign!(num_removed, 1);
