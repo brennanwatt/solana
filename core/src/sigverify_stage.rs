@@ -280,16 +280,19 @@ impl SigVerifyStage {
             num_packets,
         );
 
+        // Count valid packets in batches.
         let num_valid_packets_pre_verify = count_valid_packets(
             &batches,
             #[inline(always)]
             |valid_packet| verifier.process_passed_sigverify_packet(valid_packet),
         );
 
+        // Verify packet signatures.
         let mut verify_time = Measure::start("sigverify_batch_time");
         let mut batches = verifier.verify_batches(batches, num_valid_packets_pre_verify);
         verify_time.stop();
 
+        // Defragment packets in batches.
         let mut shrink_time = Measure::start("sigverify_shrink_time");
         let num_valid_packets_post_verify = count_valid_packets(
             &batches,
@@ -305,13 +308,15 @@ impl SigVerifyStage {
         let total_shrinks = start_len.saturating_sub(batches.len());
         shrink_time.stop();
 
+        // Send packets to the next stage.
         verifier.send_packets(batches)?;
 
         debug!(
-            "@{:?} verifier: done. batches: {} total verify time: {:?} verified: {} v/s {}",
+            "@{:?} verifier: done. batches: {} total verify time: {:?}ms shrink time: {:?}us verified: {} v/s {}",
             timing::timestamp(),
             batches_len,
             verify_time.as_ms(),
+            shrink_time.as_us(),
             num_packets,
             (num_valid_packets_pre_verify as f32 / verify_time.as_s())
         );
@@ -647,7 +652,7 @@ mod tests {
         let use_same_tx = true;
         let now = Instant::now();
         let packets_per_batch = 128;
-        let total_packets = 1920;
+        let total_packets = 19200;
         let expected_packets = if use_same_tx {
             1
         } else {
