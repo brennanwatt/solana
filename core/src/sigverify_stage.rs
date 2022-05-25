@@ -710,7 +710,7 @@ mod tests {
         let use_same_tx = false;
         let now = Instant::now();
         let packets_per_batch = 128;
-        let total_packets = 100_000 * packets_per_batch / packets_per_batch;
+        let total_packets = 100_000 / packets_per_batch * packets_per_batch;
         let expected_packets = if use_same_tx { 1 } else { total_packets };
 
         let mut batches = gen_batches(use_same_tx, packets_per_batch, total_packets);
