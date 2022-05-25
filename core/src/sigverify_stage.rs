@@ -543,7 +543,7 @@ impl SigVerifyStage {
         if let Err(e) = sender.send(batches)
         {
             error!("{:?}", e);
-            SigVerifyServiceError::Send
+            Err(SigVerifyServiceError::Send("Failed to send filtered batches to verifier"))
         }
 
         Ok(())
