@@ -513,7 +513,6 @@ impl Deduper {
     pub fn dedup_packets_and_count_discards(
         &self,
         batches: &mut [PacketBatch],
-        mut process_received_packet: impl FnMut(&mut Packet, bool, bool),
     ) -> u64 {
         let mut num_removed: u64 = 0;
         batches.iter_mut().for_each(|batch| {
@@ -523,7 +522,6 @@ impl Deduper {
                 if is_duplicate == 1 {
                     saturating_add_assign!(num_removed, 1);
                 }
-                process_received_packet(p, removed_before_sigverify, is_duplicate == 1);
             })
         });
         num_removed
@@ -1431,9 +1429,6 @@ mod tests {
         let mut num_deduped = 0;
         let discard = filter.dedup_packets_and_count_discards(
             &mut batches,
-            |_deduped_packet, _removed_before_sigverify_stage, _is_dup| {
-                num_deduped += 1;
-            },
         ) as usize;
         assert_eq!(num_deduped, discard + 1);
         assert_eq!(packet_count, discard + 1);
@@ -1443,7 +1438,7 @@ mod tests {
     fn test_dedup_diff() {
         let mut filter = Deduper::new(1_000_000, Duration::from_millis(0));
         let mut batches = to_packet_batches(&(0..1024).map(|_| test_tx()).collect::<Vec<_>>(), 128);
-        let discard = filter.dedup_packets_and_count_discards(&mut batches, |_, _, _| ()) as usize;
+        let discard = filter.dedup_packets_and_count_discards(&mut batches) as usize;
         // because dedup uses a threadpool, there maybe up to N threads of txs that go through
         assert_eq!(discard, 0);
         filter.reset();
@@ -1461,7 +1456,7 @@ mod tests {
         for i in 0..1000 {
             let mut batches =
                 to_packet_batches(&(0..1000).map(|_| test_tx()).collect::<Vec<_>>(), 128);
-            discard += filter.dedup_packets_and_count_discards(&mut batches, |_, _, _| ()) as usize;
+            discard += filter.dedup_packets_and_count_discards(&mut batches) as usize;
             debug!("{} {}", i, discard);
             if filter.saturated.load(Ordering::Relaxed) {
                 break;
@@ -1477,7 +1472,7 @@ mod tests {
         for i in 0..10 {
             let mut batches =
                 to_packet_batches(&(0..1024).map(|_| test_tx()).collect::<Vec<_>>(), 128);
-            discard += filter.dedup_packets_and_count_discards(&mut batches, |_, _, _| ()) as usize;
+            discard += filter.dedup_packets_and_count_discards(&mut batches) as usize;
             debug!("false positive rate: {}/{}", discard, i * 1024);
         }
         //allow for 1 false positive even if extremely unlikely

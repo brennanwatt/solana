@@ -233,17 +233,16 @@ impl VerifyFilterStage {
     #[allow(clippy::new_ret_no_self)]
     pub fn new<T: SigVerifier + 'static + Send + Clone>(
         packet_receiver: find_packet_sender_stake_stage::FindPacketSenderStakeReceiver,
-        verifier: T,
+        sender: Sender<Vec<PacketBatch>>,
         name: &'static str,
     ) -> Self {
-        let thread_hdl = Self::filter_services(packet_receiver, verifier, name);
+        let thread_hdl = Self::filter_services(packet_receiver, sender, name);
         Self { thread_hdl }
     }
 
     pub fn discard_excess_packets(
         batches: &mut [PacketBatch],
         mut max_packets: usize,
-        mut process_excess_packet: impl FnMut(&Packet),
     ) {
         // Group packets by their incoming IP address.
         let mut addrs = batches
@@ -265,20 +264,18 @@ impl VerifyFilterStage {
         }
         // Discard excess packets from each address.
         for packet in addrs.into_values().flatten() {
-            process_excess_packet(packet);
             packet.meta.set_discard(true);
         }
     }
 
-    fn filter<T: SigVerifier>(
+    fn filter(
         deduper: &Deduper,
         recvr: &find_packet_sender_stake_stage::FindPacketSenderStakeReceiver,
-        verifier: &mut T,
+        sender: Sender<Vec<PacketBatch>>,
         stats: &mut SigVerifierStats,
     ) -> Result<(), T::SendType> {
-        let (mut batches, num_packets, recv_duration) = streamer::recv_vec_packet_batches(recvr)?;
+        let (mut batches, num_packets, _recv_duration) = streamer::recv_vec_packet_batches(recvr)?;
 
-        let batches_len = batches.len();
         debug!(
             "@{:?} filter: filtering: {} packets",
             timing::timestamp(),
@@ -297,14 +294,6 @@ impl VerifyFilterStage {
         let mut dedup_time = Measure::start("sigverify_dedup_time");
         let discard_or_dedup_fail = deduper.dedup_packets_and_count_discards(
             &mut batches,
-            #[inline(always)]
-            |received_packet, removed_before_sigverify_stage, is_dup| {
-                verifier.process_received_packet(
-                    received_packet,
-                    removed_before_sigverify_stage,
-                    is_dup,
-                );
-            },
         ) as usize;
         dedup_time.stop();
         let num_unique = non_discarded_packets.saturating_sub(discard_or_dedup_fail);
@@ -315,22 +304,35 @@ impl VerifyFilterStage {
             Self::discard_excess_packets(
                 &mut batches,
                 MAX_SIGVERIFY_BATCH,
-                #[inline(always)]
-                |excess_packet| verifier.process_excess_packet(excess_packet),
             );
             num_valid_packets = MAX_SIGVERIFY_BATCH;
         }
         let excess_fail = num_unique.saturating_sub(MAX_SIGVERIFY_BATCH);
         discard_time.stop();
 
-        verifier.send_packets(batches)?;
+        sender.send(batches)?;
+
+        debug!(
+            "\ndiscard random time={:?}ns\ndedup time ={:?}us\ndiscard time={:?}ns",
+            discard_random_time.as_ns(),
+            dedup_time.as_us(),
+            discard_time.as_ns(),
+        );
+
+        debug!(
+            "\nnum packets={:?}\ndiscard random={:?} packets\ndedup ={:?} packets\ndiscard ={:?} packets",
+            num_packets,
+            num_discarded_randomly,
+            discard_or_dedup_fail,
+            excess_fail,
+        );
 
         Ok(())
     }
 
-    fn filter_service<T: SigVerifier + 'static + Send + Clone>(
+    fn filter_service(
         packet_receiver: find_packet_sender_stake_stage::FindPacketSenderStakeReceiver,
-        mut verifier: T,
+        sender: Sender<Vec<PacketBatch>>,
         name: &'static str,
     ) -> JoinHandle<()> {
         let mut stats = SigVerifierStats::default();
@@ -343,7 +345,7 @@ impl VerifyFilterStage {
                 loop {
                     deduper.reset();
                     if let Err(e) =
-                        Self::filter(&deduper, &packet_receiver, &mut verifier, &mut stats)
+                        Self::filter(&deduper, &packet_receiver, &mut sender, &mut stats)
                     {
                         match e {
                             SigVerifyServiceError::Streamer(StreamerError::RecvTimeout(
@@ -363,12 +365,12 @@ impl VerifyFilterStage {
             .unwrap()
     }
 
-    fn filter_services<T: SigVerifier + 'static + Send + Clone>(
+    fn filter_services(
         packet_receiver: find_packet_sender_stake_stage::FindPacketSenderStakeReceiver,
-        verifier: T,
+        sender: Sender<Vec<PacketBatch>>,
         name: &'static str,
     ) -> JoinHandle<()> {
-        Self::filter_service(packet_receiver, verifier, name)
+        Self::filter_service(packet_receiver, sender, name)
     }
 
     pub fn join(self) -> thread::Result<()> {
@@ -385,36 +387,6 @@ impl SigVerifyStage {
     ) -> Self {
         let thread_hdl = Self::verifier_services(packet_receiver, verifier, name);
         Self { thread_hdl }
-    }
-
-    pub fn discard_excess_packets(
-        batches: &mut [PacketBatch],
-        mut max_packets: usize,
-        mut process_excess_packet: impl FnMut(&Packet),
-    ) {
-        // Group packets by their incoming IP address.
-        let mut addrs = batches
-            .iter_mut()
-            .rev()
-            .flat_map(|batch| batch.iter_mut().rev())
-            .filter(|packet| !packet.meta.discard())
-            .map(|packet| (packet.meta.addr, packet))
-            .into_group_map();
-        // Allocate max_packets evenly across addresses.
-        while max_packets > 0 && !addrs.is_empty() {
-            let num_addrs = addrs.len();
-            addrs.retain(|_, packets| {
-                let cap = (max_packets + num_addrs - 1) / num_addrs;
-                max_packets -= packets.len().min(cap);
-                packets.truncate(packets.len().saturating_sub(cap));
-                !packets.is_empty()
-            });
-        }
-        // Discard excess packets from each address.
-        for packet in addrs.into_values().flatten() {
-            process_excess_packet(packet);
-            packet.meta.set_discard(true);
-        }
     }
 
     fn verifier<T: SigVerifier>(
@@ -460,23 +432,17 @@ impl SigVerifyStage {
             num_packets,
             (num_packets as f32 / verify_time.as_s())
         );
-        /*debug!(
-            "\ndiscard random time={:?}ns\ndedup time ={:?}us\ndiscard time={:?}ns\nverify time={:?}us\nshrink time={:?}us",
-            discard_random_time.as_ns(),
-            dedup_time.as_us(),
-            discard_time.as_ns(),
+        debug!(
+            "\nverify time={:?}us\nshrink time={:?}us",
             verify_time.as_us(),
             shrink_time.as_us(),
         );
 
         debug!(
-            "\ndiscard random={:?} packets\ndedup ={:?} packets\ndiscard ={:?} packets\nverify={:?} packets\nshrink={:?} batches",
-            num_discarded_randomly,
-            discard_or_dedup_fail,
-            excess_fail,
+            "\nverify={:?} packets\nshrink={:?} batches",
             num_valid_packets,
             total_shrinks,
-        );*/
+        );
 
         Ok(())
     }
@@ -546,7 +512,6 @@ mod tests {
             test_tx::test_tx,
         },
         solana_sdk::packet::PacketFlags,
-        std::thread::sleep,
     };
 
     fn count_non_discard(packet_batches: &[PacketBatch]) -> usize {
@@ -618,10 +583,10 @@ mod tests {
         let (packet_s, packet_r) = unbounded();
         let (filter_s, filter_r) = unbounded();
         let (verified_s, verified_r) = unbounded();
-        let verifier = TransactionSigVerifier::new(filter_s);
-        let filter = VerifyFilterStage::new(packet_r, verifier, "test_filter");
-        let verifier2 = TransactionSigVerifier::new(verified_s);
-        let stage = SigVerifyStage::new(filter_r, verifier2, "test_sigverify");
+
+        let filter = VerifyFilterStage::new(packet_r, filter_s, "test_filter");
+        let verifier = TransactionSigVerifier::new(verified_s);
+        let stage = SigVerifyStage::new(filter_r, verifier, "test_sigverify");
 
         let use_same_tx = false;
         let now = Instant::now();
