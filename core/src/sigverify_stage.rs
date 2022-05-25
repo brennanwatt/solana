@@ -8,7 +8,7 @@
 use {
     crate::{find_packet_sender_stake_stage, sigverify},
     core::time::Duration,
-    crossbeam_channel::{RecvTimeoutError, SendError, Sender},
+    crossbeam_channel::{unbounded, RecvTimeoutError, SendError, Sender},
     itertools::Itertools,
     solana_measure::measure::Measure,
     solana_perf::{
@@ -515,10 +515,8 @@ mod tests {
         trace!("start");
         let (packet_s, packet_r) = unbounded();
         let (verified_s, verified_r) = unbounded();
-
-        let filter = VerifyFilterStage::new(packet_r, filter_s, "test_filter");
         let verifier = TransactionSigVerifier::new(verified_s);
-        let stage = SigVerifyStage::new(filter_r, verifier, "test_sigverify");
+        let stage = SigVerifyStage::new(packet_r, verifier, "test_sigverify");
 
         let use_same_tx = false;
         let now = Instant::now();
@@ -596,9 +594,6 @@ mod tests {
         trace!("received: {}", received);
 
         drop(packet_s);
-        drop(filter_s);
-        filter.join().unwrap();
         stage.join().unwrap();
-
     }
 }
