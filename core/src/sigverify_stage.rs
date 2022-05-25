@@ -18,7 +18,7 @@ use {
     solana_sdk::timing,
     solana_streamer::streamer::{self, StreamerError},
     std::{
-        thread::{self, Builder, JoinHandle},
+        thread::{self, Builder, JoinHandle, sleep},
         time::Instant,
     },
     thiserror::Error,
@@ -621,6 +621,8 @@ mod tests {
                 total_tracer_packets_received_in_sigverify_stage,
                 total_packets
             );
+
+            sleep(Duration::from_millis(1000));
         }
         drop(packet_s);
         stage.join().unwrap();
