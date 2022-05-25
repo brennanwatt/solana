@@ -484,23 +484,18 @@ impl SigVerifyStage {
         }
 
         debug!(
-            "@{:?} filter: done. batches: {} packets: {} random discard: {} dedup: {} excess: {} f/s {}",
+            "@{:?} filter: done. batches: {} packets: {} random discard: {} dedup: {} excess: {}",
             timing::timestamp(),
             batches_len,
             num_packets,
             num_discarded_randomly,
             discard_or_dedup_fail,
-            excess_fail,
-            (num_packets as f32 / verify_time.as_s())
+            excess_fail
         );
 
         stats
             .recv_batches_us_hist
             .increment(recv_duration.as_micros() as u64)
-            .unwrap();
-        stats
-            .verify_batches_pp_us_hist
-            .increment(verify_time.as_us() / (num_packets as u64))
             .unwrap();
         stats
             .discard_packets_pp_us_hist
@@ -519,7 +514,6 @@ impl SigVerifyStage {
         stats.total_discard_random_time_us += discard_random_time.as_us() as usize;
         stats.total_discard_random += num_discarded_randomly;
         stats.total_excess_fail += excess_fail;
-        stats.total_shrinks += total_shrinks;
         stats.total_dedup_time_us += dedup_time.as_us() as usize;
         stats.total_discard_time_us += discard_time.as_us() as usize;
 
