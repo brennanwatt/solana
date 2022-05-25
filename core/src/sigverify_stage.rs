@@ -27,10 +27,10 @@ use {
 // Try to target 50ms, rough timings from mainnet machines
 //
 // 50ms/(300ns/packet) = 166666 packets ~ 1300 batches
-const MAX_DEDUP_BATCH: usize = 165_000;
+const MAX_DEDUP_BATCH: usize = 120_000;
 
 // 50ms/(25us/packet) = 2000 packets
-const MAX_SIGVERIFY_BATCH: usize = 2_000;
+const MAX_SIGVERIFY_BATCH: usize = 10_000;
 
 #[derive(Error, Debug)]
 pub enum SigVerifyServiceError<SendType> {
@@ -344,6 +344,7 @@ impl SigVerifyStage {
     fn verifier_service<T: SigVerifier + 'static + Send + Clone>(
         filter_receiver: Receiver<Vec<PacketBatch>>,
         mut verifier: T,
+        verify_pending_packet_count: Arc<AtomicU32>,
         name: &'static str,
     ) -> JoinHandle<()> {
         let mut stats = SigVerifierStats::default();
@@ -508,6 +509,7 @@ impl SigVerifyStage {
         packet_receiver: find_packet_sender_stake_stage::FindPacketSenderStakeReceiver,
         mut verifier: T,
         filter_sender: Sender<Vec<PacketBatch>>,
+        verify_pending_packet_count: Arc<AtomicU32>,
         name: &'static str,
     ) -> JoinHandle<()> {
         let mut stats = SigVerifierStats::default();
@@ -552,8 +554,9 @@ impl SigVerifyStage {
         name: &'static str,
     ) -> Vec<JoinHandle<()>> {
         let (filter_sender, filter_receiver) = unbounded();
-        let thread_filter = Self::filter_service(packet_receiver, verifier.clone(), filter_sender, name);
-        let thread_verifier = Self::verifier_service(filter_receiver, verifier, name);
+        let verify_pending_packet_count = Arc::new(atomic::AtomicU32::new(0));
+        let thread_filter = Self::filter_service(packet_receiver, verifier.clone(), filter_sender, verify_pending_packet_count, name);
+        let thread_verifier = Self::verifier_service(filter_receiver, verifier, verify_pending_packet_count, name);
         vec![thread_filter, thread_verifier]
     }
 
@@ -652,7 +655,7 @@ mod tests {
         let use_same_tx = true;
         let now = Instant::now();
         let packets_per_batch = 128;
-        let total_packets = 19200;
+        let total_packets = 192000;
         let expected_packets = if use_same_tx {
             1
         } else {
