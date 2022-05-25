@@ -273,7 +273,7 @@ impl VerifyFilterStage {
         recvr: &find_packet_sender_stake_stage::FindPacketSenderStakeReceiver,
         sender: &Sender<Vec<PacketBatch>>,
         stats: &mut SigVerifierStats,
-    ) -> Result<(), std::fmt::Debug> {
+    ) -> Result<(), dyn std::fmt::Debug> {
         let (mut batches, num_packets, _recv_duration) = streamer::recv_vec_packet_batches(recvr)?;
 
         debug!(
@@ -508,7 +508,7 @@ mod tests {
         crate::{sigverify::TransactionSigVerifier, sigverify_stage::timing::duration_as_ms},
         crossbeam_channel::unbounded,
         solana_perf::{
-            packet::{to_packet_batches, Packet},
+            packet::{to_packet_batches},
             test_tx::test_tx,
         },
         solana_sdk::packet::PacketFlags,
