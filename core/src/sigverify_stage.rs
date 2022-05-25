@@ -348,7 +348,7 @@ impl SigVerifyStage {
             (num_packets as f32 / verify_time.as_s())
         );
         debug!(
-            "discard random time={:?}ns\n dedup time ={:?}ns\n discard time={:?}ns\n verify time={:?}us\n shrink time={:?}ns",
+            "\ndiscard random time={:?}ns\n dedup time ={:?}ns\n discard time={:?}ns\n verify time={:?}us\n shrink time={:?}ns",
             discard_random_time.as_ns(),
             dedup_time.as_ns(),
             discard_time.as_ns(),
@@ -357,7 +357,7 @@ impl SigVerifyStage {
         );
 
         debug!(
-            "discard random={:?} packets\n dedup ={:?} packets\n discard ={:?} packets\n verify={:?} packets\n shrink={:?} batches",
+            "\ndiscard random={:?} packets\n dedup ={:?} packets\n discard ={:?} packets\n verify={:?} packets\n shrink={:?} batches",
             num_discarded_randomly,
             discard_or_dedup_fail,
             excess_fail,
@@ -537,7 +537,7 @@ mod tests {
         let verifier = TransactionSigVerifier::new(verified_s);
         let stage = SigVerifyStage::new(packet_r, verifier, "test");
 
-        let use_same_tx = true;
+        let use_same_tx = false;
         let now = Instant::now();
         let packets_per_batch = 128;
         let total_packets = MAX_SIGVERIFY_BATCH/packets_per_batch*packets_per_batch;
