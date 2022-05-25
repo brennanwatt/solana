@@ -274,7 +274,7 @@ impl VerifyFilterStage {
         sender: &Sender<Vec<PacketBatch>>,
         stats: &mut SigVerifierStats,
     ) {
-        let (mut batches, num_packets, _recv_duration) = streamer::recv_vec_packet_batches(recvr)?;
+        let (mut batches, num_packets, _recv_duration) = streamer::recv_vec_packet_batches(recvr).unwrap();
 
         debug!(
             "@{:?} filter: filtering: {} packets",
