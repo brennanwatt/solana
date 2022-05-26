@@ -682,16 +682,13 @@ impl Validator {
 
         *start_progress.write().unwrap() = ValidatorStartProgress::StartingServices;
 
-        let sample_performance_service =
-            if config.rpc_addrs.is_some() && config.rpc_config.enable_rpc_transaction_history {
-                Some(SamplePerformanceService::new(
-                    &bank_forks,
-                    &blockstore,
-                    &exit,
-                ))
-            } else {
-                None
-            };
+        warn!("config.rpc_addrs={}, config.rpc_config.enable_rpc_transaction_history={}",
+            config.rpc_addrs.is_some(),
+            config.rpc_config.enable_rpc_transaction_history);
+        let sample_performance_service = Some(SamplePerformanceService::new(
+                                                                            &bank_forks,
+                                                                            &blockstore,
+                                                                            &exit));
 
         let mut block_commitment_cache = BlockCommitmentCache::default();
         block_commitment_cache.initialize_slots(

@@ -34,7 +34,7 @@ impl SamplePerformanceService {
         let blockstore = blockstore.clone();
         let bank_forks = bank_forks.clone();
 
-        info!("Starting SamplePerformance service");
+        warn!("Starting SamplePerformance service");
         let thread_hdl = Builder::new()
             .name("sample-performance".to_string())
             .spawn(move || {
@@ -68,7 +68,7 @@ impl SamplePerformanceService {
 
             let elapsed = now.elapsed();
 
-            if elapsed.as_secs() >= SAMPLE_INTERVAL {
+            if elapsed.as_secs() >= 10 {
                 now = Instant::now();
                 let bank_forks = bank_forks.read().unwrap();
                 let bank = bank_forks.root_bank().clone();
@@ -85,6 +85,8 @@ impl SamplePerformanceService {
                         .unwrap_or_default(),
                     sample_period_secs: elapsed.as_secs() as u16,
                 };
+
+                warn!("Perf Sample: {:?}", perf_sample);
 
                 if let Err(e) = blockstore.write_perf_sample(highest_slot, &perf_sample) {
                     error!("write_perf_sample failed: slot {:?} {:?}", highest_slot, e);
