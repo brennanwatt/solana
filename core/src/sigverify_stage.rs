@@ -300,7 +300,7 @@ impl SigVerifyStage {
         stats.total_verify_time_us += verify_time.as_us() as usize;
         stats.total_shrink_time_us += (pre_shrink_time_us + post_shrink_time_us) as usize;
 
-        stats.report(name);
+        stats.report("verifier");
         stats = &mut SigVerifierStats::default();
 
         Ok(())
@@ -439,15 +439,15 @@ mod tests {
         let verifier = TransactionSigVerifier::new(verified_s);
         let stage = SigVerifyStage::new(packet_r, verifier, "test");
 
-        let use_same_tx = true;
+        let use_same_tx = false;
         let now = Instant::now();
-        let packets_per_batch = 128;
-        let total_packets = 1920;
+        let packets_per_batch = 12;
+        let total_packets = 120;
         // This is important so that we don't discard any packets and fail asserts below about
         // `total_excess_tracer_packets`
         assert!(total_packets < MAX_SIGVERIFY_BATCH);
         let mut batches = gen_batches(use_same_tx, packets_per_batch, total_packets);
-        trace!(
+        warn!(
             "starting... generation took: {} ms batches: {}",
             duration_as_ms(&now.elapsed()),
             batches.len()
@@ -466,7 +466,7 @@ mod tests {
         }
         let mut received = 0;
         let mut total_tracer_packets_received_in_sigverify_stage = 0;
-        trace!("sent: {}", sent_len);
+        warn!("sent: {}", sent_len);
         loop {
             if let Ok((mut verifieds, tracer_packet_stats_option)) = verified_r.recv() {
                 let tracer_packet_stats = tracer_packet_stats_option.unwrap();
@@ -516,7 +516,7 @@ mod tests {
                 break;
             }
         }
-        trace!("received: {}", received);
+        trawarnce!("received: {}", received);
         assert_eq!(
             total_tracer_packets_received_in_sigverify_stage,
             total_packets
