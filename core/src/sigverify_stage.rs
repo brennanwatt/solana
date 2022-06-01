@@ -194,12 +194,12 @@ impl SigVerifyStage {
         deduper: &Deduper,
         recvr: &find_packet_sender_stake_stage::FindPacketSenderStakeReceiver,
         verifier: &mut T,
-        stats: &mut SigVerifierStats,
     ) -> Result<(), T::SendType> {
+        let mut stats = SigVerifierStats::default();
         let (mut batches, num_packets, recv_duration) = streamer::recv_vec_packet_batches(recvr)?;
 
         let batches_len = batches.len();
-        debug!(
+        warn!(
             "@{:?} verifier: verifying: {}",
             timing::timestamp(),
             num_packets,
@@ -260,7 +260,7 @@ impl SigVerifyStage {
 
         verifier.send_packets(batches)?;
 
-        debug!(
+        warn!(
             "@{:?} verifier: done. batches: {} total verify time: {:?} verified: {} v/s {}",
             timing::timestamp(),
             batches_len,
@@ -299,9 +299,7 @@ impl SigVerifyStage {
         stats.total_discard_time_us += discard_time.as_us() as usize;
         stats.total_verify_time_us += verify_time.as_us() as usize;
         stats.total_shrink_time_us += (pre_shrink_time_us + post_shrink_time_us) as usize;
-
         stats.report("verifier");
-        stats = &mut SigVerifierStats::default();
 
         Ok(())
     }
@@ -311,8 +309,6 @@ impl SigVerifyStage {
         mut verifier: T,
         name: &'static str,
     ) -> JoinHandle<()> {
-        let mut stats = SigVerifierStats::default();
-        let mut last_print = Instant::now();
         const MAX_DEDUPER_AGE: Duration = Duration::from_secs(2);
         const MAX_DEDUPER_ITEMS: u32 = 1_000_000;
         Builder::new()
@@ -322,7 +318,7 @@ impl SigVerifyStage {
                 loop {
                     deduper.reset();
                     if let Err(e) =
-                        Self::verifier(&deduper, &packet_receiver, &mut verifier, &mut stats)
+                        Self::verifier(&deduper, &packet_receiver, &mut verifier)
                     {
                         match e {
                             SigVerifyServiceError::Streamer(StreamerError::RecvTimeout(
@@ -516,7 +512,7 @@ mod tests {
                 break;
             }
         }
-        trawarnce!("received: {}", received);
+        warn!("received: {}", received);
         assert_eq!(
             total_tracer_packets_received_in_sigverify_stage,
             total_packets
