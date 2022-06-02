@@ -431,6 +431,7 @@ mod tests {
         for i in 0..10 {
             error!("!!! ITERATION {} !!!",i);
             test_sigverify_stage();
+            test_sigverify_stage2();
         }
     }
 
@@ -446,6 +447,100 @@ mod tests {
         let now = Instant::now();
         let packets_per_batch = 12;
         let total_packets = 120;
+        // This is important so that we don't discard any packets and fail asserts below about
+        // `total_excess_tracer_packets`
+        assert!(total_packets < MAX_SIGVERIFY_BATCH);
+        let mut batches = gen_batches(use_same_tx, packets_per_batch, total_packets);
+        warn!(
+            "starting... generation took: {} ms batches: {}",
+            duration_as_ms(&now.elapsed()),
+            batches.len()
+        );
+
+        let mut sent_len = 0;
+        for _ in 0..batches.len() {
+            if let Some(mut batch) = batches.pop() {
+                sent_len += batch.len();
+                batch
+                    .iter_mut()
+                    .for_each(|packet| packet.meta.flags |= PacketFlags::TRACER_PACKET);
+                assert_eq!(batch.len(), packets_per_batch);
+                packet_s.send(vec![batch]).unwrap();
+            }
+        }
+        let mut received = 0;
+        let mut total_tracer_packets_received_in_sigverify_stage = 0;
+        warn!("sent: {}", sent_len);
+        loop {
+            if let Ok((mut verifieds, tracer_packet_stats_option)) = verified_r.recv() {
+                let tracer_packet_stats = tracer_packet_stats_option.unwrap();
+                total_tracer_packets_received_in_sigverify_stage +=
+                    tracer_packet_stats.total_tracer_packets_received_in_sigverify_stage;
+                assert_eq!(
+                    tracer_packet_stats.total_tracer_packets_received_in_sigverify_stage
+                        % packets_per_batch,
+                    0,
+                );
+
+                if use_same_tx {
+                    // Every transaction other than the very first one in the very first batch
+                    // should be deduped.
+
+                    // Also have to account for the fact that deduper could be cleared periodically,
+                    // in which case the first transaction in the next batch won't be deduped
+                    assert!(
+                        (tracer_packet_stats.total_tracer_packets_deduped
+                            == tracer_packet_stats
+                                .total_tracer_packets_received_in_sigverify_stage
+                                - 1)
+                            || (tracer_packet_stats.total_tracer_packets_deduped
+                                == tracer_packet_stats
+                                    .total_tracer_packets_received_in_sigverify_stage)
+                    );
+                    assert!(
+                        (tracer_packet_stats.total_tracker_packets_passed_sigverify == 1)
+                            || (tracer_packet_stats.total_tracker_packets_passed_sigverify == 0)
+                    );
+                } else {
+                    assert_eq!(tracer_packet_stats.total_tracer_packets_deduped, 0);
+                    assert!(
+                        (tracer_packet_stats.total_tracker_packets_passed_sigverify
+                            == tracer_packet_stats
+                                .total_tracer_packets_received_in_sigverify_stage)
+                    );
+                }
+                assert_eq!(tracer_packet_stats.total_excess_tracer_packets, 0);
+                while let Some(v) = verifieds.pop() {
+                    received += v.len();
+                    batches.push(v);
+                }
+            }
+
+            if total_tracer_packets_received_in_sigverify_stage >= sent_len {
+                break;
+            }
+        }
+        warn!("received: {}", received);
+        assert_eq!(
+            total_tracer_packets_received_in_sigverify_stage,
+            total_packets
+        );
+        drop(packet_s);
+        stage.join().unwrap();
+    }
+
+    fn test_sigverify_stage2() {
+        solana_logger::setup();
+        trace!("start");
+        let (packet_s, packet_r) = unbounded();
+        let (verified_s, verified_r) = unbounded();
+        let verifier = TransactionSigVerifier::new(verified_s);
+        let stage = SigVerifyStage::new(packet_r, verifier, "test");
+
+        let use_same_tx = false;
+        let now = Instant::now();
+        let packets_per_batch = 15;
+        let total_packets = 60;
         // This is important so that we don't discard any packets and fail asserts below about
         // `total_excess_tracer_packets`
         assert!(total_packets < MAX_SIGVERIFY_BATCH);
