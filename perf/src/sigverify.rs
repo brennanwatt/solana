@@ -598,7 +598,9 @@ pub fn ed25519_verify_cpu(batches: &mut [PacketBatch], reject_non_vote: bool, pa
         });
     });*/
     batches.into_iter().for_each(|batch| {
-        batch.into_iter().for_each(|p: &mut Packet| verify_packet(p, reject_non_vote))
+        batch.into_iter().for_each(|p: &mut Packet| {
+            verify_packet(p, reject_non_vote)
+        })
     });
     inc_new_counter_debug!("ed25519_verify_cpu", packet_count);
 }
