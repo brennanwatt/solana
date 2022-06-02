@@ -15,7 +15,7 @@ lazy_static! {
 
 pub fn get_thread_count() -> usize {
     //*MAX_RAYON_THREADS
-    16
+    8
 }
 
 // Only used in legacy code.
