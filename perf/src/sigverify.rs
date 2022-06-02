@@ -596,15 +596,10 @@ pub fn ed25519_verify_cpu(batches: &mut [PacketBatch], reject_non_vote: bool, pa
                 .par_iter_mut()
                 .for_each(|p| verify_packet(p, reject_non_vote))
         });
-    });
-    batches.into_iter().for_each(|batch| {
-        batch.for_each(|p: &mut Packet| {
-            verify_packet(p, reject_non_vote)
-        })
     });*/
-    batches.into_par_iter().for_each(|batch| {
+    batches.into_iter().for_each(|batch| {
         batch
-            .par_iter_mut()
+            .iter_mut()
             .for_each(|p| verify_packet(p, reject_non_vote))
     });
     inc_new_counter_debug!("ed25519_verify_cpu", packet_count);
