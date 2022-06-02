@@ -590,12 +590,15 @@ pub fn shrink_batches(batches: &mut Vec<PacketBatch>) {
 pub fn ed25519_verify_cpu(batches: &mut [PacketBatch], reject_non_vote: bool, packet_count: usize) {
     use rayon::prelude::*;
     debug!("CPU ECDSA for {}", packet_count);
-    PAR_THREAD_POOL.install(|| {
+    /*PAR_THREAD_POOL.install(|| {
         batches.into_par_iter().for_each(|batch| {
             batch
                 .par_iter_mut()
                 .for_each(|p| verify_packet(p, reject_non_vote))
         });
+    });*/
+    batches.into_iter().for_each(|batch| {
+        batch.for_each(|p| verify_packet(p, reject_non_vote))
     });
     inc_new_counter_debug!("ed25519_verify_cpu", packet_count);
 }
