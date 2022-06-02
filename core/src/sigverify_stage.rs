@@ -22,7 +22,6 @@ use {
     solana_streamer::streamer::{self, StreamerError},
     std::{
         thread::{self, Builder, JoinHandle},
-        time::Instant,
     },
     thiserror::Error,
 };
@@ -307,7 +306,7 @@ impl SigVerifyStage {
     fn verifier_service<T: SigVerifier + 'static + Send + Clone>(
         packet_receiver: find_packet_sender_stake_stage::FindPacketSenderStakeReceiver,
         mut verifier: T,
-        name: &'static str,
+        _name: &'static str,
     ) -> JoinHandle<()> {
         const MAX_DEDUPER_AGE: Duration = Duration::from_secs(2);
         const MAX_DEDUPER_ITEMS: u32 = 1_000_000;
@@ -427,6 +426,13 @@ mod tests {
     }
 
     #[test]
+    fn bw_test_sigverify_stage() {
+        for i in 0..10 {
+            error!("!!! ITERATION {} !!!",i);
+            test_sigverify_stage();
+        }
+    }
+    
     fn test_sigverify_stage() {
         solana_logger::setup();
         trace!("start");
