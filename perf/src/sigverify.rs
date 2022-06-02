@@ -61,6 +61,11 @@ lazy_static! {
         .thread_name(|ix| format!("sigverify_{}", ix))
         .build()
         .unwrap();
+    static ref PAR_THREAD_POOL16: ThreadPool = rayon::ThreadPoolBuilder::new()
+        .num_threads(16)
+        .thread_name(|ix| format!("sigverify_{}", ix))
+        .build()
+        .unwrap();
 }
 
 
@@ -606,7 +611,13 @@ pub fn shrink_batches(batches: &mut Vec<PacketBatch>) {
 pub fn ed25519_verify_cpu(batches: &mut [PacketBatch], reject_non_vote: bool, packet_count: usize) {
     use rayon::prelude::*;
     debug!("CPU ECDSA for {}", packet_count);
-    if packet_count <= 32 {
+    if packet_count <= 16 {
+        batches.into_iter().for_each(|batch| {
+            batch
+                .iter_mut()
+                .for_each(|p| verify_packet(p, reject_non_vote))
+        });
+    } else if packet_count <= 32 {
         PAR_THREAD_POOL2.install(|| {
             batches.into_par_iter().for_each(|batch| {
                 batch
@@ -624,6 +635,14 @@ pub fn ed25519_verify_cpu(batches: &mut [PacketBatch], reject_non_vote: bool, pa
         });
     } else if packet_count <= 128 {
         PAR_THREAD_POOL8.install(|| {
+            batches.into_par_iter().for_each(|batch| {
+                batch
+                    .par_iter_mut()
+                    .for_each(|p| verify_packet(p, reject_non_vote))
+            });
+        });
+    } else if packet_count <= 256 {
+        PAR_THREAD_POOL16.install(|| {
             batches.into_par_iter().for_each(|batch| {
                 batch
                     .par_iter_mut()

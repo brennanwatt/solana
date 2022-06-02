@@ -429,19 +429,10 @@ mod tests {
 
     #[test]
     fn bw_test_sigverify_stage() {
-        for i in 0..10 {
-            error!("!!! ITERATION {} !!!",i);
-            test_sigverify_stage(1);
-            test_sigverify_stage(2);
-            test_sigverify_stage(4);
-            test_sigverify_stage(8);
-            test_sigverify_stage(16);
-            test_sigverify_stage(32);
-            test_sigverify_stage(64);
-            test_sigverify_stage(128);
-            test_sigverify_stage(256);
-            test_sigverify_stage(512);
-            test_sigverify_stage(1024);
+        for _i in 0..10 {
+            for j in 1..512 {
+                test_sigverify_stage(j);
+            }
         }
     }
 
@@ -456,11 +447,7 @@ mod tests {
         let use_same_tx = false;
         let now = Instant::now();
         let total_packets = packets;
-        let packets_per_batch = if (packets & 0xF) > 0 {
-            1
-        } else {
-            16
-        };
+        let packets_per_batch = 12
 
         // This is important so that we don't discard any packets and fail asserts below about
         // `total_excess_tracer_packets`
@@ -479,7 +466,6 @@ mod tests {
                 batch
                     .iter_mut()
                     .for_each(|packet| packet.meta.flags |= PacketFlags::TRACER_PACKET);
-                assert_eq!(batch.len(), packets_per_batch);
                 packet_s.send(vec![batch]).unwrap();
             }
         }
@@ -491,11 +477,6 @@ mod tests {
                 let tracer_packet_stats = tracer_packet_stats_option.unwrap();
                 total_tracer_packets_received_in_sigverify_stage +=
                     tracer_packet_stats.total_tracer_packets_received_in_sigverify_stage;
-                assert_eq!(
-                    tracer_packet_stats.total_tracer_packets_received_in_sigverify_stage
-                        % packets_per_batch,
-                    0,
-                );
 
                 if use_same_tx {
                     // Every transaction other than the very first one in the very first batch
