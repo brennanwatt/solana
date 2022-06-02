@@ -456,7 +456,7 @@ mod tests {
         let use_same_tx = false;
         let now = Instant::now();
         let total_packets = packets;
-        let packets_per_batch = if packets & 0xF {
+        let packets_per_batch = if (packets & 0xF) > 0 {
             1
         } else {
             16
