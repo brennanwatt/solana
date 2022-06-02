@@ -361,6 +361,7 @@ mod tests {
             test_tx::test_tx,
         },
         solana_sdk::packet::PacketFlags,
+        std::time::Instant,
     };
 
     fn count_non_discard(packet_batches: &[PacketBatch]) -> usize {
@@ -432,7 +433,7 @@ mod tests {
             test_sigverify_stage();
         }
     }
-    
+
     fn test_sigverify_stage() {
         solana_logger::setup();
         trace!("start");
