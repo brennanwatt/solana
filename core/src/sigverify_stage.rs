@@ -447,7 +447,7 @@ mod tests {
         let use_same_tx = false;
         let now = Instant::now();
         let total_packets = packets;
-        let packets_per_batch = 12
+        let packets_per_batch = 12;
 
         // This is important so that we don't discard any packets and fail asserts below about
         // `total_excess_tracer_packets`
