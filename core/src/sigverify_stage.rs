@@ -22,6 +22,7 @@ use {
     solana_streamer::streamer::{self, StreamerError},
     std::{
         thread::{self, Builder, JoinHandle},
+        time::Instant,
     },
     thiserror::Error,
 };
@@ -97,6 +98,104 @@ impl SigVerifierStats {
     fn report(&self, name: &'static str) {
         datapoint_info!(
             name,
+            (
+                "recv_batches_us_90pct",
+                self.recv_batches_us_hist.percentile(90.0).unwrap_or(0),
+                i64
+            ),
+            (
+                "recv_batches_us_min",
+                self.recv_batches_us_hist.minimum().unwrap_or(0),
+                i64
+            ),
+            (
+                "recv_batches_us_max",
+                self.recv_batches_us_hist.maximum().unwrap_or(0),
+                i64
+            ),
+            (
+                "recv_batches_us_mean",
+                self.recv_batches_us_hist.mean().unwrap_or(0),
+                i64
+            ),
+            (
+                "verify_batches_pp_us_90pct",
+                self.verify_batches_pp_us_hist.percentile(90.0).unwrap_or(0),
+                i64
+            ),
+            (
+                "verify_batches_pp_us_min",
+                self.verify_batches_pp_us_hist.minimum().unwrap_or(0),
+                i64
+            ),
+            (
+                "verify_batches_pp_us_max",
+                self.verify_batches_pp_us_hist.maximum().unwrap_or(0),
+                i64
+            ),
+            (
+                "verify_batches_pp_us_mean",
+                self.verify_batches_pp_us_hist.mean().unwrap_or(0),
+                i64
+            ),
+            (
+                "discard_packets_pp_us_90pct",
+                self.discard_packets_pp_us_hist
+                    .percentile(90.0)
+                    .unwrap_or(0),
+                i64
+            ),
+            (
+                "discard_packets_pp_us_min",
+                self.discard_packets_pp_us_hist.minimum().unwrap_or(0),
+                i64
+            ),
+            (
+                "discard_packets_pp_us_max",
+                self.discard_packets_pp_us_hist.maximum().unwrap_or(0),
+                i64
+            ),
+            (
+                "discard_packets_pp_us_mean",
+                self.discard_packets_pp_us_hist.mean().unwrap_or(0),
+                i64
+            ),
+            (
+                "dedup_packets_pp_us_90pct",
+                self.dedup_packets_pp_us_hist.percentile(90.0).unwrap_or(0),
+                i64
+            ),
+            (
+                "dedup_packets_pp_us_min",
+                self.dedup_packets_pp_us_hist.minimum().unwrap_or(0),
+                i64
+            ),
+            (
+                "dedup_packets_pp_us_max",
+                self.dedup_packets_pp_us_hist.maximum().unwrap_or(0),
+                i64
+            ),
+            (
+                "dedup_packets_pp_us_mean",
+                self.dedup_packets_pp_us_hist.mean().unwrap_or(0),
+                i64
+            ),
+            (
+                "batches_90pct",
+                self.batches_hist.percentile(90.0).unwrap_or(0),
+                i64
+            ),
+            ("batches_min", self.batches_hist.minimum().unwrap_or(0), i64),
+            ("batches_max", self.batches_hist.maximum().unwrap_or(0), i64),
+            ("batches_mean", self.batches_hist.mean().unwrap_or(0), i64),
+            (
+                "packets_90pct",
+                self.packets_hist.percentile(90.0).unwrap_or(0),
+                i64
+            ),
+            ("packets_min", self.packets_hist.minimum().unwrap_or(0), i64),
+            ("packets_max", self.packets_hist.maximum().unwrap_or(0), i64),
+            ("packets_mean", self.packets_hist.mean().unwrap_or(0), i64),
             ("total_batches", self.total_batches, i64),
             ("total_packets", self.total_packets, i64),
             ("total_dedup", self.total_dedup, i64),
@@ -193,12 +292,12 @@ impl SigVerifyStage {
         deduper: &Deduper,
         recvr: &find_packet_sender_stake_stage::FindPacketSenderStakeReceiver,
         verifier: &mut T,
+        stats: &mut SigVerifierStats,
     ) -> Result<(), T::SendType> {
-        let mut stats = SigVerifierStats::default();
         let (mut batches, num_packets, recv_duration) = streamer::recv_vec_packet_batches(recvr)?;
 
         let batches_len = batches.len();
-        info!(
+        debug!(
             "@{:?} verifier: verifying: {}",
             timing::timestamp(),
             num_packets,
@@ -259,7 +358,7 @@ impl SigVerifyStage {
 
         verifier.send_packets(batches)?;
 
-        info!(
+        debug!(
             "@{:?} verifier: done. batches: {} total verify time: {:?} verified: {} v/s {}",
             timing::timestamp(),
             batches_len,
@@ -298,8 +397,6 @@ impl SigVerifyStage {
         stats.total_discard_time_us += discard_time.as_us() as usize;
         stats.total_verify_time_us += verify_time.as_us() as usize;
         stats.total_shrink_time_us += (pre_shrink_time_us + post_shrink_time_us) as usize;
-        warn!("{:?} - {:?}",stats.total_valid_packets,stats.total_verify_time_us);
-        stats.report("verify");
 
         Ok(())
     }
@@ -307,8 +404,10 @@ impl SigVerifyStage {
     fn verifier_service<T: SigVerifier + 'static + Send + Clone>(
         packet_receiver: find_packet_sender_stake_stage::FindPacketSenderStakeReceiver,
         mut verifier: T,
-        _name: &'static str,
+        name: &'static str,
     ) -> JoinHandle<()> {
+        let mut stats = SigVerifierStats::default();
+        let mut last_print = Instant::now();
         const MAX_DEDUPER_AGE: Duration = Duration::from_secs(2);
         const MAX_DEDUPER_ITEMS: u32 = 1_000_000;
         Builder::new()
@@ -318,7 +417,7 @@ impl SigVerifyStage {
                 loop {
                     deduper.reset();
                     if let Err(e) =
-                        Self::verifier(&deduper, &packet_receiver, &mut verifier)
+                        Self::verifier(&deduper, &packet_receiver, &mut verifier, &mut stats)
                     {
                         match e {
                             SigVerifyServiceError::Streamer(StreamerError::RecvTimeout(
@@ -332,6 +431,11 @@ impl SigVerifyStage {
                             }
                             _ => error!("{:?}", e),
                         }
+                    }
+                    if last_print.elapsed().as_secs() > 2 {
+                        stats.report(name);
+                        stats = SigVerifierStats::default();
+                        last_print = Instant::now();
                     }
                 }
             })
@@ -362,7 +466,6 @@ mod tests {
             test_tx::test_tx,
         },
         solana_sdk::packet::PacketFlags,
-        std::time::Instant,
     };
 
     fn count_non_discard(packet_batches: &[PacketBatch]) -> usize {
