@@ -11,6 +11,7 @@ use {
         perf_libs,
         recycler_cache::RecyclerCache,
         sigverify::{self, count_packets_in_batches, TxOffset},
+        thread::renice_this_thread,
     },
     solana_rayon_threadlimit::get_thread_count,
     solana_sdk::{
@@ -27,6 +28,7 @@ lazy_static! {
     static ref SIGVERIFY_THREAD_POOL: ThreadPool = rayon::ThreadPoolBuilder::new()
         .num_threads(get_thread_count())
         .thread_name(|ix| format!("sigverify_shreds_{}", ix))
+        .start_handler(move || renice_this_thread(10).unwrap())
         .build()
         .unwrap();
 }

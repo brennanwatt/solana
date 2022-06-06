@@ -65,6 +65,7 @@ use {
     rayon::{prelude::*, ThreadPool},
     serde::{Deserialize, Serialize},
     solana_measure::measure::Measure,
+    solana_perf::thread::renice_this_thread,
     solana_rayon_threadlimit::get_thread_count,
     solana_sdk::{
         account::{AccountSharedData, ReadableAccount, WritableAccount},
@@ -1662,6 +1663,7 @@ pub fn make_min_priority_thread_pool() -> ThreadPool {
     let num_threads = quarter_thread_count();
     rayon::ThreadPoolBuilder::new()
         .thread_name(|i| format!("solana-cleanup-accounts-{}", i))
+        .start_handler(move || renice_this_thread(10).unwrap())
         .num_threads(num_threads)
         .build()
         .unwrap()
@@ -1903,6 +1905,7 @@ impl AccountsDb {
             thread_pool: rayon::ThreadPoolBuilder::new()
                 .num_threads(num_threads)
                 .thread_name(|i| format!("solana-db-accounts-{}", i))
+                .start_handler(move || renice_this_thread(10).unwrap())
                 .build()
                 .unwrap(),
             thread_pool_clean: make_min_priority_thread_pool(),

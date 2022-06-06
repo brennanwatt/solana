@@ -14,6 +14,7 @@ use {
     },
     solana_measure::measure::Measure,
     solana_metrics::{datapoint_error, inc_new_counter_debug},
+    solana_perf::thread::renice_this_thread,
     solana_program_runtime::timings::{ExecuteTimingType, ExecuteTimings},
     solana_rayon_threadlimit::{get_max_thread_count, get_thread_count},
     solana_runtime::{
@@ -99,6 +100,7 @@ lazy_static! {
     static ref PAR_THREAD_POOL: ThreadPool = rayon::ThreadPoolBuilder::new()
         .num_threads(get_max_thread_count())
         .thread_name(|ix| format!("blockstore_processor_{}", ix))
+        .start_handler(move || renice_this_thread(10).unwrap())
         .build()
         .unwrap();
 }

@@ -11,6 +11,7 @@ use {
     },
     solana_entry::entry::Entry,
     solana_measure::measure::Measure,
+    solana_perf::thread::renice_this_thread,
     solana_rayon_threadlimit::get_thread_count,
     solana_sdk::{clock::Slot, signature::Keypair},
     std::fmt::Debug,
@@ -20,6 +21,7 @@ lazy_static! {
     static ref PAR_THREAD_POOL: ThreadPool = rayon::ThreadPoolBuilder::new()
         .num_threads(get_thread_count())
         .thread_name(|ix| format!("shredder_{}", ix))
+        .start_handler(move || renice_this_thread(10).unwrap())
         .build()
         .unwrap();
 }

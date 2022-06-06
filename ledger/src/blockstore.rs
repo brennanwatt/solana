@@ -31,6 +31,7 @@ use {
         datapoint_debug, datapoint_error,
         poh_timing_point::{send_poh_timing_point, PohTimingSender, SlotPohTimingInfo},
     },
+    solana_perf::thread::renice_this_thread,
     solana_rayon_threadlimit::get_max_thread_count,
     solana_runtime::hardened_unpack::{unpack_genesis_archive, MAX_GENESIS_ARCHIVE_UNPACKED_SIZE},
     solana_sdk::{
@@ -88,11 +89,13 @@ lazy_static! {
     static ref PAR_THREAD_POOL: ThreadPool = rayon::ThreadPoolBuilder::new()
         .num_threads(get_max_thread_count())
         .thread_name(|ix| format!("blockstore_{}", ix))
+        .start_handler(move || renice_this_thread(10).unwrap())
         .build()
         .unwrap();
     static ref PAR_THREAD_POOL_ALL_CPUS: ThreadPool = rayon::ThreadPoolBuilder::new()
         .num_threads(num_cpus::get())
         .thread_name(|ix| format!("blockstore_{}", ix))
+        .start_handler(move || renice_this_thread(10).unwrap())
         .build()
         .unwrap();
 }

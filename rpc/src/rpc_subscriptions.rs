@@ -23,6 +23,7 @@ use {
     },
     solana_ledger::{blockstore::Blockstore, get_tmp_ledger_path},
     solana_measure::measure::Measure,
+    solana_perf::thread::renice_this_thread,
     solana_rayon_threadlimit::get_thread_count,
     solana_runtime::{
         bank::{Bank, TransactionLogInfo},
@@ -637,6 +638,7 @@ impl RpcSubscriptions {
                         let pool = rayon::ThreadPoolBuilder::new()
                             .num_threads(notification_threads)
                             .thread_name(|i| format!("sol-sub-notif-{}", i))
+                            .start_handler(move || renice_this_thread(10).unwrap())
                             .build()
                             .unwrap();
                         pool.install(|| {

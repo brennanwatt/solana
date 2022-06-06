@@ -20,7 +20,10 @@ use {
     },
     solana_measure::measure::Measure,
     solana_metrics::{inc_new_counter_debug, inc_new_counter_error},
-    solana_perf::packet::{Packet, PacketBatch},
+    solana_perf::{
+        packet::{Packet, PacketBatch},
+        thread::renice_this_thread,
+    },
     solana_rayon_threadlimit::get_thread_count,
     solana_runtime::{bank::Bank, bank_forks::BankForks},
     solana_sdk::{clock::Slot, pubkey::Pubkey},
@@ -643,6 +646,7 @@ impl WindowService {
                 trace!("{}: RECV_WINDOW started", id);
                 let thread_pool = rayon::ThreadPoolBuilder::new()
                     .num_threads(get_thread_count())
+                    .start_handler(move || renice_this_thread(10).unwrap())
                     .build()
                     .unwrap();
                 let mut now = Instant::now();

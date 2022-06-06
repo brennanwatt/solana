@@ -9,6 +9,7 @@ use {
         packet::{Packet, PacketBatch, PacketFlags},
         perf_libs,
         recycler::Recycler,
+        thread::renice_this_thread,
     },
     ahash::AHasher,
     rand::{thread_rng, Rng},
@@ -44,6 +45,7 @@ lazy_static! {
     static ref PAR_THREAD_POOL: ThreadPool = rayon::ThreadPoolBuilder::new()
         .num_threads(get_thread_count())
         .thread_name(|ix| format!("sigverify_{}", ix))
+        .start_handler(move || renice_this_thread(10).unwrap())
         .build()
         .unwrap();
     static ref PAR_THREAD_POOL2: ThreadPool = rayon::ThreadPoolBuilder::new()
@@ -611,7 +613,7 @@ pub fn shrink_batches(batches: &mut Vec<PacketBatch>) {
 pub fn ed25519_verify_cpu(batches: &mut [PacketBatch], reject_non_vote: bool, packet_count: usize) {
     use rayon::prelude::*;
     debug!("CPU ECDSA for {}", packet_count);
-    if packet_count <= 16 {
+    /*if packet_count <= 16 {
         batches.into_iter().for_each(|batch| {
             batch
                 .iter_mut()
@@ -649,7 +651,7 @@ pub fn ed25519_verify_cpu(batches: &mut [PacketBatch], reject_non_vote: bool, pa
                     .for_each(|p| verify_packet(p, reject_non_vote))
             });
         });
-    } else {
+    } else {*/
         PAR_THREAD_POOL.install(|| {
             batches.into_par_iter().for_each(|batch| {
                 batch
@@ -657,7 +659,7 @@ pub fn ed25519_verify_cpu(batches: &mut [PacketBatch], reject_non_vote: bool, pa
                     .for_each(|p| verify_packet(p, reject_non_vote))
             });
         });
-    }
+    //}
     
     inc_new_counter_debug!("ed25519_verify_cpu", packet_count);
 }
