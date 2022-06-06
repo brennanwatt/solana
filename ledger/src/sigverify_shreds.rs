@@ -28,7 +28,7 @@ lazy_static! {
     static ref SIGVERIFY_THREAD_POOL: ThreadPool = rayon::ThreadPoolBuilder::new()
         .num_threads(get_thread_count())
         .thread_name(|ix| format!("sigverify_shreds_{}", ix))
-        .start_handler(move || renice_this_thread(10).unwrap())
+        .start_handler(move |_idx| renice_this_thread(10).unwrap())
         .build()
         .unwrap();
 }
