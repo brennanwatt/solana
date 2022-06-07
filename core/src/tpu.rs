@@ -160,7 +160,7 @@ impl Tpu {
 
         let sigverify_stage = {
             let verifier = TransactionSigVerifier::new(verified_sender);
-            SigVerifyStage::new(find_packet_sender_stake_receiver, verifier, "tpu-verifier")
+            SigVerifyStage::new(find_packet_sender_stake_receiver, verifier, 1, "tpu-verifier")
         };
 
         let (verified_tpu_vote_packets_sender, verified_tpu_vote_packets_receiver) = unbounded();
@@ -171,6 +171,7 @@ impl Tpu {
             SigVerifyStage::new(
                 vote_find_packet_sender_stake_receiver,
                 verifier,
+                1000,
                 "tpu-vote-verifier",
             )
         };

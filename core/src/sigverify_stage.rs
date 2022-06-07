@@ -5,6 +5,8 @@
 //! transaction. All processing is done on the CPU by default and on a GPU
 //! if perf-libs are available
 
+use crate::{sigverify_shreds::ShredSigVerifier, sigverify::TransactionSigVerifier};
+
 use {
     crate::{find_packet_sender_stake_stage, sigverify},
     core::time::Duration,
@@ -30,10 +32,10 @@ use {
 // Try to target 50ms, rough timings from mainnet machines
 //
 // 50ms/(300ns/packet) = 166666 packets ~ 1300 batches
-const MAX_DEDUP_BATCH: usize = 1;
+const MAX_DEDUP_BATCH: usize = 165_000;
 
 // 50ms/(25us/packet) = 2000 packets
-const MAX_SIGVERIFY_BATCH: usize = 1;
+const MAX_SIGVERIFY_BATCH: usize = 2_000;
 
 // Packet batch shrinker will reorganize packets into compacted batches if 10%
 // or more of the packets in a group of packet batches have been discarded.
@@ -237,9 +239,10 @@ impl SigVerifyStage {
     pub fn new<T: SigVerifier + 'static + Send + Clone>(
         packet_receiver: find_packet_sender_stake_stage::FindPacketSenderStakeReceiver,
         verifier: T,
+        max_packets: usize,
         name: &'static str,
     ) -> Self {
-        let thread_hdl = Self::verifier_services(packet_receiver, verifier, name);
+        let thread_hdl = Self::verifier_services(packet_receiver, verifier, max_packets, name);
         Self { thread_hdl }
     }
 
@@ -292,6 +295,7 @@ impl SigVerifyStage {
         deduper: &Deduper,
         recvr: &find_packet_sender_stake_stage::FindPacketSenderStakeReceiver,
         verifier: &mut T,
+        max_packets: usize,
         stats: &mut SigVerifierStats,
     ) -> Result<(), T::SendType> {
         let (mut batches, num_packets, recv_duration) = streamer::recv_vec_packet_batches(recvr)?;
@@ -306,7 +310,7 @@ impl SigVerifyStage {
         let mut discard_random_time = Measure::start("sigverify_discard_random_time");
         let non_discarded_packets = solana_perf::discard::discard_batches_randomly(
             &mut batches,
-            MAX_DEDUP_BATCH,
+            max_packets,
             num_packets,
         );
         let num_discarded_randomly = num_packets.saturating_sub(non_discarded_packets);
@@ -404,6 +408,7 @@ impl SigVerifyStage {
     fn verifier_service<T: SigVerifier + 'static + Send + Clone>(
         packet_receiver: find_packet_sender_stake_stage::FindPacketSenderStakeReceiver,
         mut verifier: T,
+        max_packets: usize,
         name: &'static str,
     ) -> JoinHandle<()> {
         let mut stats = SigVerifierStats::default();
@@ -417,7 +422,7 @@ impl SigVerifyStage {
                 loop {
                     deduper.reset();
                     if let Err(e) =
-                        Self::verifier(&deduper, &packet_receiver, &mut verifier, &mut stats)
+                        Self::verifier(&deduper, &packet_receiver, &mut verifier, max_packets, &mut stats)
                     {
                         match e {
                             SigVerifyServiceError::Streamer(StreamerError::RecvTimeout(
@@ -445,9 +450,10 @@ impl SigVerifyStage {
     fn verifier_services<T: SigVerifier + 'static + Send + Clone>(
         packet_receiver: find_packet_sender_stake_stage::FindPacketSenderStakeReceiver,
         verifier: T,
+        max_packets: usize,
         name: &'static str,
     ) -> JoinHandle<()> {
-        Self::verifier_service(packet_receiver, verifier, name)
+        Self::verifier_service(packet_receiver, verifier, max_packets, name)
     }
 
     pub fn join(self) -> thread::Result<()> {
@@ -545,7 +551,7 @@ mod tests {
         let (packet_s, packet_r) = unbounded();
         let (verified_s, verified_r) = unbounded();
         let verifier = TransactionSigVerifier::new(verified_s);
-        let stage = SigVerifyStage::new(packet_r, verifier, "test");
+        let stage = SigVerifyStage::new(packet_r, verifier, 100000, "test");
 
         let use_same_tx = false;
         let now = Instant::now();

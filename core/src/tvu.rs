@@ -166,6 +166,7 @@ impl Tvu {
                 leader_schedule_cache.clone(),
                 verified_sender,
             ),
+            100000,
             "shred-verifier",
         );
 

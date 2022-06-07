@@ -143,7 +143,7 @@ fn bench_sigverify_stage(bencher: &mut Bencher) {
     let (packet_s, packet_r) = unbounded();
     let (verified_s, verified_r) = unbounded();
     let verifier = TransactionSigVerifier::new(verified_s);
-    let stage = SigVerifyStage::new(packet_r, verifier, "bench");
+    let stage = SigVerifyStage::new(packet_r, verifier, 100000, "bench");
 
     let use_same_tx = true;
     bencher.iter(move || {
