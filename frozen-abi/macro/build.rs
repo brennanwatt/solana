@@ -1,1 +1,1 @@
-include!{r#"../build.rs"#}
+../build.rs
