@@ -27,10 +27,7 @@ use {
         shred::{Shred, ShredId},
     },
     solana_measure::measure::Measure,
-    solana_perf::{
-        packet::PacketBatch,
-        thread::renice_this_thread,
-    },
+    solana_perf::{packet::PacketBatch, thread::renice_this_thread},
     solana_rayon_threadlimit::get_thread_count,
     solana_rpc::{max_slots::MaxSlots, rpc_subscriptions::RpcSubscriptions},
     solana_runtime::{bank::Bank, bank_forks::BankForks},

@@ -539,7 +539,7 @@ mod tests {
         }
     }
 
-    fn test_sigverify_stage(packets : usize) {
+    fn test_sigverify_stage(packets: usize) {
         solana_logger::setup();
         trace!("start");
         let (packet_s, packet_r) = unbounded();

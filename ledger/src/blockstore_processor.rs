@@ -100,7 +100,6 @@ lazy_static! {
     static ref PAR_THREAD_POOL: ThreadPool = rayon::ThreadPoolBuilder::new()
         .num_threads(get_max_thread_count())
         .thread_name(|ix| format!("blockstore_processor_{}", ix))
-        .start_handler(move |_idx| renice_this_thread(-10).unwrap())
         .build()
         .unwrap();
 }
