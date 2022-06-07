@@ -30,10 +30,10 @@ use {
 // Try to target 50ms, rough timings from mainnet machines
 //
 // 50ms/(300ns/packet) = 166666 packets ~ 1300 batches
-const MAX_DEDUP_BATCH: usize = 165_000;
+const MAX_DEDUP_BATCH: usize = 1;
 
 // 50ms/(25us/packet) = 2000 packets
-const MAX_SIGVERIFY_BATCH: usize = 2_000;
+const MAX_SIGVERIFY_BATCH: usize = 1;
 
 // Packet batch shrinker will reorganize packets into compacted batches if 10%
 // or more of the packets in a group of packet batches have been discarded.
