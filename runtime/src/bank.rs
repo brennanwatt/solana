@@ -1886,7 +1886,7 @@ impl Bank {
             |_| {
                 if parent_epoch < new.epoch() {
                     let (thread_pool, thread_pool_time) = Measure::this(
-                        |_| ThreadPoolBuilder::new().start_handler(move |_idx| renice_this_thread(10).unwrap()).build().unwrap(),
+                        |_| ThreadPoolBuilder::new().build().unwrap(),
                         (),
                         "thread_pool_creation",
                     );

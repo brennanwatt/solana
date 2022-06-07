@@ -390,7 +390,6 @@ pub fn retransmitter(
     let thread_pool = ThreadPoolBuilder::new()
         .num_threads(num_threads)
         .thread_name(|i| format!("retransmit-{}", i))
-        .start_handler(move |_idx| renice_this_thread(10).unwrap())
         .build()
         .unwrap();
     Builder::new()
