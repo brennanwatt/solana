@@ -54,6 +54,7 @@ use {
     solana_perf::{
         data_budget::DataBudget,
         packet::{Packet, PacketBatch, PacketBatchRecycler, PACKET_DATA_SIZE},
+        thread::renice_this_thread,
     },
     solana_rayon_threadlimit::get_thread_count,
     solana_runtime::{bank_forks::BankForks, vote_parser},
@@ -1673,6 +1674,7 @@ impl ClusterInfo {
         let thread_pool = ThreadPoolBuilder::new()
             .num_threads(std::cmp::min(get_thread_count(), 8))
             .thread_name(|i| format!("ClusterInfo::gossip-{}", i))
+            .start_handler(move |_idx| renice_this_thread(10).unwrap())
             .build()
             .unwrap();
         Builder::new()
@@ -2540,6 +2542,7 @@ impl ClusterInfo {
         let thread_pool = ThreadPoolBuilder::new()
             .num_threads(get_thread_count().min(8))
             .thread_name(|i| format!("gossip-consume-{}", i))
+            .start_handler(move |_idx| renice_this_thread(10).unwrap())
             .build()
             .unwrap();
         let run_consume = move || {
@@ -2572,6 +2575,7 @@ impl ClusterInfo {
         let thread_pool = ThreadPoolBuilder::new()
             .num_threads(get_thread_count().min(8))
             .thread_name(|i| format!("sol-gossip-work-{}", i))
+            .start_handler(move |_idx| renice_this_thread(10).unwrap())
             .build()
             .unwrap();
         Builder::new()

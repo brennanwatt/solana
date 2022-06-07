@@ -82,6 +82,7 @@ use {
     },
     solana_measure::measure::Measure,
     solana_metrics::{inc_new_counter_debug, inc_new_counter_info},
+    solana_perf::thread::renice_this_thread,
     solana_program_runtime::{
         accounts_data_meter::MAX_ACCOUNTS_DATA_LEN,
         compute_budget::{self, ComputeBudget},
@@ -1885,7 +1886,7 @@ impl Bank {
             |_| {
                 if parent_epoch < new.epoch() {
                     let (thread_pool, thread_pool_time) = Measure::this(
-                        |_| ThreadPoolBuilder::new().build().unwrap(),
+                        |_| ThreadPoolBuilder::new().start_handler(move |_idx| renice_this_thread(10).unwrap()).build().unwrap(),
                         (),
                         "thread_pool_creation",
                     );
