@@ -295,7 +295,7 @@ impl SigVerifyStage {
         deduper: &Deduper,
         recvr: &find_packet_sender_stake_stage::FindPacketSenderStakeReceiver,
         verifier: &mut T,
-        max_packets: usize,
+        _max_packets: usize,
         stats: &mut SigVerifierStats,
     ) -> Result<(), T::SendType> {
         let (mut batches, num_packets, recv_duration) = streamer::recv_vec_packet_batches(recvr)?;
@@ -310,7 +310,7 @@ impl SigVerifyStage {
         let mut discard_random_time = Measure::start("sigverify_discard_random_time");
         let non_discarded_packets = solana_perf::discard::discard_batches_randomly(
             &mut batches,
-            max_packets,
+            MAX_DEDUP_BATCH,
             num_packets,
         );
         let num_discarded_randomly = num_packets.saturating_sub(non_discarded_packets);
