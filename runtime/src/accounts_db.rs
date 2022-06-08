@@ -65,7 +65,6 @@ use {
     rayon::{prelude::*, ThreadPool},
     serde::{Deserialize, Serialize},
     solana_measure::measure::Measure,
-    solana_perf::thread::renice_this_thread,
     solana_rayon_threadlimit::get_thread_count,
     solana_sdk::{
         account::{AccountSharedData, ReadableAccount, WritableAccount},

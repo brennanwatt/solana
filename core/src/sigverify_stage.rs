@@ -98,7 +98,7 @@ struct SigVerifierStats {
 
 impl SigVerifierStats {
     fn report(&self, name: &'static str) {
-        datapoint_warn!(
+        datapoint_info!(
             name,
             (
                 "recv_batches_us_90pct",
@@ -198,6 +198,28 @@ impl SigVerifierStats {
             ("packets_min", self.packets_hist.minimum().unwrap_or(0), i64),
             ("packets_max", self.packets_hist.maximum().unwrap_or(0), i64),
             ("packets_mean", self.packets_hist.mean().unwrap_or(0), i64),
+            ("total_batches", self.total_batches, i64),
+            ("total_packets", self.total_packets, i64),
+            ("total_dedup", self.total_dedup, i64),
+            ("total_excess_fail", self.total_excess_fail, i64),
+            ("total_valid_packets", self.total_valid_packets, i64),
+            ("total_discard_random", self.total_discard_random, i64),
+            ("total_shrinks", self.total_shrinks, i64),
+            ("total_dedup_time_us", self.total_dedup_time_us, i64),
+            ("total_discard_time_us", self.total_discard_time_us, i64),
+            (
+                "total_discard_random_time_us",
+                self.total_discard_random_time_us,
+                i64
+            ),
+            ("total_verify_time_us", self.total_verify_time_us, i64),
+            ("total_shrink_time_us", self.total_shrink_time_us, i64),
+        );
+    }
+
+    fn report2(&self, name: &'static str) {
+        datapoint_warn!(
+            name,
             ("total_batches", self.total_batches, i64),
             ("total_packets", self.total_packets, i64),
             ("total_dedup", self.total_dedup, i64),
@@ -401,7 +423,11 @@ impl SigVerifyStage {
         stats.total_discard_time_us += discard_time.as_us() as usize;
         stats.total_verify_time_us += verify_time.as_us() as usize;
         stats.total_shrink_time_us += (pre_shrink_time_us + post_shrink_time_us) as usize;
-        stats.report("verify_iter");
+        warn!("{} {} {}",
+            batches_len,
+            num_valid_packets,
+            verify_time.as_us() as usize
+        );
 
         Ok(())
     }
@@ -539,10 +565,8 @@ mod tests {
 
     #[test]
     fn bw_test_sigverify_stage() {
-        for _i in 0..10 {
-            for j in 1..512 {
-                test_sigverify_stage(j);
-            }
+        for j in 1..512 {
+            test_sigverify_stage(j);
         }
     }
 

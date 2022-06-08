@@ -21,7 +21,6 @@ use {
         perf_libs,
         recycler::Recycler,
         sigverify,
-        thread::renice_this_thread,
     },
     solana_rayon_threadlimit::get_max_thread_count,
     solana_sdk::{

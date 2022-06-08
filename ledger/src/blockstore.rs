@@ -31,7 +31,6 @@ use {
         datapoint_debug, datapoint_error,
         poh_timing_point::{send_poh_timing_point, PohTimingSender, SlotPohTimingInfo},
     },
-    solana_perf::thread::renice_this_thread,
     solana_rayon_threadlimit::get_max_thread_count,
     solana_runtime::hardened_unpack::{unpack_genesis_archive, MAX_GENESIS_ARCHIVE_UNPACKED_SIZE},
     solana_sdk::{

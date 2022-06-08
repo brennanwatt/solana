@@ -11,7 +11,6 @@ use {
     },
     solana_entry::entry::Entry,
     solana_measure::measure::Measure,
-    solana_perf::thread::renice_this_thread,
     solana_rayon_threadlimit::get_thread_count,
     solana_sdk::{clock::Slot, signature::Keypair},
     std::fmt::Debug,

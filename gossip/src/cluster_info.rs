@@ -54,7 +54,6 @@ use {
     solana_perf::{
         data_budget::DataBudget,
         packet::{Packet, PacketBatch, PacketBatchRecycler, PACKET_DATA_SIZE},
-        thread::renice_this_thread,
     },
     solana_rayon_threadlimit::get_thread_count,
     solana_runtime::{bank_forks::BankForks, vote_parser},

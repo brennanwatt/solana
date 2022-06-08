@@ -23,7 +23,6 @@ use {
     },
     solana_ledger::{blockstore::Blockstore, get_tmp_ledger_path},
     solana_measure::measure::Measure,
-    solana_perf::thread::renice_this_thread,
     solana_rayon_threadlimit::get_thread_count,
     solana_runtime::{
         bank::{Bank, TransactionLogInfo},

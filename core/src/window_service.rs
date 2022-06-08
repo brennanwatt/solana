@@ -22,7 +22,6 @@ use {
     solana_metrics::{inc_new_counter_debug, inc_new_counter_error},
     solana_perf::{
         packet::{Packet, PacketBatch},
-        thread::renice_this_thread,
     },
     solana_rayon_threadlimit::get_thread_count,
     solana_runtime::{bank::Bank, bank_forks::BankForks},

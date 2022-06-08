@@ -11,7 +11,6 @@ use {
         perf_libs,
         recycler_cache::RecyclerCache,
         sigverify::{self, count_packets_in_batches, TxOffset},
-        thread::renice_this_thread,
     },
     solana_rayon_threadlimit::get_thread_count,
     solana_sdk::{

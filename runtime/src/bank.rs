@@ -82,7 +82,6 @@ use {
     },
     solana_measure::measure::Measure,
     solana_metrics::{inc_new_counter_debug, inc_new_counter_info},
-    solana_perf::thread::renice_this_thread,
     solana_program_runtime::{
         accounts_data_meter::MAX_ACCOUNTS_DATA_LEN,
         compute_budget::{self, ComputeBudget},
