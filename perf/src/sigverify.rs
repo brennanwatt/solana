@@ -13,6 +13,7 @@ use {
     ahash::AHasher,
     rand::{thread_rng, Rng},
     rayon::ThreadPool,
+    solana_measure::measure::Measure,
     solana_metrics::inc_new_counter_debug,
     solana_rayon_threadlimit::get_thread_count,
     solana_sdk::{
@@ -31,6 +32,7 @@ use {
         time::{Duration, Instant},
     },
 };
+
 
 // Representing key tKeYE4wtowRb8yRroZShTipE18YVnqwXjsSAoNsFU6g
 const TRACER_KEY_BYTES: [u8; 32] = [
@@ -650,14 +652,124 @@ pub fn ed25519_verify_cpu(batches: &mut [PacketBatch], reject_non_vote: bool, pa
         });
     } else {*/
 
+    /* Flatten, collect, min len 16
+    let mut flatten_time = Measure::start("flatten_time");
+    let x: Vec<&mut Packet> = batches.into_par_iter().flatten().collect();
+    flatten_time.stop();
+    warn!("flatten time={}",flatten_time.as_us() as usize);
+
+    PAR_THREAD_POOL.install(|| {
+        x
+        .into_par_iter()
+        .with_min_len(16)
+        .for_each(|p| {
+            println!("My idx is {}", rayon::current_thread_index().unwrap());
+            verify_packet(p, reject_non_vote);
+            p.meta.set_discard(true);
+        })
+    });*/
+
+    /*PAR_THREAD_POOL.install(|| {
+        batches.into_par_iter()
+            .flatten()
+            .collect::<Vec<&mut Packet>>()
+            .into_par_iter()
+            .with_min_len(10)
+            .for_each(|p| {
+                println!("idx = {}", rayon::current_thread_index().unwrap());
+                verify_packet(p, reject_non_vote)
+            });
+    });*/
+
+    
+    let soft_target = 16;
+    let desired_cpus = (packet_count + soft_target - 1) / soft_target;
+    if desired_cpus >= get_thread_count() {
+        PAR_THREAD_POOL.install(|| {
+            batches.into_par_iter().for_each(|batch| {
+                batch
+                    .par_iter_mut()
+                    .for_each(|p| verify_packet(p, reject_non_vote))
+            });
+        });
+    } else {
+        let target = packet_count / desired_cpus;
+        PAR_THREAD_POOL.install(|| {
+            batches.into_par_iter()
+                .flatten()
+                .collect::<Vec<&mut Packet>>()
+                .into_par_iter()
+                .with_min_len(target)
+                .for_each(|p| verify_packet(p, reject_non_vote));
+        });
+    };
+
+    /*let t0 = AtomicU64::default();
+    let t1 = AtomicU64::default();
+    let t2 = AtomicU64::default();
+    let t3 = AtomicU64::default();
+    let t4 = AtomicU64::default();
+
+    let mini = match packet_count {
+        1..=16 => 16,
+        17..=32 => 8,
+        _ => 1,
+    };*/
+
+    /*PAR_THREAD_POOL.install(|| {
+        batches.into_par_iter()
+            .flatten()
+            .collect::<Vec<&mut Packet>>()
+            .into_par_iter()
+            .with_min_len(target)
+            //.with_max_len(target+1)
+            .for_each(|p| {
+                //println!("idx = {}", rayon::current_thread_index().unwrap());
+                match rayon::current_thread_index().unwrap() {
+                    1 => t1.fetch_add(1, Ordering::Relaxed),
+                    2 => t2.fetch_add(1, Ordering::Relaxed),
+                    3 => t3.fetch_add(1, Ordering::Relaxed),
+                    4 => t4.fetch_add(1, Ordering::Relaxed),
+                    _ => t0.fetch_add(1, Ordering::Relaxed),
+                };
+                verify_packet(p, reject_non_vote)
+            });
+    });*/
+    /*println!("{} {}",target,desired_cpus);
+    println!("{} {} {} {} {}",
+        t0.load(Ordering::Relaxed),
+        t1.load(Ordering::Relaxed),
+        t2.load(Ordering::Relaxed),
+        t3.load(Ordering::Relaxed),
+        t4.load(Ordering::Relaxed));*/
+
+    /* Single thread
+    batches.into_iter().for_each(|batch| {
+        batch
+            .iter_mut()
+            .for_each(|p| verify_packet(p, reject_non_vote))
+    });*/
+    
+    /*let min = 10;
+    let max = (packet_count / (num_cpus::get() as usize / 2)).max(min);
     PAR_THREAD_POOL.install(|| {
         batches.into_par_iter().for_each(|batch| {
             batch
                 .par_iter_mut()
-                .with_min_len(16)
+                .with_min_len(min)
+                .with_max_len(max)
                 .for_each(|p| verify_packet(p, reject_non_vote))
         });
-    });
+    });*/
+
+    /* Vanilla
+    PAR_THREAD_POOL.install(|| {
+        batches.into_par_iter().for_each(|batch| {
+            batch
+                .par_iter_mut()
+                .for_each(|p| verify_packet(p, reject_non_vote))
+        });
+    });*/
     //}
 
     inc_new_counter_debug!("ed25519_verify_cpu", packet_count);
