@@ -5,8 +5,6 @@
 //! transaction. All processing is done on the CPU by default and on a GPU
 //! if perf-libs are available
 
-use crate::{sigverify_shreds::ShredSigVerifier, sigverify::TransactionSigVerifier};
-
 use {
     crate::{find_packet_sender_stake_stage, sigverify},
     core::time::Duration,
@@ -216,28 +214,6 @@ impl SigVerifierStats {
             ("total_shrink_time_us", self.total_shrink_time_us, i64),
         );
     }
-
-    fn report2(&self, name: &'static str) {
-        datapoint_warn!(
-            name,
-            ("total_batches", self.total_batches, i64),
-            ("total_packets", self.total_packets, i64),
-            ("total_dedup", self.total_dedup, i64),
-            ("total_excess_fail", self.total_excess_fail, i64),
-            ("total_valid_packets", self.total_valid_packets, i64),
-            ("total_discard_random", self.total_discard_random, i64),
-            ("total_shrinks", self.total_shrinks, i64),
-            ("total_dedup_time_us", self.total_dedup_time_us, i64),
-            ("total_discard_time_us", self.total_discard_time_us, i64),
-            (
-                "total_discard_random_time_us",
-                self.total_discard_random_time_us,
-                i64
-            ),
-            ("total_verify_time_us", self.total_verify_time_us, i64),
-            ("total_shrink_time_us", self.total_shrink_time_us, i64),
-        );
-    }
 }
 
 impl SigVerifier for DisabledSigVerifier {
@@ -423,11 +399,11 @@ impl SigVerifyStage {
         stats.total_discard_time_us += discard_time.as_us() as usize;
         stats.total_verify_time_us += verify_time.as_us() as usize;
         stats.total_shrink_time_us += (pre_shrink_time_us + post_shrink_time_us) as usize;
-        warn!("{} {} {}",
+        /*warn!("{} {} {}",
             batches_len,
             num_valid_packets,
             verify_time.as_us() as usize
-        );
+        );*/
 
         Ok(())
     }
@@ -448,9 +424,13 @@ impl SigVerifyStage {
                 let mut deduper = Deduper::new(MAX_DEDUPER_ITEMS, MAX_DEDUPER_AGE);
                 loop {
                     deduper.reset();
-                    if let Err(e) =
-                        Self::verifier(&deduper, &packet_receiver, &mut verifier, max_packets, &mut stats)
-                    {
+                    if let Err(e) = Self::verifier(
+                        &deduper,
+                        &packet_receiver,
+                        &mut verifier,
+                        max_packets,
+                        &mut stats,
+                    ) {
                         match e {
                             SigVerifyServiceError::Streamer(StreamerError::RecvTimeout(
                                 RecvTimeoutError::Disconnected,

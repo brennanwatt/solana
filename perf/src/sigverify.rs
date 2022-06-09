@@ -649,16 +649,15 @@ pub fn ed25519_verify_cpu(batches: &mut [PacketBatch], reject_non_vote: bool, pa
             });
         });
     } else {*/
-        PAR_THREAD_POOL.install(|| {
 
-            batches.into_par_iter().for_each(|batch| {
-                batch
-                    .par_iter_mut()
-                    .with_min_len(16)
-                    .for_each(|p| verify_packet(p, reject_non_vote))
-            });
-
+    PAR_THREAD_POOL.install(|| {
+        batches.into_par_iter().for_each(|batch| {
+            batch
+                .par_iter_mut()
+                .with_min_len(16)
+                .for_each(|p| verify_packet(p, reject_non_vote))
         });
+    });
     //}
 
     inc_new_counter_debug!("ed25519_verify_cpu", packet_count);
