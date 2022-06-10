@@ -13,6 +13,7 @@ use {
     ahash::AHasher,
     rand::{thread_rng, Rng},
     rayon::ThreadPool,
+    solana_measure::measure,
     solana_metrics::inc_new_counter_debug,
     solana_rayon_threadlimit::get_thread_count,
     solana_sdk::{
@@ -601,6 +602,7 @@ pub fn ed25519_verify_cpu(batches: &mut [PacketBatch], reject_non_vote: bool, pa
 
     let thread_in_use = AtomicU64::default();
     
+    let mut start = measure::Measure::start("verify");
     if thread_count >= get_thread_count() {
         // When using all available threads, skip the overhead of flatting, collecting, etc.
         PAR_THREAD_POOL.install(|| {
@@ -626,6 +628,7 @@ pub fn ed25519_verify_cpu(batches: &mut [PacketBatch], reject_non_vote: bool, pa
                 })
         });
     };
+    start.stop();
 
     let mut active_threads: usize = 0;
     for i in 0..get_thread_count() {
@@ -636,7 +639,13 @@ pub fn ed25519_verify_cpu(batches: &mut [PacketBatch], reject_non_vote: bool, pa
     if active_threads_hist.is_some() {
         active_threads_hist.unwrap().increment(active_threads as u64).unwrap();
     }
-    warn!("{} threads active",active_threads);
+
+    warn!("{} {} {} {}",
+        thread_count,
+        active_threads,
+        packet_count,
+        start.as_us() as usize,
+    );
 
     inc_new_counter_debug!("ed25519_verify_cpu", packet_count);
 }
