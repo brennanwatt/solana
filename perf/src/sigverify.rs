@@ -13,7 +13,6 @@ use {
     ahash::AHasher,
     rand::{thread_rng, Rng},
     rayon::ThreadPool,
-    solana_measure::measure::Measure,
     solana_metrics::inc_new_counter_debug,
     solana_rayon_threadlimit::get_thread_count,
     solana_sdk::{
@@ -28,7 +27,9 @@ use {
         convert::TryFrom,
         hash::Hasher,
         mem::size_of,
-        sync::atomic::{AtomicBool, AtomicU64, Ordering},
+        sync::{
+            atomic::{AtomicBool, AtomicU64, Ordering},
+        },
         time::{Duration, Instant},
     },
 };
@@ -46,26 +47,6 @@ const VERIFY_MIN_PACKETS_PER_THREAD: usize = 16;
 lazy_static! {
     static ref PAR_THREAD_POOL: ThreadPool = rayon::ThreadPoolBuilder::new()
         .num_threads(get_thread_count())
-        .thread_name(|ix| format!("sigverify_{}", ix))
-        .build()
-        .unwrap();
-    static ref PAR_THREAD_POOL2: ThreadPool = rayon::ThreadPoolBuilder::new()
-        .num_threads(2)
-        .thread_name(|ix| format!("sigverify_{}", ix))
-        .build()
-        .unwrap();
-    static ref PAR_THREAD_POOL4: ThreadPool = rayon::ThreadPoolBuilder::new()
-        .num_threads(4)
-        .thread_name(|ix| format!("sigverify_{}", ix))
-        .build()
-        .unwrap();
-    static ref PAR_THREAD_POOL8: ThreadPool = rayon::ThreadPoolBuilder::new()
-        .num_threads(8)
-        .thread_name(|ix| format!("sigverify_{}", ix))
-        .build()
-        .unwrap();
-    static ref PAR_THREAD_POOL16: ThreadPool = rayon::ThreadPoolBuilder::new()
-        .num_threads(16)
         .thread_name(|ix| format!("sigverify_{}", ix))
         .build()
         .unwrap();
@@ -610,55 +591,27 @@ pub fn shrink_batches(batches: &mut Vec<PacketBatch>) {
     batches.truncate(last_valid_batch);
 }
 
-pub fn ed25519_verify_cpu(batches: &mut [PacketBatch], reject_non_vote: bool, packet_count: usize) {
+pub fn ed25519_verify_cpu(batches: &mut [PacketBatch], reject_non_vote: bool, packet_count: usize, active_threads_hist: Option<&mut histogram::Histogram>) {
     use rayon::prelude::*;
     debug!("CPU ECDSA for {}", packet_count);
     
     let thread_count = packet_count
         .saturating_add(VERIFY_MIN_PACKETS_PER_THREAD - 1)
         .saturating_div(VERIFY_MIN_PACKETS_PER_THREAD);
+
+    let thread_in_use = AtomicU64::default();
+    
     if thread_count >= get_thread_count() {
         // When using all available threads, skip the overhead of flatting, collecting, etc.
         PAR_THREAD_POOL.install(|| {
             batches.into_par_iter().for_each(|batch| {
                 batch.par_iter_mut().for_each(|packet| {
                     verify_packet(packet, reject_non_vote);
+                    thread_in_use.fetch_or(1<<rayon::current_thread_index().unwrap(), Ordering::Relaxed);
                 })
             });
         });
     } else {
-        let t0 = AtomicU64::default();
-        let t1 = AtomicU64::default();
-        let t2 = AtomicU64::default();
-        let t3 = AtomicU64::default();
-        let t4 = AtomicU64::default();
-        let t5 = AtomicU64::default();
-        let t6 = AtomicU64::default();
-        let t7 = AtomicU64::default();
-        let t8 = AtomicU64::default();
-        let t9 = AtomicU64::default();
-        let t10 = AtomicU64::default();
-        let t11 = AtomicU64::default();
-        let t12 = AtomicU64::default();
-        let t13 = AtomicU64::default();
-        let t14 = AtomicU64::default();
-        let t15 = AtomicU64::default();
-        let t16 = AtomicU64::default();
-        let t17 = AtomicU64::default();
-        let t18 = AtomicU64::default();
-        let t19 = AtomicU64::default();
-        let t20 = AtomicU64::default();
-        let t21 = AtomicU64::default();
-        let t22 = AtomicU64::default();
-        let t23 = AtomicU64::default();
-        let t24 = AtomicU64::default();
-        let t25 = AtomicU64::default();
-        let t26 = AtomicU64::default();
-        let t27 = AtomicU64::default();
-        let t28 = AtomicU64::default();
-        let t29 = AtomicU64::default();
-        let t30 = AtomicU64::default();
-        let t31 = AtomicU64::default();
         let packets_per_thread = packet_count.saturating_div(thread_count);
         PAR_THREAD_POOL.install(|| {
             batches
@@ -668,86 +621,22 @@ pub fn ed25519_verify_cpu(batches: &mut [PacketBatch], reject_non_vote: bool, pa
                 .into_par_iter()
                 .with_min_len(packets_per_thread)
                 .for_each(|packet| {
-                    match rayon::current_thread_index().unwrap() {
-                        1 => t1.fetch_add(1, Ordering::Relaxed),
-                        2 => t2.fetch_add(1, Ordering::Relaxed),
-                        3 => t3.fetch_add(1, Ordering::Relaxed),
-                        4 => t4.fetch_add(1, Ordering::Relaxed),
-                        5 => t5.fetch_add(1, Ordering::Relaxed),
-                        6 => t6.fetch_add(1, Ordering::Relaxed),
-                        7 => t7.fetch_add(1, Ordering::Relaxed),
-                        8 => t8.fetch_add(1, Ordering::Relaxed),
-                        9 => t9.fetch_add(1, Ordering::Relaxed),
-                        10 => t10.fetch_add(1, Ordering::Relaxed),
-                        11 => t11.fetch_add(1, Ordering::Relaxed),
-                        12 => t12.fetch_add(1, Ordering::Relaxed),
-                        13 => t13.fetch_add(1, Ordering::Relaxed),
-                        14 => t14.fetch_add(1, Ordering::Relaxed),
-                        15 => t15.fetch_add(1, Ordering::Relaxed),
-                        16 => t16.fetch_add(1, Ordering::Relaxed),
-                        17 => t17.fetch_add(1, Ordering::Relaxed),
-                        18 => t18.fetch_add(1, Ordering::Relaxed),
-                        19 => t19.fetch_add(1, Ordering::Relaxed),
-                        20 => t20.fetch_add(1, Ordering::Relaxed),
-                        21 => t21.fetch_add(1, Ordering::Relaxed),
-                        22 => t22.fetch_add(1, Ordering::Relaxed),
-                        23 => t23.fetch_add(1, Ordering::Relaxed),
-                        24 => t24.fetch_add(1, Ordering::Relaxed),
-                        25 => t25.fetch_add(1, Ordering::Relaxed),
-                        26 => t26.fetch_add(1, Ordering::Relaxed),
-                        27 => t27.fetch_add(1, Ordering::Relaxed),
-                        28 => t28.fetch_add(1, Ordering::Relaxed),
-                        29 => t29.fetch_add(1, Ordering::Relaxed),
-                        30 => t30.fetch_add(1, Ordering::Relaxed),
-                        31 => t31.fetch_add(1, Ordering::Relaxed),
-                        _ => t0.fetch_add(1, Ordering::Relaxed),
-                    };
                     verify_packet(packet, reject_non_vote);
+                    thread_in_use.fetch_or(1<<rayon::current_thread_index().unwrap(), Ordering::Relaxed);
                 })
         });
-
-        println!("ppt{} tc{}",packets_per_thread, thread_count);
-        println!("{} {} {} {} {} {} {} {} {} {}",
-            t0.load(Ordering::Relaxed),
-            t1.load(Ordering::Relaxed),
-            t2.load(Ordering::Relaxed),
-            t3.load(Ordering::Relaxed),
-            t4.load(Ordering::Relaxed),
-            t5.load(Ordering::Relaxed),
-            t6.load(Ordering::Relaxed),
-            t7.load(Ordering::Relaxed),
-            t8.load(Ordering::Relaxed),
-            t9.load(Ordering::Relaxed),
-        );
-        println!("{} {} {} {} {} {} {} {} {} {}",
-            t10.load(Ordering::Relaxed),
-            t11.load(Ordering::Relaxed),
-            t12.load(Ordering::Relaxed),
-            t13.load(Ordering::Relaxed),
-            t14.load(Ordering::Relaxed),
-            t15.load(Ordering::Relaxed),
-            t16.load(Ordering::Relaxed),
-            t17.load(Ordering::Relaxed),
-            t18.load(Ordering::Relaxed),
-            t19.load(Ordering::Relaxed),
-        );
-        println!("{} {} {} {} {} {} {} {} {} {}",
-            t20.load(Ordering::Relaxed),
-            t21.load(Ordering::Relaxed),
-            t22.load(Ordering::Relaxed),
-            t23.load(Ordering::Relaxed),
-            t24.load(Ordering::Relaxed),
-            t25.load(Ordering::Relaxed),
-            t26.load(Ordering::Relaxed),
-            t27.load(Ordering::Relaxed),
-            t28.load(Ordering::Relaxed),
-            t29.load(Ordering::Relaxed),
-        );
-        println!("{} {}",
-            t30.load(Ordering::Relaxed),
-            t31.load(Ordering::Relaxed),
-        );
     };
+
+    let mut active_threads: usize = 0;
+    for i in 0..get_thread_count() {
+        if thread_in_use.load(Ordering::Relaxed) & (1<<i) > 0 {
+            active_threads = active_threads.saturating_add(1);
+        }
+    }
+    if active_threads_hist.is_some() {
+        active_threads_hist.unwrap().increment(active_threads as u64).unwrap();
+    }
+    warn!("{} threads active",active_threads);
 
     inc_new_counter_debug!("ed25519_verify_cpu", packet_count);
 }
@@ -829,10 +718,11 @@ pub fn ed25519_verify(
     recycler_out: &Recycler<PinnedVec<u8>>,
     reject_non_vote: bool,
     valid_packet_count: usize,
+    active_threads_hist: Option<&mut histogram::Histogram>,
 ) {
     let api = perf_libs::api();
     if api.is_none() {
-        return ed25519_verify_cpu(batches, reject_non_vote, valid_packet_count);
+        return ed25519_verify_cpu(batches, reject_non_vote, valid_packet_count, active_threads_hist);
     }
     let api = api.unwrap();
 
@@ -850,7 +740,7 @@ pub fn ed25519_verify(
             .wrapping_div(total_packet_count)
             < 90
     {
-        return ed25519_verify_cpu(batches, reject_non_vote, valid_packet_count);
+        return ed25519_verify_cpu(batches, reject_non_vote, valid_packet_count, active_threads_hist);
     }
 
     let (signature_offsets, pubkey_offsets, msg_start_offsets, msg_sizes, sig_lens) =
@@ -1315,7 +1205,7 @@ mod tests {
         let recycler = Recycler::default();
         let recycler_out = Recycler::default();
         let packet_count = sigverify::count_packets_in_batches(batches);
-        sigverify::ed25519_verify(batches, &recycler, &recycler_out, false, packet_count);
+        sigverify::ed25519_verify(batches, &recycler, &recycler_out, false, packet_count, None);
     }
 
     #[test]
@@ -1418,8 +1308,8 @@ mod tests {
             // equivalent to the CPU verification pipeline.
             let mut batches_cpu = batches.clone();
             let packet_count = sigverify::count_packets_in_batches(&batches);
-            sigverify::ed25519_verify(&mut batches, &recycler, &recycler_out, false, packet_count);
-            ed25519_verify_cpu(&mut batches_cpu, false, packet_count);
+            sigverify::ed25519_verify(&mut batches, &recycler, &recycler_out, false, packet_count, None);
+            ed25519_verify_cpu(&mut batches_cpu, false, packet_count, None);
 
             // check result
             batches
