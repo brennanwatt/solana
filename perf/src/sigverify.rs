@@ -601,6 +601,7 @@ pub fn ed25519_verify_cpu(batches: &mut [PacketBatch], reject_non_vote: bool, pa
         .saturating_div(VERIFY_MIN_PACKETS_PER_THREAD);
 
     let thread_in_use = AtomicU64::default();
+    let packets_per_thread = packet_count.saturating_div(thread_count);
     
     let mut start = measure::Measure::start("verify");
     if thread_count >= get_thread_count() {
@@ -614,7 +615,6 @@ pub fn ed25519_verify_cpu(batches: &mut [PacketBatch], reject_non_vote: bool, pa
             });
         });
     } else {
-        let packets_per_thread = packet_count.saturating_div(thread_count);
         PAR_THREAD_POOL.install(|| {
             batches
                 .into_par_iter()
@@ -640,9 +640,10 @@ pub fn ed25519_verify_cpu(batches: &mut [PacketBatch], reject_non_vote: bool, pa
         active_threads_hist.unwrap().increment(active_threads as u64).unwrap();
     }
 
-    warn!("{} {} {} {}",
+    warn!("{} {} {} {} {}",
         thread_count,
         active_threads,
+        packets_per_thread,
         packet_count,
         start.as_us() as usize,
     );
