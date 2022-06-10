@@ -597,7 +597,7 @@ pub fn ed25519_verify_cpu(batches: &mut [PacketBatch], reject_non_vote: bool, pa
     debug!("CPU ECDSA for {}", packet_count);
     
     let thread_count = packet_count
-        .saturating_add(VERIFY_MIN_PACKETS_PER_THREAD - 1)
+        .saturating_add(VERIFY_MIN_PACKETS_PER_THREAD)
         .saturating_div(VERIFY_MIN_PACKETS_PER_THREAD);
 
     let thread_in_use = AtomicU64::default();
