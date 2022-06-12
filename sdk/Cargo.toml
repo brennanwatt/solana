@@ -49,7 +49,7 @@ chrono = { default-features = false, features = ["alloc"], version = "0.4", opti
 curve25519-dalek = { version = "3.2.1", optional = true }
 derivation-path = { version = "0.2.0", default-features = false }
 digest = { version = "0.10.1", optional = true }
-ed25519-dalek = { version = "=1.0.1", optional = true }
+ed25519-dalek = { version = "1.0.1", features = ["legacy_compatibility"], optional = true }
 ed25519-dalek-bip32 = { version = "0.2.0", optional = true }
 generic-array = { version = "0.14.5", default-features = false, features = ["serde", "more_lengths"], optional = true }
 hmac = "0.12.1"

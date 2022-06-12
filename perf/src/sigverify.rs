@@ -43,7 +43,7 @@ const TRACER_KEY_BYTES: [u8; 32] = [
 ];
 const TRACER_KEY: Pubkey = Pubkey::new_from_array(TRACER_KEY_BYTES);
 const TRACER_KEY_OFFSET_IN_TRANSACTION: usize = 69;
-const VERIFY_MIN_PACKETS_PER_THREAD: usize = 16;
+const VERIFY_MIN_PACKETS_PER_THREAD: usize = 128;
 
 lazy_static! {
     static ref PAR_THREAD_POOL: ThreadPool = rayon::ThreadPoolBuilder::new()
@@ -150,6 +150,7 @@ fn verify_packet(packet: &mut Packet, reject_non_vote: bool) {
 
         let signature = Signature::new(&packet.data()[sig_start..sig_end]);
 
+        let mut timer = measure::Measure::start("sigver");
         if !signature.verify(
             &packet.data()[pubkey_start..pubkey_end],
             &packet.data()[msg_start..msg_end],
@@ -157,6 +158,7 @@ fn verify_packet(packet: &mut Packet, reject_non_vote: bool) {
             packet.meta.set_discard(true);
             return;
         }
+        timer.stop();
 
         pubkey_start = pubkey_end;
         sig_start = sig_end;
@@ -596,57 +598,72 @@ pub fn ed25519_verify_cpu(batches: &mut [PacketBatch], reject_non_vote: bool, pa
     use rayon::prelude::*;
     debug!("CPU ECDSA for {}", packet_count);
     
-    let thread_count = packet_count
-        .saturating_add(VERIFY_MIN_PACKETS_PER_THREAD)
-        .saturating_div(VERIFY_MIN_PACKETS_PER_THREAD);
-
-    let thread_in_use = AtomicU64::default();
-    let packets_per_thread = packet_count.saturating_div(thread_count);
     
-    let mut start = measure::Measure::start("verify");
-    if thread_count >= get_thread_count() {
-        // When using all available threads, skip the overhead of flatting, collecting, etc.
-        PAR_THREAD_POOL.install(|| {
-            batches.into_par_iter().for_each(|batch| {
-                batch.par_iter_mut().for_each(|packet| {
-                    verify_packet(packet, reject_non_vote);
-                    thread_in_use.fetch_or(1<<rayon::current_thread_index().unwrap(), Ordering::Relaxed);
-                })
-            });
+    if packet_count < VERIFY_MIN_PACKETS_PER_THREAD {
+        let mut start = measure::Measure::start("verify");
+        batches.into_iter().for_each(|batch| {
+            batch.iter_mut().for_each(|packet| {
+                verify_packet(packet, reject_non_vote);
+            })
         });
+        start.stop();
+        warn!("{} {} {} {} {}",
+            1,
+            1,
+            packet_count,
+            packet_count,
+            start.as_us() as usize,
+        );
     } else {
-        PAR_THREAD_POOL.install(|| {
-            batches
-                .into_par_iter()
-                .flatten()
-                .collect::<Vec<&mut Packet>>()
-                .into_par_iter()
-                .with_min_len(packets_per_thread)
-                .for_each(|packet| {
-                    verify_packet(packet, reject_non_vote);
-                    thread_in_use.fetch_or(1<<rayon::current_thread_index().unwrap(), Ordering::Relaxed);
-                })
-        });
-    };
-    start.stop();
-
-    let mut active_threads: usize = 0;
-    for i in 0..get_thread_count() {
-        if thread_in_use.load(Ordering::Relaxed) & (1<<i) > 0 {
-            active_threads = active_threads.saturating_add(1);
+        let thread_count = packet_count
+            .saturating_add(VERIFY_MIN_PACKETS_PER_THREAD)
+            .saturating_div(VERIFY_MIN_PACKETS_PER_THREAD);
+        let packets_per_thread = packet_count.saturating_div(thread_count);
+        let thread_in_use = AtomicU64::default();
+        let mut start = measure::Measure::start("verify");
+        if thread_count >= get_thread_count() {
+            // When using all available threads, skip the overhead of flatting, collecting, etc.
+            PAR_THREAD_POOL.install(|| {
+                batches.into_par_iter().for_each(|batch| {
+                    batch.par_iter_mut().for_each(|packet| {
+                        verify_packet(packet, reject_non_vote);
+                        thread_in_use.fetch_or(1<<rayon::current_thread_index().unwrap(), Ordering::Relaxed);
+                    })
+                });
+            });
+        } else {
+            PAR_THREAD_POOL.install(|| {
+                batches
+                    .into_par_iter()
+                    .flatten()
+                    .collect::<Vec<&mut Packet>>()
+                    .into_par_iter()
+                    .with_min_len(packets_per_thread)
+                    .for_each(|packet| {
+                        verify_packet(packet, reject_non_vote);
+                        thread_in_use.fetch_or(1<<rayon::current_thread_index().unwrap(), Ordering::Relaxed);
+                    })
+            });
+        };
+        start.stop();
+        let mut active_threads: usize = 0;
+        for i in 0..get_thread_count() {
+            if thread_in_use.load(Ordering::Relaxed) & (1<<i) > 0 {
+                active_threads = active_threads.saturating_add(1);
+            }
         }
-    }
-    if active_threads_hist.is_some() {
-        active_threads_hist.unwrap().increment(active_threads as u64).unwrap();
-    }
+        if active_threads_hist.is_some() {
+            active_threads_hist.unwrap().increment(active_threads as u64).unwrap();
+        }
 
-    warn!("{} {} {} {} {}",
-        thread_count,
-        active_threads,
-        packets_per_thread,
-        packet_count,
-        start.as_us() as usize,
-    );
+        warn!("{} {} {} {} {}",
+            thread_count,
+            active_threads,
+            packets_per_thread,
+            packet_count,
+            start.as_us() as usize,
+        );
+    }
 
     inc_new_counter_debug!("ed25519_verify_cpu", packet_count);
 }
