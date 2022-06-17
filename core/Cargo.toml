@@ -33,6 +33,7 @@ queues = "1.0.2"
 rand = "0.7.0"
 rand_chacha = "0.2.2"
 rayon = "1.5.3"
+regex = "1.5.6"
 serde = "1.0.137"
 serde_derive = "1.0.103"
 solana-address-lookup-table-program = { path = "../programs/address-lookup-table", version = "=1.11.0" }
@@ -59,6 +60,7 @@ solana-streamer = { path = "../streamer", version = "=1.11.0" }
 solana-transaction-status = { path = "../transaction-status", version = "=1.11.0" }
 solana-version = { path = "../version", version = "=1.11.0" }
 solana-vote-program = { path = "../programs/vote", version = "=1.11.0" }
+substring = "1.4.5"
 sys-info = "0.9.1"
 tempfile = "3.3.0"
 thiserror = "1.0"

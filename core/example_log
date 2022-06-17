@@ -1,0 +1,6 @@
+[2022-06-17T03:48:45.815130000Z INFO solana_core::repair_service] all shred repairs requested: {12: {21, 28, 15}}
+Fake junk here
+[2022-06-17T03:48:45.815130000Z INFO solana_core::repair_service] all shred repairs requested: {13: {21, 28, 15, 30}}
+Blah blah blah
+[2022-06-17T03:48:45.815130000Z INFO solana_core::repair_service] all shred repairs requested: {15: {21}}
+all shred repairs requested: {5: {1, 2}, 7: {1, 2}}

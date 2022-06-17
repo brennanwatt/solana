@@ -642,6 +642,14 @@ fn drop_redundant_turbine_path(shred_slot: Slot, root_bank: &Bank) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::{
+        fs::{File},
+        io::{BufRead, BufReader},
+    };
+    use lazy_static::lazy_static;
+    use regex::Regex;
+    use substring::Substring;
+
 
     #[test]
     fn bw() {
@@ -669,37 +677,92 @@ mod tests {
         let root_bank = Bank::default_for_tests();
         let fanout = DATA_PLANE_FANOUT;
 
-        let slot = 1_000_000;
-        let shred_idx = 3;
-        let shred = Shred::new_from_data(
-            slot,
-            shred_idx,
-            0,
-            &[],
-            ShredFlags::LAST_SHRED_IN_SLOT,
-            0,
-            0,
-            3,
-        );
+        let mut slot_to_repair_shred_map: HashMap<u64, Vec<u32>> = HashMap::new();
+        let filename = "example_log";
+        debug!("Repair log file = {}", filename);
+        let file = File::open(filename).expect("Something went wrong reading the file");
+        let reader = BufReader::new(file);
+        static SHRED_REPAIR_STRING:&'static str = "all shred repairs requested:";
+        for line in reader.lines() {
+            let line = line.unwrap();
+            if line.find(SHRED_REPAIR_STRING).is_some() {
+                trace!("FOUND: {}", line);
+                lazy_static! {
+                    static ref PARSING_SLOTS_SHREDS_REGEX : Regex = Regex::new(
+                            r"\{[0-9a-zA-Z,:{} ]*}}"
+                        ).unwrap();
+                    static ref PARSING_SLOT_SHRED_REGEX : Regex = Regex::new(
+                            r"[0-9][0-9a-zA-Z,:{ ]*}"
+                        ).unwrap();
+                    static ref PARSING_SLOT_REGEX : Regex = Regex::new(
+                            r"[0-9]*:"
+                        ).unwrap();
+                    static ref PARSING_SHRED_REGEX : Regex = Regex::new(
+                        r"[0-9]*[,}]"
+                    ).unwrap();
+                }
+                
+                PARSING_SLOTS_SHREDS_REGEX.find_iter(&line).for_each(|slots_shreds| {
+                    let slots_shreds = slots_shreds.as_str();
+                    trace!("SLOTS SHREDS: {}", slots_shreds);
+
+                    PARSING_SLOT_SHRED_REGEX.find_iter(&slots_shreds).for_each(|slot_shred| {
+                        let slot_shred = slot_shred.as_str();
+                        trace!("SLOT SHRED: {}", slot_shred);
+
+                        let slot: Vec<_> = PARSING_SLOT_REGEX.find_iter(&slot_shred).map(|mat| {
+                            let slot = mat.as_str();
+                            let slot: u64 = slot.substring(0, slot.len()-1).parse().unwrap();
+                            trace!("SLOT: {}", slot);
+                            slot
+                        }).collect();
+
+                        let shred_vec: Vec<_> = PARSING_SHRED_REGEX.find_iter(&slot_shred).map(|mat| {
+                            let shred = mat.as_str();
+                            let shred: u32 = shred.substring(0, shred.len()-1).parse().unwrap();
+                            trace!("SHRED: {}", shred);
+                            shred
+                        }).collect();
+
+                        slot_to_repair_shred_map.insert(slot[0], shred_vec);
+                    });
+                });
+            }
+        }
 
         let mut node_to_shred_count: HashMap<Pubkey, u64> = HashMap::new();
-        let mut q: Queue<Pubkey> = queue![];
+        for (slot, shreds) in slot_to_repair_shred_map {
+            debug!("slot {}: shreds {:?}", slot, shreds);
+            for shred_idx in shreds {
+                let shred = Shred::new_from_data(
+                    slot,
+                    shred_idx,
+                    0,
+                    &[],
+                    ShredFlags::LAST_SHRED_IN_SLOT,
+                    0,
+                    0,
+                    3,
+                );
 
-        q.add(my_pubkey).expect("Failed to add pubkey to queue");
-        while q.size() > 0 {
-            if let Ok(pubkey) = q.remove() {
-                debug!("Leader is {} and I am {}. Looking at slot {}, shred {}", leader_pubkey, pubkey, slot, shred_idx);
-                let ((is_root, parent), anchor) = cluster_nodes.get_retransmit_ancestors(leader_pubkey, &shred, &root_bank, fanout, pubkey);
-                let values = node_to_shred_count.entry(parent).or_insert(0);
-                *values += 1;
-                if !is_root {
-                    q.add(parent).expect("Failed to add pubkey to queue");
-                }
+                let mut q: Queue<Pubkey> = queue![];
+                q.add(my_pubkey).expect("Failed to add pubkey to queue");
+                while q.size() > 0 {
+                    if let Ok(pubkey) = q.remove() {
+                        debug!("Leader is {} and I am {}. Looking at slot {}, shred {}", leader_pubkey, pubkey, slot, shred_idx);
+                        let ((is_root, parent), anchor) = cluster_nodes.get_retransmit_ancestors(leader_pubkey, &shred, &root_bank, fanout, pubkey);
+                        let values = node_to_shred_count.entry(parent).or_insert(0);
+                        *values += 1;
+                        if !is_root {
+                            q.add(parent).expect("Failed to add pubkey to queue");
+                        }
 
-                if let Some (anchor) =  anchor {
-                    let values = node_to_shred_count.entry(anchor).or_insert(0);
-                    *values += 1;
-                    q.add(anchor).expect("Failed to add pubkey to queue");
+                        if let Some (anchor) =  anchor {
+                            let values = node_to_shred_count.entry(anchor).or_insert(0);
+                            *values += 1;
+                            q.add(anchor).expect("Failed to add pubkey to queue");
+                        }
+                    }
                 }
             }
         }
