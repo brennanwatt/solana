@@ -3721,6 +3721,67 @@ mod tests {
         );
     }
 
+    #[test]
+    fn test_bank_fields_from_snapshot() {
+        solana_logger::setup();
+        let collector = Pubkey::new_unique();
+        let key1 = Keypair::new();
+
+        let (genesis_config, mint_keypair) = create_genesis_config(sol_to_lamports(1_000_000.));
+        let bank0 = Arc::new(Bank::new_for_tests(&genesis_config));
+        while !bank0.is_complete() {
+            bank0.register_tick(&Hash::new_unique());
+        }
+
+        let slot = 1;
+        let bank1 = Arc::new(Bank::new_from_parent(&bank0, &collector, slot));
+        while !bank1.is_complete() {
+            bank1.register_tick(&Hash::new_unique());
+        }
+
+        let all_snapshots_dir = tempfile::TempDir::new().unwrap();
+        let snapshot_archive_format = ArchiveFormat::Tar;
+
+        let full_snapshot_slot = slot;
+        bank_to_full_snapshot_archive(
+            &all_snapshots_dir,
+            &bank1,
+            None,
+            &all_snapshots_dir,
+            &all_snapshots_dir,
+            snapshot_archive_format,
+            DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN,
+            DEFAULT_MAX_INCREMENTAL_SNAPSHOT_ARCHIVES_TO_RETAIN,
+        )
+        .unwrap();
+
+        let slot = slot + 1;
+        let bank2 = Arc::new(Bank::new_from_parent(&bank1, &collector, slot));
+        bank2
+            .transfer(sol_to_lamports(1.), &mint_keypair, &key1.pubkey())
+            .unwrap();
+        while !bank2.is_complete() {
+            bank2.register_tick(&Hash::new_unique());
+        }
+
+        bank_to_incremental_snapshot_archive(
+            &all_snapshots_dir,
+            &bank2,
+            full_snapshot_slot,
+            None,
+            &all_snapshots_dir,
+            &all_snapshots_dir,
+            snapshot_archive_format,
+            DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN,
+            DEFAULT_MAX_INCREMENTAL_SNAPSHOT_ARCHIVES_TO_RETAIN,
+        )
+        .unwrap();
+
+        let bank_fields = bank_fields_from_snapshot_archives(&all_snapshots_dir).unwrap();
+        assert_eq!(bank_fields.slot, bank2.slot());
+        assert_eq!(bank_fields.slot, bank2.parent_slot());
+    }
+
     /// All the permutations of `snapshot_type` for the new-and-old accounts packages:
     ///
     ///  new      | old      |
