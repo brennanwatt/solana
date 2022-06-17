@@ -5,10 +5,12 @@ use {
         },
         accounts_index::AccountSecondaryIndexes,
         accounts_update_notifier_interface::AccountsUpdateNotifier,
-        bank::{Bank, BankSlotDelta},
+        bank::{Bank, BankFieldsToDeserialize, BankSlotDelta},
         builtins::Builtins,
         hardened_unpack::{unpack_snapshot, ParallelSelector, UnpackError, UnpackedAppendVecMap},
-        serde_snapshot::{bank_from_streams, bank_to_stream, SerdeStyle, SnapshotStreams},
+        serde_snapshot::{
+            bank_from_streams, bank_to_stream, fields_from_streams, SerdeStyle, SnapshotStreams,
+        },
         shared_buffer_reader::{SharedBuffer, SharedBufferReader},
         snapshot_archive_info::{
             FullSnapshotArchiveInfo, IncrementalSnapshotArchiveInfo, SnapshotArchiveInfoGetter,
@@ -795,6 +797,79 @@ pub struct BankFromArchiveTimings {
 // From testing, 4 seems to be a sweet spot for ranges of 60M-360M accounts and 16-64 cores. This may need to be tuned later.
 const PARALLEL_UNTAR_READERS_DEFAULT: usize = 4;
 
+pub fn bank_fields_from_snapshot_archives(
+    // Pass in path to the directory containing the snapshot directory
+    bank_snapshots_dir: impl AsRef<Path>,
+) -> Result<BankFieldsToDeserialize> {
+    let full_snapshot_archive_info = get_highest_full_snapshot_archive_info(&bank_snapshots_dir)
+        .ok_or(SnapshotError::NoSnapshotArchives)?;
+
+    let incremental_snapshot_archive_info = get_highest_incremental_snapshot_archive_info(
+        &bank_snapshots_dir,
+        full_snapshot_archive_info.slot(),
+    );
+
+    let temp_dir = tempfile::Builder::new()
+        .prefix("dummy-accounts-path")
+        .tempdir_in(&bank_snapshots_dir)?;
+
+    let account_paths = vec![temp_dir.path().to_path_buf()];
+
+    // COPY PASTA'd from `bank_from_snapshot_archives`
+    check_are_snapshots_compatible(
+        &full_snapshot_archive_info,
+        incremental_snapshot_archive_info.as_ref(),
+    )?;
+
+    let parallel_divisions = std::cmp::min(
+        PARALLEL_UNTAR_READERS_DEFAULT,
+        std::cmp::max(1, num_cpus::get() / 4),
+    );
+
+    let unarchived_full_snapshot = unarchive_snapshot(
+        &bank_snapshots_dir,
+        TMP_SNAPSHOT_ARCHIVE_PREFIX,
+        full_snapshot_archive_info.path(),
+        "snapshot untar",
+        &account_paths,
+        full_snapshot_archive_info.archive_format(),
+        parallel_divisions,
+    )?;
+
+    let mut unarchived_incremental_snapshot =
+        if let Some(incremental_snapshot_archive_info) = incremental_snapshot_archive_info {
+            let unarchived_incremental_snapshot = unarchive_snapshot(
+                &bank_snapshots_dir,
+                TMP_SNAPSHOT_ARCHIVE_PREFIX,
+                incremental_snapshot_archive_info.path(),
+                "incremental snapshot untar",
+                &account_paths,
+                incremental_snapshot_archive_info.archive_format(),
+                parallel_divisions,
+            )?;
+            Some(unarchived_incremental_snapshot)
+        } else {
+            None
+        };
+
+    let mut unpacked_append_vec_map = unarchived_full_snapshot.unpacked_append_vec_map;
+    if let Some(ref mut unarchive_preparation_result) = unarchived_incremental_snapshot {
+        let incremental_snapshot_unpacked_append_vec_map =
+            std::mem::take(&mut unarchive_preparation_result.unpacked_append_vec_map);
+        unpacked_append_vec_map.extend(incremental_snapshot_unpacked_append_vec_map.into_iter());
+    }
+    // end COPY PASTA from `bank_from_snapshot_archives`
+
+    bank_fields_from_snapshots(
+        &unarchived_full_snapshot.unpacked_snapshots_dir_and_version,
+        unarchived_incremental_snapshot
+            .as_ref()
+            .map(|unarchive_preparation_result| {
+                &unarchive_preparation_result.unpacked_snapshots_dir_and_version
+            }),
+    )
+}
+
 /// Rebuild bank from snapshot archives.  Handles either just a full snapshot, or both a full
 /// snapshot and an incremental snapshot.
 #[allow(clippy::too_many_arguments)]
@@ -1559,6 +1634,51 @@ fn verify_unpacked_snapshots_dir_and_version(
         .pop()
         .ok_or_else(|| get_io_error("No snapshots found in snapshots directory"))?;
     Ok((snapshot_version, root_paths))
+}
+
+fn bank_fields_from_snapshots(
+    full_snapshot_unpacked_snapshots_dir_and_version: &UnpackedSnapshotsDirAndVersion,
+    incremental_snapshot_unpacked_snapshots_dir_and_version: Option<
+        &UnpackedSnapshotsDirAndVersion,
+    >,
+) -> Result<BankFieldsToDeserialize> {
+    let (full_snapshot_version, full_snapshot_root_paths) =
+        verify_unpacked_snapshots_dir_and_version(
+            full_snapshot_unpacked_snapshots_dir_and_version,
+        )?;
+    let (incremental_snapshot_version, incremental_snapshot_root_paths) =
+        if let Some(snapshot_unpacked_snapshots_dir_and_version) =
+            incremental_snapshot_unpacked_snapshots_dir_and_version
+        {
+            let (snapshot_version, bank_snapshot_info) = verify_unpacked_snapshots_dir_and_version(
+                snapshot_unpacked_snapshots_dir_and_version,
+            )?;
+            (Some(snapshot_version), Some(bank_snapshot_info))
+        } else {
+            (None, None)
+        };
+    info!(
+        "Loading bank from full snapshot {} and incremental snapshot {:?}",
+        full_snapshot_root_paths.snapshot_path.display(),
+        incremental_snapshot_root_paths
+            .as_ref()
+            .map(|paths| paths.snapshot_path.display()),
+    );
+
+    let snapshot_root_paths = SnapshotRootPaths {
+        full_snapshot_root_file_path: full_snapshot_root_paths.snapshot_path,
+        incremental_snapshot_root_file_path: incremental_snapshot_root_paths
+            .map(|root_paths| root_paths.snapshot_path),
+    };
+
+    deserialize_snapshot_data_files(&snapshot_root_paths, |snapshot_streams| {
+        Ok(
+            match incremental_snapshot_version.unwrap_or(full_snapshot_version) {
+                SnapshotVersion::V1_2_0 => fields_from_streams(SerdeStyle::Newer, snapshot_streams)
+                    .map(|(bank_fields, _accountsdb_fields)| bank_fields),
+            }?,
+        )
+    })
 }
 
 #[allow(clippy::too_many_arguments)]
