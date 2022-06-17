@@ -797,8 +797,53 @@ pub struct BankFromArchiveTimings {
 // From testing, 4 seems to be a sweet spot for ranges of 60M-360M accounts and 16-64 cores. This may need to be tuned later.
 const PARALLEL_UNTAR_READERS_DEFAULT: usize = 4;
 
+fn verify_and_unarchive_snapshots(
+    bank_snapshots_dir: impl AsRef<Path>,
+    full_snapshot_archive_info: &FullSnapshotArchiveInfo,
+    incremental_snapshot_archive_info: Option<&IncrementalSnapshotArchiveInfo>,
+    account_paths: &[PathBuf],
+) -> Result<(UnarchivedSnapshot, Option<UnarchivedSnapshot>)> {
+    check_are_snapshots_compatible(
+        full_snapshot_archive_info,
+        incremental_snapshot_archive_info,
+    )?;
+
+    let parallel_divisions = std::cmp::min(
+        PARALLEL_UNTAR_READERS_DEFAULT,
+        std::cmp::max(1, num_cpus::get() / 4),
+    );
+
+    let unarchived_full_snapshot = unarchive_snapshot(
+        &bank_snapshots_dir,
+        TMP_SNAPSHOT_ARCHIVE_PREFIX,
+        full_snapshot_archive_info.path(),
+        "snapshot untar",
+        account_paths,
+        full_snapshot_archive_info.archive_format(),
+        parallel_divisions,
+    )?;
+
+    let unarchived_incremental_snapshot =
+        if let Some(incremental_snapshot_archive_info) = incremental_snapshot_archive_info {
+            let unarchived_incremental_snapshot = unarchive_snapshot(
+                &bank_snapshots_dir,
+                TMP_SNAPSHOT_ARCHIVE_PREFIX,
+                incremental_snapshot_archive_info.path(),
+                "incremental snapshot untar",
+                account_paths,
+                incremental_snapshot_archive_info.archive_format(),
+                parallel_divisions,
+            )?;
+            Some(unarchived_incremental_snapshot)
+        } else {
+            None
+        };
+
+    Ok((unarchived_full_snapshot, unarchived_incremental_snapshot))
+}
+
 pub fn bank_fields_from_snapshot_archives(
-    // Pass in path to the directory containing the snapshot directory
+    // Pass in path to the directory containing the snapshot archive
     bank_snapshots_dir: impl AsRef<Path>,
 ) -> Result<BankFieldsToDeserialize> {
     let full_snapshot_archive_info = get_highest_full_snapshot_archive_info(&bank_snapshots_dir)
@@ -815,50 +860,13 @@ pub fn bank_fields_from_snapshot_archives(
 
     let account_paths = vec![temp_dir.path().to_path_buf()];
 
-    // COPY PASTA'd from `bank_from_snapshot_archives`
-    check_are_snapshots_compatible(
-        &full_snapshot_archive_info,
-        incremental_snapshot_archive_info.as_ref(),
-    )?;
-
-    let parallel_divisions = std::cmp::min(
-        PARALLEL_UNTAR_READERS_DEFAULT,
-        std::cmp::max(1, num_cpus::get() / 4),
-    );
-
-    let unarchived_full_snapshot = unarchive_snapshot(
-        &bank_snapshots_dir,
-        TMP_SNAPSHOT_ARCHIVE_PREFIX,
-        full_snapshot_archive_info.path(),
-        "snapshot untar",
-        &account_paths,
-        full_snapshot_archive_info.archive_format(),
-        parallel_divisions,
-    )?;
-
-    let mut unarchived_incremental_snapshot =
-        if let Some(incremental_snapshot_archive_info) = incremental_snapshot_archive_info {
-            let unarchived_incremental_snapshot = unarchive_snapshot(
-                &bank_snapshots_dir,
-                TMP_SNAPSHOT_ARCHIVE_PREFIX,
-                incremental_snapshot_archive_info.path(),
-                "incremental snapshot untar",
-                &account_paths,
-                incremental_snapshot_archive_info.archive_format(),
-                parallel_divisions,
-            )?;
-            Some(unarchived_incremental_snapshot)
-        } else {
-            None
-        };
-
-    let mut unpacked_append_vec_map = unarchived_full_snapshot.unpacked_append_vec_map;
-    if let Some(ref mut unarchive_preparation_result) = unarchived_incremental_snapshot {
-        let incremental_snapshot_unpacked_append_vec_map =
-            std::mem::take(&mut unarchive_preparation_result.unpacked_append_vec_map);
-        unpacked_append_vec_map.extend(incremental_snapshot_unpacked_append_vec_map.into_iter());
-    }
-    // end COPY PASTA from `bank_from_snapshot_archives`
+    let (unarchived_full_snapshot, unarchived_incremental_snapshot) =
+        verify_and_unarchive_snapshots(
+            &bank_snapshots_dir,
+            &full_snapshot_archive_info,
+            incremental_snapshot_archive_info.as_ref(),
+            &account_paths,
+        )?;
 
     bank_fields_from_snapshots(
         &unarchived_full_snapshot.unpacked_snapshots_dir_and_version,
@@ -891,44 +899,16 @@ pub fn bank_from_snapshot_archives(
     accounts_db_config: Option<AccountsDbConfig>,
     accounts_update_notifier: Option<AccountsUpdateNotifier>,
 ) -> Result<(Bank, BankFromArchiveTimings)> {
-    check_are_snapshots_compatible(
-        full_snapshot_archive_info,
-        incremental_snapshot_archive_info,
-    )?;
-
     let accounts_db_skip_shrink =
         accounts_db_skip_shrink || !full_snapshot_archive_info.is_remote();
 
-    let parallel_divisions = std::cmp::min(
-        PARALLEL_UNTAR_READERS_DEFAULT,
-        std::cmp::max(1, num_cpus::get() / 4),
-    );
-
-    let unarchived_full_snapshot = unarchive_snapshot(
-        &bank_snapshots_dir,
-        TMP_SNAPSHOT_ARCHIVE_PREFIX,
-        full_snapshot_archive_info.path(),
-        "snapshot untar",
-        account_paths,
-        full_snapshot_archive_info.archive_format(),
-        parallel_divisions,
-    )?;
-
-    let mut unarchived_incremental_snapshot =
-        if let Some(incremental_snapshot_archive_info) = incremental_snapshot_archive_info {
-            let unarchived_incremental_snapshot = unarchive_snapshot(
-                &bank_snapshots_dir,
-                TMP_SNAPSHOT_ARCHIVE_PREFIX,
-                incremental_snapshot_archive_info.path(),
-                "incremental snapshot untar",
-                account_paths,
-                incremental_snapshot_archive_info.archive_format(),
-                parallel_divisions,
-            )?;
-            Some(unarchived_incremental_snapshot)
-        } else {
-            None
-        };
+    let (unarchived_full_snapshot, mut unarchived_incremental_snapshot) =
+        verify_and_unarchive_snapshots(
+            bank_snapshots_dir,
+            full_snapshot_archive_info,
+            incremental_snapshot_archive_info,
+            account_paths,
+        )?;
 
     let mut unpacked_append_vec_map = unarchived_full_snapshot.unpacked_append_vec_map;
     if let Some(ref mut unarchive_preparation_result) = unarchived_incremental_snapshot {
@@ -3722,14 +3702,6 @@ mod tests {
     }
 
     #[test]
-    fn test_dummy_bank_fields_from_snapshot() {
-        let path_buf =
-            PathBuf::from_str("/home/carl_solana_com/solana/DebugConsensus/1.9-consensus/gh24710").unwrap();
-        let bank_fields = bank_fields_from_snapshot_archives(&path_buf).unwrap();
-        println!("slot: {}", bank_fields.slot);
-    }
-    
-    #[test]
     fn test_bank_fields_from_snapshot() {
         solana_logger::setup();
         let collector = Pubkey::new_unique();
@@ -3787,7 +3759,7 @@ mod tests {
 
         let bank_fields = bank_fields_from_snapshot_archives(&all_snapshots_dir).unwrap();
         assert_eq!(bank_fields.slot, bank2.slot());
-        assert_eq!(bank_fields.slot, bank2.parent_slot());
+        assert_eq!(bank_fields.parent_slot, bank2.parent_slot());
     }
 
     /// All the permutations of `snapshot_type` for the new-and-old accounts packages:
