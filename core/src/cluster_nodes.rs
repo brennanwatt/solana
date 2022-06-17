@@ -2,17 +2,18 @@ use {
     crate::{broadcast_stage::BroadcastStage, retransmit_stage::RetransmitStage},
     itertools::Itertools,
     lru::LruCache,
+    queues::*,
     rand::{seq::SliceRandom, Rng, SeedableRng},
     rand_chacha::ChaChaRng,
     solana_gossip::{
-        cluster_info::{compute_retransmit_peers, ClusterInfo},
+        cluster_info::{compute_retransmit_peers, ClusterInfo, DATA_PLANE_FANOUT},
         contact_info::ContactInfo,
         crds::GossipRoute,
         crds_gossip_pull::CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS,
         crds_value::{CrdsData, CrdsValue},
         weighted_shuffle::WeightedShuffle,
     },
-    solana_ledger::shred::Shred,
+    solana_ledger::shred::{Shred, ShredFlags},
     solana_runtime::bank::Bank,
     solana_sdk::{
         clock::{Epoch, Slot},
@@ -174,7 +175,7 @@ impl ClusterNodes<BroadcastStage> {
 }
 
 impl ClusterNodes<RetransmitStage> {
-    pub(crate) fn get_retransmit_addrs(
+    pub fn get_retransmit_addrs(
         &self,
         slot_leader: Pubkey,
         shred: &Shred,
@@ -205,6 +206,49 @@ impl ClusterNodes<RetransmitStage> {
                 children
                     .iter()
                     .filter_map(|node| Some(node.contact_info()?.tvu)),
+            )
+            .collect()
+    }
+
+    pub fn get_retransmit_addrs2(
+        &self,
+        leader_pubkey: Pubkey,
+        shred: &Shred,
+        root_bank: &Bank,
+        fanout: usize,
+        my_pubkey: Pubkey,
+    ) -> Vec<Pubkey> {
+        let (neighbors, children) =
+            self.get_retransmit_peers2(leader_pubkey, shred, root_bank, fanout, my_pubkey);
+        debug!("{} neighbors and {} children", neighbors.len(), children.len());
+
+        if neighbors.is_empty() {
+            debug!("Neighbors is empty");
+            return children
+                .iter()
+                .filter_map(|node| Some(node.pubkey()))
+                .collect();
+        }
+        // If the node is on the critical path (i.e. the first node in each
+        // neighborhood), it should send the packet to tvu socket of its
+        // children and also tvu_forward socket of its neighbors. Otherwise it
+        // should only forward to tvu_forwards socket of its children.
+        if neighbors[0].pubkey() != my_pubkey {
+            debug!("Just returning children");
+            return children
+                .iter()
+                .filter_map(|node| Some(node.pubkey()))
+                .collect();
+        }
+        debug!("This node is first neighbor");
+        // First neighbor is this node itself, so skip it.
+        neighbors[1..]
+            .iter()
+            .filter_map(|node| Some(node.pubkey()))
+            .chain(
+                children
+                    .iter()
+                    .filter_map(|node| Some(node.pubkey())),
             )
             .collect()
     }
@@ -244,6 +288,45 @@ impl ClusterNodes<RetransmitStage> {
         // Assert that the node itself is included in the set of neighbors, at
         // the right offset.
         debug_assert_eq!(neighbors[self_index % fanout].pubkey(), self.pubkey);
+        (neighbors, children)
+    }
+
+    pub fn get_retransmit_peers2(
+        &self,
+        slot_leader: Pubkey,
+        shred: &Shred,
+        root_bank: &Bank,
+        fanout: usize,
+        my_pubkey: Pubkey,
+    ) -> (
+        Vec<&Node>, // neighbors
+        Vec<&Node>, // children
+    ) {
+        let shred_seed = shred.seed(slot_leader, root_bank);
+        let mut weighted_shuffle = self.weighted_shuffle.clone();
+        // Exclude slot leader from list of nodes.
+        if slot_leader == my_pubkey {
+            error!("retransmit from slot leader: {}", slot_leader);
+        } else if let Some(index) = self.index.get(&slot_leader) {
+            weighted_shuffle.remove_index(*index);
+        };
+        let mut rng = ChaChaRng::from_seed(shred_seed);
+        let nodes: Vec<_> = weighted_shuffle
+            .shuffle(&mut rng)
+            .map(|index| &self.nodes[index])
+            .collect();
+        let self_index = nodes
+            .iter()
+            .position(|node| node.pubkey() == my_pubkey)
+            .unwrap();
+        if drop_redundant_turbine_path(shred.slot(), root_bank) {
+            let peers = get_retransmit_peers(fanout, self_index, &nodes);
+            return (Vec::default(), peers.collect());
+        }
+        let (neighbors, children) = compute_retransmit_peers(fanout, self_index, &nodes);
+        // Assert that the node itself is included in the set of neighbors, at
+        // the right offset.
+        debug_assert_eq!(neighbors[self_index % fanout].pubkey(), my_pubkey);
         (neighbors, children)
     }
 }
@@ -480,6 +563,67 @@ fn drop_redundant_turbine_path(shred_slot: Slot, root_bank: &Bank) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn bw() {
+        solana_logger::setup();
+        let mut rng = rand::thread_rng();
+        let mut nodes: Vec<_> = repeat_with(|| ContactInfo::new_rand(&mut rng, None))
+            .take(1_000)
+            .collect();
+        nodes.shuffle(&mut rng);
+        let this_node = nodes[0].clone();
+        let leader_pubkey = nodes[1].id;
+        let my_pubkey = this_node.id;
+        let stakes: HashMap<Pubkey, u64> = nodes
+            .iter()
+            .filter_map(|node| {
+                    Some((node.id, rng.gen_range(0, 20)))
+            })
+            .collect();
+
+        let cluster_info = ClusterInfo::new(
+            this_node,
+            Arc::new(Keypair::new()),
+            SocketAddrSpace::Unspecified,
+        );
+
+        let cluster_nodes = new_cluster_nodes::<RetransmitStage>(&cluster_info, &stakes);
+
+        let slot = 1_000_000;
+        let shred = Shred::new_from_data(
+            slot,
+            3,   // shred index
+            0,   // parent offset
+            &[], // data
+            ShredFlags::LAST_SHRED_IN_SLOT,
+            0, // reference_tick
+            0, // version
+            3, // fec_set_index
+        );
+        let root_bank = Bank::default_for_tests();
+        let fanout = DATA_PLANE_FANOUT;
+
+        let mut node_to_shred_count: HashMap<Pubkey, u64> = HashMap::new();
+        let mut q: Queue<Pubkey> = queue![];
+
+        q.add(my_pubkey).expect("Failed to add pubkey to queue");
+        while q.size() > 0 {
+            if let Ok(pubkey) = q.remove() {
+                let pubkeys = cluster_nodes.get_retransmit_addrs2(leader_pubkey, &shred, &root_bank, fanout, pubkey);
+                info!("{} returned {} downstream turbine nodes", pubkey, pubkeys.len());
+                for key in pubkeys {
+                    q.add(key).expect("Failed to add pubkey to queue");
+                    let values = node_to_shred_count.entry(key).or_insert(0);
+                    *values += 1;
+                }
+            }
+        }
+
+        for (key, value) in node_to_shred_count {
+            println!("{} / {}", key, value);
+        }
+    }
 
     #[test]
     fn test_cluster_nodes_retransmit() {

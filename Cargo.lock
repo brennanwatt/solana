@@ -3289,6 +3289,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "queues"
+version = "1.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1475abae4f8ad4998590fe3acfe20104f0a5d48fc420c817cd2c09c3f56151f0"
+
+[[package]]
 name = "quick-error"
 version = "1.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4778,6 +4784,7 @@ dependencies = [
  "lru",
  "matches",
  "min-max-heap",
+ "queues",
  "rand 0.7.3",
  "rand_chacha 0.2.2",
  "raptorq",
