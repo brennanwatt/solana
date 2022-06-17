@@ -1306,7 +1306,7 @@ pub struct Bank {
     inflation: Arc<RwLock<Inflation>>,
 
     /// cache of vote_account and stake_account state for this fork
-    stakes_cache: StakesCache,
+    pub stakes_cache: StakesCache,
 
     /// staked nodes on epoch boundaries, saved off when a bank.slot() is at
     ///   a leader schedule calculation boundary
@@ -1338,7 +1338,7 @@ pub struct Bank {
     /// Cached executors
     cached_executors: RwLock<CachedExecutors>,
 
-    transaction_debug_keys: Option<Arc<HashSet<Pubkey>>>,
+    pub transaction_debug_keys: Option<Arc<HashSet<Pubkey>>>,
 
     // Global configuration for how transaction logs should be collected across all banks
     pub transaction_log_collector_config: Arc<RwLock<TransactionLogCollectorConfig>>,
@@ -1475,7 +1475,7 @@ impl Bank {
         )
     }
 
-    fn default_with_accounts(accounts: Accounts) -> Self {
+    pub fn default_with_accounts(accounts: Accounts) -> Self {
         let mut bank = Self {
             rewrites_skipped_this_slot: Rewrites::default(),
             rc: BankRc::new(accounts, Slot::default()),
@@ -3415,7 +3415,7 @@ impl Bank {
         self.parent_hash
     }
 
-    fn process_genesis_config(&mut self, genesis_config: &GenesisConfig) {
+    pub fn process_genesis_config(&mut self, genesis_config: &GenesisConfig) {
         // Bootstrap validator collects fees until `new_from_parent` is called.
         self.fee_rate_governor = genesis_config.fee_rate_governor.clone();
         self.fee_calculator = self.fee_rate_governor.create_fee_calculator();
@@ -6296,7 +6296,7 @@ impl Bank {
         self.rc.accounts.clone()
     }
 
-    fn finish_init(
+    pub fn finish_init(
         &mut self,
         genesis_config: &GenesisConfig,
         additional_builtins: Option<&Builtins>,

@@ -46,14 +46,14 @@ pub enum InvalidCacheEntryReason {
 type StakeAccount = stake_account::StakeAccount<Delegation>;
 
 #[derive(Default, Debug, AbiExample)]
-pub(crate) struct StakesCache(RwLock<Stakes<StakeAccount>>);
+pub struct StakesCache(RwLock<Stakes<StakeAccount>>);
 
 impl StakesCache {
     pub(crate) fn new(stakes: Stakes<StakeAccount>) -> Self {
         Self(RwLock::new(stakes))
     }
 
-    pub(crate) fn stakes(&self) -> RwLockReadGuard<Stakes<StakeAccount>> {
+    pub fn stakes(&self) -> RwLockReadGuard<Stakes<StakeAccount>> {
         self.0.read().unwrap()
     }
 
@@ -194,7 +194,7 @@ impl<T: Clone> Stakes<T> {
         &self.vote_accounts
     }
 
-    pub(crate) fn staked_nodes(&self) -> Arc<HashMap<Pubkey, u64>> {
+    pub fn staked_nodes(&self) -> Arc<HashMap<Pubkey, u64>> {
         self.vote_accounts.staked_nodes()
     }
 }
@@ -376,7 +376,7 @@ impl StakesEnum {
         }
     }
 
-    pub(crate) fn staked_nodes(&self) -> Arc<HashMap<Pubkey, u64>> {
+    pub fn staked_nodes(&self) -> Arc<HashMap<Pubkey, u64>> {
         match self {
             StakesEnum::Accounts(stakes) => stakes.staked_nodes(),
             StakesEnum::Delegations(stakes) => stakes.staked_nodes(),

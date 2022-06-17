@@ -451,6 +451,15 @@ impl Shred {
         .to_bytes()
     }
 
+    pub fn seed2(&self, leader_pubkey: Pubkey) -> [u8; 32] {
+        hashv(&[
+            &self.slot().to_le_bytes(),
+            &u8::from(self.shred_type()).to_le_bytes(),
+            &self.index().to_le_bytes(),
+            &leader_pubkey.to_bytes(),
+        ]).to_bytes()
+    }
+
     #[inline]
     pub fn shred_type(&self) -> ShredType {
         ShredType::from(self.common_header().shred_variant)

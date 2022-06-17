@@ -2,7 +2,7 @@ use {
     crate::leader_schedule::LeaderSchedule,
     solana_runtime::bank::Bank,
     solana_sdk::{
-        clock::{Epoch, Slot, NUM_CONSECUTIVE_LEADER_SLOTS},
+        clock::{Epoch, Slot, DEFAULT_SLOTS_PER_EPOCH, NUM_CONSECUTIVE_LEADER_SLOTS},
         pubkey::Pubkey,
     },
     std::collections::HashMap,
@@ -22,6 +22,25 @@ pub fn leader_schedule(epoch: Epoch, bank: &Bank) -> Option<LeaderSchedule> {
             &stakes,
             seed,
             bank.get_slots_in_epoch(epoch),
+            NUM_CONSECUTIVE_LEADER_SLOTS,
+        )
+    })
+}
+
+/// Return the leader schedule for the given epoch.
+pub fn leader_schedule2(epoch: Epoch, staked_nodes: Option<HashMap<Pubkey, u64>>) -> Option<LeaderSchedule> {
+    staked_nodes.map(|stakes| {
+        let mut seed = [0u8; 32];
+        seed[0..8].copy_from_slice(&epoch.to_le_bytes());
+        let mut stakes: Vec<_> = stakes
+            .iter()
+            .map(|(pubkey, stake)| (*pubkey, *stake))
+            .collect();
+        sort_stakes(&mut stakes);
+        LeaderSchedule::new(
+            &stakes,
+            seed,
+            DEFAULT_SLOTS_PER_EPOCH,
             NUM_CONSECUTIVE_LEADER_SLOTS,
         )
     })

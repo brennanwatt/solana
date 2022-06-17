@@ -334,11 +334,10 @@ impl ClusterNodes<RetransmitStage> {
         &self,
         slot_leader: Pubkey,
         shred: &Shred,
-        root_bank: &Bank,
         fanout: usize,
         my_pubkey: Pubkey,
     ) -> ((bool, Pubkey), Option<Pubkey>) {
-        let shred_seed = shred.seed(slot_leader, root_bank);
+        let shred_seed = shred.seed2(slot_leader);
         let mut weighted_shuffle = self.weighted_shuffle.clone();
         // Exclude slot leader from list of nodes.
         if slot_leader == my_pubkey {
@@ -469,7 +468,7 @@ fn get_anchor (
 
 fn get_parent (
     fanout: usize,
-    index: usize, // Local node's index withing the nodes slice.
+    index: usize, // Local node's index within the nodes vector
     nodes: &Vec<&Node>,
 ) -> (bool, Pubkey) {
     // Node's index within its neighborhood.
@@ -649,20 +648,30 @@ mod tests {
     use lazy_static::lazy_static;
     use regex::Regex;
     use substring::Substring;
-
+    use solana_sdk::{genesis_config::create_genesis_config, sysvar::epoch_schedule::EpochSchedule};
+    use solana_runtime::{
+        accounts:: Accounts,
+        accounts_db::{AccountShrinkThreshold, ACCOUNTS_DB_CONFIG_FOR_TESTING},
+        accounts_index::AccountSecondaryIndexes,
+        ancestors::Ancestors,
+        bank::Bank,
+        epoch_stakes::EpochStakes,
+        stakes::StakesEnum,
+    };
+    use std::ops::Index;
 
     #[test]
     fn bw() {
         solana_logger::setup();
+
         let mut rng = rand::thread_rng();
         let mut nodes: Vec<_> = repeat_with(|| ContactInfo::new_rand(&mut rng, None))
             .take(1_000)
             .collect();
         nodes.shuffle(&mut rng);
         let this_node = nodes[0].clone();
-        let leader_pubkey = nodes[1].id;
         let my_pubkey = this_node.id;
-        let stakes: HashMap<Pubkey, u64> = nodes
+        let staked_nodes: HashMap<Pubkey, u64> = nodes
             .iter()
             .filter_map(|node| {
                     Some((node.id, rng.gen_range(0, 20)))
@@ -673,8 +682,10 @@ mod tests {
             Arc::new(Keypair::new()),
             SocketAddrSpace::Unspecified,
         );
-        let cluster_nodes = new_cluster_nodes::<RetransmitStage>(&cluster_info, &stakes);
-        let root_bank = Bank::default_for_tests();
+
+        let epoch = 0;
+        let leader_schedule = solana_ledger::leader_schedule_utils::leader_schedule2(epoch, Some(staked_nodes.clone()));
+        let cluster_nodes = new_cluster_nodes::<RetransmitStage>(&cluster_info, &staked_nodes);
         let fanout = DATA_PLANE_FANOUT;
 
         let mut slot_to_repair_shred_map: HashMap<u64, Vec<u32>> = HashMap::new();
@@ -732,7 +743,8 @@ mod tests {
 
         let mut node_to_shred_count: HashMap<Pubkey, u64> = HashMap::new();
         for (slot, shreds) in slot_to_repair_shred_map {
-            debug!("slot {}: shreds {:?}", slot, shreds);
+            let leader_pubkey = leader_schedule.as_ref().unwrap().index(slot);
+            debug!("Leader is {} for slot {}: shreds {:?}", *leader_pubkey, slot, shreds);
             for shred_idx in shreds {
                 let shred = Shred::new_from_data(
                     slot,
@@ -749,8 +761,8 @@ mod tests {
                 q.add(my_pubkey).expect("Failed to add pubkey to queue");
                 while q.size() > 0 {
                     if let Ok(pubkey) = q.remove() {
-                        debug!("Leader is {} and I am {}. Looking at slot {}, shred {}", leader_pubkey, pubkey, slot, shred_idx);
-                        let ((is_root, parent), anchor) = cluster_nodes.get_retransmit_ancestors(leader_pubkey, &shred, &root_bank, fanout, pubkey);
+                        debug!("I am {}. Looking at shred {}", pubkey, shred_idx);
+                        let ((is_root, parent), anchor) = cluster_nodes.get_retransmit_ancestors(*leader_pubkey, &shred, fanout, pubkey);
                         let values = node_to_shred_count.entry(parent).or_insert(0);
                         *values += 1;
                         if !is_root {
@@ -767,8 +779,8 @@ mod tests {
             }
         }
 
-        for (key, value) in node_to_shred_count {
-            println!("{} / {}", key, value);
+        for (node, shred) in node_to_shred_count {
+            println!("Node {} was responsible for transmitting {} shreds", node, shred);
         }
     }
 
