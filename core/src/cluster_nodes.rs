@@ -240,7 +240,7 @@ impl ClusterNodes<RetransmitStage> {
                 .filter_map(|node| Some(node.pubkey()))
                 .collect();
         }
-        debug!("This node is first neighbor");
+        debug!("This node is first neighbor (Anchor node)");
         // First neighbor is this node itself, so skip it.
         neighbors[1..]
             .iter()
@@ -328,6 +328,34 @@ impl ClusterNodes<RetransmitStage> {
         // the right offset.
         debug_assert_eq!(neighbors[self_index % fanout].pubkey(), my_pubkey);
         (neighbors, children)
+    }
+
+    pub fn get_retransmit_ancestors(
+        &self,
+        slot_leader: Pubkey,
+        shred: &Shred,
+        root_bank: &Bank,
+        fanout: usize,
+        my_pubkey: Pubkey,
+    ) -> ((bool, Pubkey), Option<Pubkey>) {
+        let shred_seed = shred.seed(slot_leader, root_bank);
+        let mut weighted_shuffle = self.weighted_shuffle.clone();
+        // Exclude slot leader from list of nodes.
+        if slot_leader == my_pubkey {
+            error!("retransmit from slot leader: {}", slot_leader);
+        } else if let Some(index) = self.index.get(&slot_leader) {
+            weighted_shuffle.remove_index(*index);
+        };
+        let mut rng = ChaChaRng::from_seed(shred_seed);
+        let nodes: Vec<_> = weighted_shuffle
+            .shuffle(&mut rng)
+            .map(|index| &self.nodes[index])
+            .collect();
+        let self_index = nodes
+            .iter()
+            .position(|node| node.pubkey() == my_pubkey)
+            .unwrap();
+        return (get_parent(fanout, self_index, &nodes), get_anchor(fanout, self_index, &nodes));
     }
 }
 
@@ -419,6 +447,57 @@ fn get_retransmit_peers<T: Copy>(
         .map(|i| nodes.get(i))
         .while_some()
         .copied()
+}
+
+fn get_anchor (
+    fanout: usize,
+    index: usize, // Local node's index withing the nodes slice.
+    nodes: &Vec<&Node>,
+) -> Option<Pubkey> {
+    // Node's index within its neighborhood.
+    let offset = index.saturating_sub(1) % fanout;
+    // First node in the neighborhood.
+    let anchor = index - offset;
+    if anchor == index {
+        // Anchor of anchor is anchor. Don't fall for this trap.
+        None
+    } else {
+        debug!("Anchor is {}, offset is {}", nodes.get(anchor).unwrap().pubkey(), anchor);
+        Some(nodes.get(anchor).unwrap().pubkey())
+    }
+}
+
+fn get_parent (
+    fanout: usize,
+    index: usize, // Local node's index withing the nodes slice.
+    nodes: &Vec<&Node>,
+) -> (bool, Pubkey) {
+    // Node's index within its neighborhood.
+    let mut temp = index-1;
+    let mut layer = 0;
+    loop {
+        temp /= fanout;
+        layer += 1;
+        if temp <= 0 {
+            break;
+        }
+    }
+    debug!("My index is {}, layer is {}, offset is {}", index, layer, index.saturating_sub(1) % fanout);
+    if layer == 1 {
+        debug!("Parent is root {}", nodes.get(0).unwrap().pubkey());
+        (true, nodes.get(0).unwrap().pubkey())
+    } else {
+        let mut parent = index % fanout;
+        if parent == 0 {
+            parent = fanout;
+        }
+        debug!("Parent is {}, layer is {}, offset is {}",
+            nodes.get(parent).unwrap().pubkey(),
+            (parent-1)/fanout + 1,
+            parent-1)
+        ;
+        (false, nodes.get(parent).unwrap().pubkey())
+    }
 }
 
 impl<T> ClusterNodesCache<T> {
@@ -581,28 +660,27 @@ mod tests {
                     Some((node.id, rng.gen_range(0, 20)))
             })
             .collect();
-
         let cluster_info = ClusterInfo::new(
             this_node,
             Arc::new(Keypair::new()),
             SocketAddrSpace::Unspecified,
         );
-
         let cluster_nodes = new_cluster_nodes::<RetransmitStage>(&cluster_info, &stakes);
-
-        let slot = 1_000_000;
-        let shred = Shred::new_from_data(
-            slot,
-            3,   // shred index
-            0,   // parent offset
-            &[], // data
-            ShredFlags::LAST_SHRED_IN_SLOT,
-            0, // reference_tick
-            0, // version
-            3, // fec_set_index
-        );
         let root_bank = Bank::default_for_tests();
         let fanout = DATA_PLANE_FANOUT;
+
+        let slot = 1_000_000;
+        let shred_idx = 3;
+        let shred = Shred::new_from_data(
+            slot,
+            shred_idx,
+            0,
+            &[],
+            ShredFlags::LAST_SHRED_IN_SLOT,
+            0,
+            0,
+            3,
+        );
 
         let mut node_to_shred_count: HashMap<Pubkey, u64> = HashMap::new();
         let mut q: Queue<Pubkey> = queue![];
@@ -610,12 +688,18 @@ mod tests {
         q.add(my_pubkey).expect("Failed to add pubkey to queue");
         while q.size() > 0 {
             if let Ok(pubkey) = q.remove() {
-                let pubkeys = cluster_nodes.get_retransmit_addrs2(leader_pubkey, &shred, &root_bank, fanout, pubkey);
-                info!("{} returned {} downstream turbine nodes", pubkey, pubkeys.len());
-                for key in pubkeys {
-                    q.add(key).expect("Failed to add pubkey to queue");
-                    let values = node_to_shred_count.entry(key).or_insert(0);
+                debug!("Leader is {} and I am {}. Looking at slot {}, shred {}", leader_pubkey, pubkey, slot, shred_idx);
+                let ((is_root, parent), anchor) = cluster_nodes.get_retransmit_ancestors(leader_pubkey, &shred, &root_bank, fanout, pubkey);
+                let values = node_to_shred_count.entry(parent).or_insert(0);
+                *values += 1;
+                if !is_root {
+                    q.add(parent).expect("Failed to add pubkey to queue");
+                }
+
+                if let Some (anchor) =  anchor {
+                    let values = node_to_shred_count.entry(anchor).or_insert(0);
                     *values += 1;
+                    q.add(anchor).expect("Failed to add pubkey to queue");
                 }
             }
         }
