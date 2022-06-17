@@ -3722,6 +3722,14 @@ mod tests {
     }
 
     #[test]
+    fn test_dummy_bank_fields_from_snapshot() {
+        let path_buf =
+            PathBuf::from_str("/home/carl_solana_com/solana/DebugConsensus/1.9-consensus/gh24710").unwrap();
+        let bank_fields = bank_fields_from_snapshot_archives(&path_buf).unwrap();
+        println!("slot: {}", bank_fields.slot);
+    }
+    
+    #[test]
     fn test_bank_fields_from_snapshot() {
         solana_logger::setup();
         let collector = Pubkey::new_unique();
