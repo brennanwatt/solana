@@ -220,7 +220,11 @@ impl ClusterNodes<RetransmitStage> {
     ) -> Vec<Pubkey> {
         let (neighbors, children) =
             self.get_retransmit_peers2(leader_pubkey, shred, root_bank, fanout, my_pubkey);
-        debug!("{} neighbors and {} children", neighbors.len(), children.len());
+        debug!(
+            "{} neighbors and {} children",
+            neighbors.len(),
+            children.len()
+        );
 
         if neighbors.is_empty() {
             debug!("Neighbors is empty");
@@ -245,11 +249,7 @@ impl ClusterNodes<RetransmitStage> {
         neighbors[1..]
             .iter()
             .filter_map(|node| Some(node.pubkey()))
-            .chain(
-                children
-                    .iter()
-                    .filter_map(|node| Some(node.pubkey())),
-            )
+            .chain(children.iter().filter_map(|node| Some(node.pubkey())))
             .collect()
     }
 
@@ -354,7 +354,10 @@ impl ClusterNodes<RetransmitStage> {
             .iter()
             .position(|node| node.pubkey() == my_pubkey)
             .unwrap();
-        return (get_parent(fanout, self_index, &nodes), get_anchor(fanout, self_index, &nodes));
+        return (
+            get_parent(fanout, self_index, &nodes),
+            get_anchor(fanout, self_index, &nodes),
+        );
     }
 }
 
@@ -448,7 +451,7 @@ fn get_retransmit_peers<T: Copy>(
         .copied()
 }
 
-fn get_anchor (
+fn get_anchor(
     fanout: usize,
     index: usize, // Local node's index withing the nodes slice.
     nodes: &Vec<&Node>,
@@ -461,18 +464,22 @@ fn get_anchor (
         // Anchor of anchor is anchor. Don't fall for this trap.
         None
     } else {
-        debug!("Anchor is {}, offset is {}", nodes.get(anchor).unwrap().pubkey(), anchor);
+        debug!(
+            "Anchor is {}, offset is {}",
+            nodes.get(anchor).unwrap().pubkey(),
+            anchor
+        );
         Some(nodes.get(anchor).unwrap().pubkey())
     }
 }
 
-fn get_parent (
+fn get_parent(
     fanout: usize,
     index: usize, // Local node's index within the nodes vector
     nodes: &Vec<&Node>,
 ) -> (bool, Pubkey) {
     // Node's index within its neighborhood.
-    let mut temp = index-1;
+    let mut temp = index - 1;
     let mut layer = 0;
     loop {
         temp /= fanout;
@@ -481,7 +488,12 @@ fn get_parent (
             break;
         }
     }
-    debug!("My index is {}, layer is {}, offset is {}", index, layer, index.saturating_sub(1) % fanout);
+    debug!(
+        "My index is {}, layer is {}, offset is {}",
+        index,
+        layer,
+        index.saturating_sub(1) % fanout
+    );
     if layer == 1 {
         debug!("Parent is root {}", nodes.get(0).unwrap().pubkey());
         (true, nodes.get(0).unwrap().pubkey())
@@ -490,11 +502,12 @@ fn get_parent (
         if parent == 0 {
             parent = fanout;
         }
-        debug!("Parent is {}, layer is {}, offset is {}",
+        debug!(
+            "Parent is {}, layer is {}, offset is {}",
             nodes.get(parent).unwrap().pubkey(),
-            (parent-1)/fanout + 1,
-            parent-1)
-        ;
+            (parent - 1) / fanout + 1,
+            parent - 1
+        );
         (false, nodes.get(parent).unwrap().pubkey())
     }
 }
@@ -640,25 +653,29 @@ fn drop_redundant_turbine_path(shred_slot: Slot, root_bank: &Bank) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use std::{
-        fs::{File},
-        io::{BufRead, BufReader},
+    use {
+        super::*,
+        lazy_static::lazy_static,
+        regex::Regex,
+        solana_runtime::snapshot_utils::bank_fields_from_snapshot_archives,
+        std::{
+            fs::File,
+            io::{BufRead, BufReader},
+            ops::Index,
+            path::Path,
+        },
+        substring::Substring,
     };
-    use lazy_static::lazy_static;
-    use regex::Regex;
-    use substring::Substring;
-    use solana_sdk::{genesis_config::create_genesis_config, sysvar::epoch_schedule::EpochSchedule};
-    use solana_runtime::{
-        accounts:: Accounts,
-        accounts_db::{AccountShrinkThreshold, ACCOUNTS_DB_CONFIG_FOR_TESTING},
-        accounts_index::AccountSecondaryIndexes,
-        ancestors::Ancestors,
-        bank::Bank,
-        epoch_stakes::EpochStakes,
-        stakes::StakesEnum,
-    };
-    use std::ops::Index;
+
+    #[macro_export]
+    macro_rules! socketaddr {
+        ($ip:expr, $port:expr) => {
+            std::net::SocketAddr::from((std::net::Ipv4Addr::from($ip), $port))
+        };
+        ($str:expr) => {{
+            $str.parse::<std::net::SocketAddr>().unwrap()
+        }};
+    }
 
     #[test]
     fn bw() {
@@ -670,21 +687,46 @@ mod tests {
             .collect();
         nodes.shuffle(&mut rng);
         let this_node = nodes[0].clone();
+
         let my_pubkey = this_node.id;
-        let staked_nodes: HashMap<Pubkey, u64> = nodes
-            .iter()
-            .filter_map(|node| {
-                    Some((node.id, rng.gen_range(0, 20)))
-            })
-            .collect();
+        let this_node =
+            ContactInfo::new_with_pubkey_socketaddr(&my_pubkey, &socketaddr!("127.0.0.1:1234"));
         let cluster_info = ClusterInfo::new(
             this_node,
             Arc::new(Keypair::new()),
             SocketAddrSpace::Unspecified,
         );
 
-        let epoch = 0;
-        let leader_schedule = solana_ledger::leader_schedule_utils::leader_schedule2(epoch, Some(staked_nodes.clone()));
+        let snapshot_path = Path::new(".");
+        let (epoch, staked_nodes) = match bank_fields_from_snapshot_archives(snapshot_path) {
+            Ok(bank_fields) => (
+                bank_fields.epoch,
+                bank_fields
+                    .epoch_stakes
+                    .index(&bank_fields.epoch)
+                    .stakes()
+                    .staked_nodes(),
+            ),
+            _ => {
+                warn!(
+                    "Failed to read snapshot from file! Creating stake from random generated nodes"
+                );
+                let staked_nodes: HashMap<Pubkey, u64> = nodes
+                    .iter()
+                    .filter_map(|node| Some((node.id, rng.gen_range(0, 20))))
+                    .collect();
+                (0, Arc::new(staked_nodes))
+            }
+        };
+
+        let staked_nodes = std::sync::Arc::<
+            std::collections::HashMap<solana_sdk::pubkey::Pubkey, u64>,
+        >::try_unwrap(staked_nodes)
+        .unwrap();
+        let leader_schedule = solana_ledger::leader_schedule_utils::leader_schedule2(
+            epoch,
+            Some(staked_nodes.clone()),
+        );
         let cluster_nodes = new_cluster_nodes::<RetransmitStage>(&cluster_info, &staked_nodes);
         let fanout = DATA_PLANE_FANOUT;
 
@@ -693,58 +735,67 @@ mod tests {
         debug!("Repair log file = {}", filename);
         let file = File::open(filename).expect("Something went wrong reading the file");
         let reader = BufReader::new(file);
-        static SHRED_REPAIR_STRING:&'static str = "all shred repairs requested:";
+        static SHRED_REPAIR_STRING: &'static str = "all shred repairs requested:";
         for line in reader.lines() {
             let line = line.unwrap();
             if line.find(SHRED_REPAIR_STRING).is_some() {
                 trace!("FOUND: {}", line);
                 lazy_static! {
-                    static ref PARSING_SLOTS_SHREDS_REGEX : Regex = Regex::new(
-                            r"\{[0-9a-zA-Z,:{} ]*}}"
-                        ).unwrap();
-                    static ref PARSING_SLOT_SHRED_REGEX : Regex = Regex::new(
-                            r"[0-9][0-9a-zA-Z,:{ ]*}"
-                        ).unwrap();
-                    static ref PARSING_SLOT_REGEX : Regex = Regex::new(
-                            r"[0-9]*:"
-                        ).unwrap();
-                    static ref PARSING_SHRED_REGEX : Regex = Regex::new(
-                        r"[0-9]*[,}]"
-                    ).unwrap();
+                    static ref PARSING_SLOTS_SHREDS_REGEX: Regex =
+                        Regex::new(r"\{[0-9a-zA-Z,:{} ]*}}").unwrap();
+                    static ref PARSING_SLOT_SHRED_REGEX: Regex =
+                        Regex::new(r"[0-9][0-9a-zA-Z,:{ ]*}").unwrap();
+                    static ref PARSING_SLOT_REGEX: Regex = Regex::new(r"[0-9]*:").unwrap();
+                    static ref PARSING_SHRED_REGEX: Regex = Regex::new(r"[0-9]*[,}]").unwrap();
                 }
-                
-                PARSING_SLOTS_SHREDS_REGEX.find_iter(&line).for_each(|slots_shreds| {
-                    let slots_shreds = slots_shreds.as_str();
-                    trace!("SLOTS SHREDS: {}", slots_shreds);
 
-                    PARSING_SLOT_SHRED_REGEX.find_iter(&slots_shreds).for_each(|slot_shred| {
-                        let slot_shred = slot_shred.as_str();
-                        trace!("SLOT SHRED: {}", slot_shred);
+                PARSING_SLOTS_SHREDS_REGEX
+                    .find_iter(&line)
+                    .for_each(|slots_shreds| {
+                        let slots_shreds = slots_shreds.as_str();
+                        trace!("SLOTS SHREDS: {}", slots_shreds);
 
-                        let slot: Vec<_> = PARSING_SLOT_REGEX.find_iter(&slot_shred).map(|mat| {
-                            let slot = mat.as_str();
-                            let slot: u64 = slot.substring(0, slot.len()-1).parse().unwrap();
-                            trace!("SLOT: {}", slot);
-                            slot
-                        }).collect();
+                        PARSING_SLOT_SHRED_REGEX
+                            .find_iter(&slots_shreds)
+                            .for_each(|slot_shred| {
+                                let slot_shred = slot_shred.as_str();
+                                trace!("SLOT SHRED: {}", slot_shred);
 
-                        let shred_vec: Vec<_> = PARSING_SHRED_REGEX.find_iter(&slot_shred).map(|mat| {
-                            let shred = mat.as_str();
-                            let shred: u32 = shred.substring(0, shred.len()-1).parse().unwrap();
-                            trace!("SHRED: {}", shred);
-                            shred
-                        }).collect();
+                                let slot: Vec<_> = PARSING_SLOT_REGEX
+                                    .find_iter(&slot_shred)
+                                    .map(|mat| {
+                                        let slot = mat.as_str();
+                                        let slot: u64 =
+                                            slot.substring(0, slot.len() - 1).parse().unwrap();
+                                        trace!("SLOT: {}", slot);
+                                        slot
+                                    })
+                                    .collect();
 
-                        slot_to_repair_shred_map.insert(slot[0], shred_vec);
+                                let shred_vec: Vec<_> = PARSING_SHRED_REGEX
+                                    .find_iter(&slot_shred)
+                                    .map(|mat| {
+                                        let shred = mat.as_str();
+                                        let shred: u32 =
+                                            shred.substring(0, shred.len() - 1).parse().unwrap();
+                                        trace!("SHRED: {}", shred);
+                                        shred
+                                    })
+                                    .collect();
+
+                                slot_to_repair_shred_map.insert(slot[0], shred_vec);
+                            });
                     });
-                });
             }
         }
 
         let mut node_to_shred_count: HashMap<Pubkey, u64> = HashMap::new();
         for (slot, shreds) in slot_to_repair_shred_map {
             let leader_pubkey = leader_schedule.as_ref().unwrap().index(slot);
-            debug!("Leader is {} for slot {}: shreds {:?}", *leader_pubkey, slot, shreds);
+            debug!(
+                "Leader is {} for slot {}: shreds {:?}",
+                *leader_pubkey, slot, shreds
+            );
             for shred_idx in shreds {
                 let shred = Shred::new_from_data(
                     slot,
@@ -762,14 +813,19 @@ mod tests {
                 while q.size() > 0 {
                     if let Ok(pubkey) = q.remove() {
                         debug!("I am {}. Looking at shred {}", pubkey, shred_idx);
-                        let ((is_root, parent), anchor) = cluster_nodes.get_retransmit_ancestors(*leader_pubkey, &shred, fanout, pubkey);
+                        let ((is_root, parent), anchor) = cluster_nodes.get_retransmit_ancestors(
+                            *leader_pubkey,
+                            &shred,
+                            fanout,
+                            pubkey,
+                        );
                         let values = node_to_shred_count.entry(parent).or_insert(0);
                         *values += 1;
                         if !is_root {
                             q.add(parent).expect("Failed to add pubkey to queue");
                         }
 
-                        if let Some (anchor) =  anchor {
+                        if let Some(anchor) = anchor {
                             let values = node_to_shred_count.entry(anchor).or_insert(0);
                             *values += 1;
                             q.add(anchor).expect("Failed to add pubkey to queue");
@@ -780,7 +836,10 @@ mod tests {
         }
 
         for (node, shred) in node_to_shred_count {
-            println!("Node {} was responsible for transmitting {} shreds", node, shred);
+            println!(
+                "Node {} was responsible for transmitting {} shreds",
+                node, shred
+            );
         }
     }
 

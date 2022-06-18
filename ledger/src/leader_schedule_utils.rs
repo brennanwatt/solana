@@ -28,7 +28,10 @@ pub fn leader_schedule(epoch: Epoch, bank: &Bank) -> Option<LeaderSchedule> {
 }
 
 /// Return the leader schedule for the given epoch.
-pub fn leader_schedule2(epoch: Epoch, staked_nodes: Option<HashMap<Pubkey, u64>>) -> Option<LeaderSchedule> {
+pub fn leader_schedule2(
+    epoch: Epoch,
+    staked_nodes: Option<HashMap<Pubkey, u64>>,
+) -> Option<LeaderSchedule> {
     staked_nodes.map(|stakes| {
         let mut seed = [0u8; 32];
         seed[0..8].copy_from_slice(&epoch.to_le_bytes());

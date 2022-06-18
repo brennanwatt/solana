@@ -457,7 +457,8 @@ impl Shred {
             &u8::from(self.shred_type()).to_le_bytes(),
             &self.index().to_le_bytes(),
             &leader_pubkey.to_bytes(),
-        ]).to_bytes()
+        ])
+        .to_bytes()
     }
 
     #[inline]
