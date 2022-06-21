@@ -2,18 +2,17 @@ use {
     crate::{broadcast_stage::BroadcastStage, retransmit_stage::RetransmitStage},
     itertools::Itertools,
     lru::LruCache,
-    queues::*,
     rand::{seq::SliceRandom, Rng, SeedableRng},
     rand_chacha::ChaChaRng,
     solana_gossip::{
-        cluster_info::{compute_retransmit_peers, ClusterInfo, DATA_PLANE_FANOUT},
+        cluster_info::{compute_retransmit_peers, ClusterInfo},
         contact_info::ContactInfo,
         crds::GossipRoute,
         crds_gossip_pull::CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS,
         crds_value::{CrdsData, CrdsValue},
         weighted_shuffle::WeightedShuffle,
     },
-    solana_ledger::shred::{Shred, ShredFlags},
+    solana_ledger::shred::Shred,
     solana_runtime::bank::Bank,
     solana_sdk::{
         clock::{Epoch, Slot},
@@ -656,7 +655,10 @@ mod tests {
     use {
         super::*,
         lazy_static::lazy_static,
+        queues::*,
         regex::Regex,
+        solana_gossip::cluster_info::DATA_PLANE_FANOUT,
+        solana_ledger::{leader_schedule::LeaderSchedule, shred::ShredFlags},
         solana_runtime::snapshot_utils::bank_fields_from_snapshot_archives,
         std::{
             fs::File,
@@ -677,61 +679,7 @@ mod tests {
         }};
     }
 
-    #[test]
-    fn bw() {
-        solana_logger::setup();
-
-        let mut rng = rand::thread_rng();
-        let mut nodes: Vec<_> = repeat_with(|| ContactInfo::new_rand(&mut rng, None))
-            .take(1_000)
-            .collect();
-        nodes.shuffle(&mut rng);
-        let this_node = nodes[0].clone();
-
-        let my_pubkey = this_node.id;
-        let this_node =
-            ContactInfo::new_with_pubkey_socketaddr(&my_pubkey, &socketaddr!("127.0.0.1:1234"));
-        let cluster_info = ClusterInfo::new(
-            this_node,
-            Arc::new(Keypair::new()),
-            SocketAddrSpace::Unspecified,
-        );
-
-        let snapshot_path = Path::new(".");
-        let (epoch, staked_nodes) = match bank_fields_from_snapshot_archives(snapshot_path) {
-            Ok(bank_fields) => (
-                bank_fields.epoch,
-                bank_fields
-                    .epoch_stakes
-                    .index(&bank_fields.epoch)
-                    .stakes()
-                    .staked_nodes(),
-            ),
-            _ => {
-                warn!(
-                    "Failed to read snapshot from file! Creating stake from random generated nodes"
-                );
-                let staked_nodes: HashMap<Pubkey, u64> = nodes
-                    .iter()
-                    .filter_map(|node| Some((node.id, rng.gen_range(0, 20))))
-                    .collect();
-                (0, Arc::new(staked_nodes))
-            }
-        };
-
-        let staked_nodes = std::sync::Arc::<
-            std::collections::HashMap<solana_sdk::pubkey::Pubkey, u64>,
-        >::try_unwrap(staked_nodes)
-        .unwrap();
-        let leader_schedule = solana_ledger::leader_schedule_utils::leader_schedule2(
-            epoch,
-            Some(staked_nodes.clone()),
-        );
-        let cluster_nodes = new_cluster_nodes::<RetransmitStage>(&cluster_info, &staked_nodes);
-        let fanout = DATA_PLANE_FANOUT;
-
-        let mut slot_to_repair_shred_map: HashMap<u64, Vec<u32>> = HashMap::new();
-        let filename = "example_log";
+    fn load_slot_shred_map_from_file(filename: &str, slot_to_repair_shred_map: &mut HashMap<u64, Vec<u32>>) {
         debug!("Repair log file = {}", filename);
         let file = File::open(filename).expect("Something went wrong reading the file");
         let reader = BufReader::new(file);
@@ -788,7 +736,71 @@ mod tests {
                     });
             }
         }
+    }
 
+    fn setup_cluster_node_data() -> (ClusterNodes<RetransmitStage>, Pubkey, Option<LeaderSchedule>) {
+        let mut rng = rand::thread_rng();
+        let mut nodes: Vec<_> = repeat_with(|| ContactInfo::new_rand(&mut rng, None))
+            .take(1_000)
+            .collect();
+        nodes.shuffle(&mut rng);
+        let this_node = nodes[0].clone();
+
+        let my_pubkey = this_node.id;
+        let this_node =
+            ContactInfo::new_with_pubkey_socketaddr(&my_pubkey, &socketaddr!("127.0.0.1:1234"));
+        let cluster_info = ClusterInfo::new(
+            this_node,
+            Arc::new(Keypair::new()),
+            SocketAddrSpace::Unspecified,
+        );
+
+        let snapshot_path = Path::new(".");
+        let (epoch, staked_nodes) = match bank_fields_from_snapshot_archives(snapshot_path) {
+            Ok(bank_fields) => (
+                bank_fields.epoch,
+                bank_fields
+                    .epoch_stakes
+                    .index(&bank_fields.epoch)
+                    .stakes()
+                    .staked_nodes(),
+            ),
+            _ => {
+                warn!(
+                    "Failed to read snapshot from file! Creating stake from random generated nodes"
+                );
+                let staked_nodes: HashMap<Pubkey, u64> = nodes
+                    .iter()
+                    .filter_map(|node| Some((node.id, rng.gen_range(0, 20))))
+                    .collect();
+                (0, Arc::new(staked_nodes))
+            }
+        };
+
+        let staked_nodes = std::sync::Arc::<
+            std::collections::HashMap<solana_sdk::pubkey::Pubkey, u64>,
+        >::try_unwrap(staked_nodes)
+        .unwrap();
+        for (pubkey, stake) in staked_nodes.clone() {
+            debug!("{} stake is {}", pubkey, stake);
+        }
+        let leader_schedule = solana_ledger::leader_schedule_utils::leader_schedule2(
+            epoch,
+            Some(staked_nodes.clone()),
+        );
+        trace!("Leader Schedule: {:?}", leader_schedule.as_ref().unwrap().get_slot_leaders());
+        let cluster_nodes = new_cluster_nodes::<RetransmitStage>(&cluster_info, &staked_nodes);
+
+        (cluster_nodes, my_pubkey, leader_schedule)
+    }
+
+    #[test]
+    fn trace_turbine_paths() {
+        solana_logger::setup();
+        let (cluster_nodes, my_pubkey, leader_schedule) = setup_cluster_node_data();
+        let mut slot_to_repair_shred_map: HashMap<u64, Vec<u32>> = HashMap::new();
+        let filename = "example_log";
+        load_slot_shred_map_from_file(filename, &mut slot_to_repair_shred_map);
         let mut node_to_shred_count: HashMap<Pubkey, u64> = HashMap::new();
         for (slot, shreds) in slot_to_repair_shred_map {
             let leader_pubkey = leader_schedule.as_ref().unwrap().index(slot);
@@ -816,7 +828,7 @@ mod tests {
                         let ((is_root, parent), anchor) = cluster_nodes.get_retransmit_ancestors(
                             *leader_pubkey,
                             &shred,
-                            fanout,
+                            DATA_PLANE_FANOUT,
                             pubkey,
                         );
                         let values = node_to_shred_count.entry(parent).or_insert(0);
