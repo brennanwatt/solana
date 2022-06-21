@@ -209,49 +209,6 @@ impl ClusterNodes<RetransmitStage> {
             .collect()
     }
 
-    pub fn get_retransmit_addrs2(
-        &self,
-        leader_pubkey: Pubkey,
-        shred: &Shred,
-        root_bank: &Bank,
-        fanout: usize,
-        my_pubkey: Pubkey,
-    ) -> Vec<Pubkey> {
-        let (neighbors, children) =
-            self.get_retransmit_peers2(leader_pubkey, shred, root_bank, fanout, my_pubkey);
-        debug!(
-            "{} neighbors and {} children",
-            neighbors.len(),
-            children.len()
-        );
-
-        if neighbors.is_empty() {
-            debug!("Neighbors is empty");
-            return children
-                .iter()
-                .filter_map(|node| Some(node.pubkey()))
-                .collect();
-        }
-        // If the node is on the critical path (i.e. the first node in each
-        // neighborhood), it should send the packet to tvu socket of its
-        // children and also tvu_forward socket of its neighbors. Otherwise it
-        // should only forward to tvu_forwards socket of its children.
-        if neighbors[0].pubkey() != my_pubkey {
-            debug!("Just returning children");
-            return children
-                .iter()
-                .filter_map(|node| Some(node.pubkey()))
-                .collect();
-        }
-        debug!("This node is first neighbor (Anchor node)");
-        // First neighbor is this node itself, so skip it.
-        neighbors[1..]
-            .iter()
-            .filter_map(|node| Some(node.pubkey()))
-            .chain(children.iter().filter_map(|node| Some(node.pubkey())))
-            .collect()
-    }
-
     pub fn get_retransmit_peers(
         &self,
         slot_leader: Pubkey,
@@ -290,45 +247,6 @@ impl ClusterNodes<RetransmitStage> {
         (neighbors, children)
     }
 
-    pub fn get_retransmit_peers2(
-        &self,
-        slot_leader: Pubkey,
-        shred: &Shred,
-        root_bank: &Bank,
-        fanout: usize,
-        my_pubkey: Pubkey,
-    ) -> (
-        Vec<&Node>, // neighbors
-        Vec<&Node>, // children
-    ) {
-        let shred_seed = shred.seed(slot_leader, root_bank);
-        let mut weighted_shuffle = self.weighted_shuffle.clone();
-        // Exclude slot leader from list of nodes.
-        if slot_leader == my_pubkey {
-            error!("retransmit from slot leader: {}", slot_leader);
-        } else if let Some(index) = self.index.get(&slot_leader) {
-            weighted_shuffle.remove_index(*index);
-        };
-        let mut rng = ChaChaRng::from_seed(shred_seed);
-        let nodes: Vec<_> = weighted_shuffle
-            .shuffle(&mut rng)
-            .map(|index| &self.nodes[index])
-            .collect();
-        let self_index = nodes
-            .iter()
-            .position(|node| node.pubkey() == my_pubkey)
-            .unwrap();
-        if drop_redundant_turbine_path(shred.slot(), root_bank) {
-            let peers = get_retransmit_peers(fanout, self_index, &nodes);
-            return (Vec::default(), peers.collect());
-        }
-        let (neighbors, children) = compute_retransmit_peers(fanout, self_index, &nodes);
-        // Assert that the node itself is included in the set of neighbors, at
-        // the right offset.
-        debug_assert_eq!(neighbors[self_index % fanout].pubkey(), my_pubkey);
-        (neighbors, children)
-    }
-
     pub fn get_retransmit_ancestors(
         &self,
         slot_leader: Pubkey,
@@ -353,10 +271,10 @@ impl ClusterNodes<RetransmitStage> {
             .iter()
             .position(|node| node.pubkey() == my_pubkey)
             .unwrap();
-        return (
+        (
             get_parent(fanout, self_index, &nodes),
             get_anchor(fanout, self_index, &nodes),
-        );
+        )
     }
 }
 
@@ -453,7 +371,7 @@ fn get_retransmit_peers<T: Copy>(
 fn get_anchor(
     fanout: usize,
     index: usize, // Local node's index withing the nodes slice.
-    nodes: &Vec<&Node>,
+    nodes: &[&Node],
 ) -> Option<Pubkey> {
     // Node's index within its neighborhood.
     let offset = index.saturating_sub(1) % fanout;
@@ -475,7 +393,7 @@ fn get_anchor(
 fn get_parent(
     fanout: usize,
     index: usize, // Local node's index within the nodes vector
-    nodes: &Vec<&Node>,
+    nodes: &[&Node],
 ) -> (bool, Pubkey) {
     // Node's index within its neighborhood.
     let mut temp = index - 1;
@@ -483,7 +401,7 @@ fn get_parent(
     loop {
         temp /= fanout;
         layer += 1;
-        if temp <= 0 {
+        if temp == 0 {
             break;
         }
     }
@@ -679,7 +597,10 @@ mod tests {
         }};
     }
 
-    fn load_slot_shred_map_from_file(filename: &str, slot_to_repair_shred_map: &mut HashMap<u64, Vec<u32>>) {
+    fn load_slot_shred_map_from_file(
+        filename: &str,
+        slot_to_repair_shred_map: &mut HashMap<u64, Vec<u32>>,
+    ) {
         debug!("Repair log file = {}", filename);
         let file = File::open(filename).expect("Something went wrong reading the file");
         let reader = BufReader::new(file);
@@ -738,7 +659,11 @@ mod tests {
         }
     }
 
-    fn setup_cluster_node_data() -> (ClusterNodes<RetransmitStage>, Pubkey, Option<LeaderSchedule>) {
+    fn setup_cluster_node_data() -> (
+        ClusterNodes<RetransmitStage>,
+        Pubkey,
+        Option<LeaderSchedule>,
+    ) {
         let mut rng = rand::thread_rng();
         let mut nodes: Vec<_> = repeat_with(|| ContactInfo::new_rand(&mut rng, None))
             .take(1_000)
@@ -788,7 +713,10 @@ mod tests {
             epoch,
             Some(staked_nodes.clone()),
         );
-        trace!("Leader Schedule: {:?}", leader_schedule.as_ref().unwrap().get_slot_leaders());
+        trace!(
+            "Leader Schedule: {:?}",
+            leader_schedule.as_ref().unwrap().get_slot_leaders()
+        );
         let cluster_nodes = new_cluster_nodes::<RetransmitStage>(&cluster_info, &staked_nodes);
 
         (cluster_nodes, my_pubkey, leader_schedule)
