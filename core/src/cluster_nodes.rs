@@ -261,12 +261,12 @@ impl ClusterNodes<RetransmitStage> {
         slot_leader: Pubkey,
         shred: &Shred,
         fanout: usize,
-        my_pubkey: Pubkey,
-    ) -> ((bool, Option<Pubkey>), Option<Pubkey>) {
+        rcvr_pubkey: Pubkey,
+    ) -> ((bool, Option<Pubkey>, usize), Option<Pubkey>) {
         let shred_seed = shred.seed2(slot_leader);
         let mut weighted_shuffle = self.weighted_shuffle.clone();
         // Exclude slot leader from list of nodes.
-        if slot_leader == my_pubkey {
+        if slot_leader == rcvr_pubkey {
             error!("retransmit from slot leader: {}", slot_leader);
         } else if let Some(index) = self.index.get(&slot_leader) {
             debug!("Removed slot leader at index {}", *index);
@@ -279,10 +279,10 @@ impl ClusterNodes<RetransmitStage> {
             .collect();
         let self_index = nodes
             .iter()
-            .position(|node| node.pubkey() == my_pubkey)
+            .position(|node| node.pubkey() == rcvr_pubkey)
             .unwrap();
 
-        info!(
+        debug!(
             "turbine shred verifier,
             leader: {},
             slot: {}, shred_index: {},
@@ -420,11 +420,11 @@ fn get_parent(
     fanout: usize,
     index: usize, // Local node's index within the nodes vector
     nodes: &[&Node],
-) -> (bool, Option<Pubkey>) {
+) -> (bool, Option<Pubkey>, usize) {
     // Node's index within its neighborhood.
     if index == 0 {
         debug!("I am root");
-        return (true, None);
+        return (true, None, 0);
     }
 
     let mut temp = index - 1;
@@ -444,7 +444,7 @@ fn get_parent(
     );
     if layer == 1 {
         debug!("Parent is root {}", nodes.get(0).unwrap().pubkey());
-        (true, Some(nodes.get(0).unwrap().pubkey()))
+        (true, Some(nodes.get(0).unwrap().pubkey()), layer)
     } else {
         let mut parent = index % fanout;
         if parent == 0 {
@@ -456,7 +456,7 @@ fn get_parent(
             (parent - 1) / fanout + 1,
             parent - 1
         );
-        (false, Some(nodes.get(parent).unwrap().pubkey()))
+        (false, Some(nodes.get(parent).unwrap().pubkey()), layer)
     }
 }
 
@@ -632,10 +632,8 @@ mod tests {
         }};
     }
 
-    fn load_slot_shred_map_from_file(
-        filename: &str,
-        slot_to_repair_shred_map: &mut HashMap<u64, Vec<u32>>,
-    ) {
+    fn load_slot_shred_map_from_file(slot_to_repair_shred_map: &mut HashMap<u64, Vec<u32>>) {
+        let filename = "tv3";
         debug!("Repair log file = {}", filename);
         let file = File::open(filename).expect("Something went wrong reading the file");
         let reader = BufReader::new(file);
@@ -720,6 +718,7 @@ mod tests {
         epoch: Epoch,
     ) -> ClusterNodes<RetransmitStage> {
         let staked_nodes = bank_info.epoch_stakes.index(&epoch).stakes().staked_nodes();
+        debug!("Staked nodes for epoch {}: {:?}", epoch, staked_nodes);
         new_cluster_nodes::<RetransmitStage>(&cluster_info, staked_nodes.as_ref())
     }
 
@@ -735,12 +734,16 @@ mod tests {
     #[test]
     fn trace_turbine_paths() {
         solana_logger::setup();
+        const NUM_LAYERS: usize = 3;
         let bank_info = get_bank_info();
         let (my_pubkey, cluster_info, epoch_schedule) = get_cluster_info(&bank_info);
         let mut slot_to_repair_shred_map: HashMap<u64, Vec<u32>> = HashMap::new();
-        let filename = "tv2";
-        load_slot_shred_map_from_file(filename, &mut slot_to_repair_shred_map);
-        let mut node_to_shred_count: HashMap<Pubkey, u64> = HashMap::new();
+        load_slot_shred_map_from_file(&mut slot_to_repair_shred_map);
+        let mut node_to_shred_count: HashMap<Pubkey, u64> = HashMap::new(); // Number of shreds each node would have been somewhere in the path for for our node where we had to repair that shred
+        let mut node_to_shred_count_1hop: HashMap<Pubkey, u64> = HashMap::new(); // Number of shreds each node would have been directly responsible for sending to our node where we had to repair that shred
+        let mut node_to_shred_count_total: HashMap<Pubkey, u64> = HashMap::new(); // Number of shreds each node would have been directly responsible for sending to our node
+        let mut layer_counts = vec![0; NUM_LAYERS];
+        let mut layer_counts_total = vec![0; NUM_LAYERS];
         for (slot, shreds) in slot_to_repair_shred_map {
             let stake_epoch = epoch_schedule.get_leader_schedule_epoch(slot);
             let cluster_nodes = get_cluster_nodes(&cluster_info, &bank_info, stake_epoch);
@@ -751,7 +754,9 @@ mod tests {
                 "Leader is {} for slot {} (epoch {}, offset {}): shreds {:?}",
                 *leader_pubkey, slot, epoch, slot_offset, shreds
             );
+            let mut highest_shred = 0;
             for shred_idx in shreds {
+                highest_shred = highest_shred.max(shred_idx);
                 let shred = Shred::new_from_data(
                     slot,
                     shred_idx,
@@ -767,13 +772,32 @@ mod tests {
                 q.add(my_pubkey).expect("Failed to add pubkey to queue");
                 while q.size() > 0 {
                     if let Ok(pubkey) = q.remove() {
-                        info!("I am {}. Looking at shred {}", pubkey, shred_idx);
-                        let ((is_root, parent), anchor) = cluster_nodes.get_retransmit_ancestors(
-                            *leader_pubkey,
-                            &shred,
-                            DATA_PLANE_FANOUT,
-                            pubkey,
-                        );
+                        debug!("I am {}. Looking at shred {}", pubkey, shred_idx);
+                        let ((is_root, parent, layer), anchor) = cluster_nodes
+                            .get_retransmit_ancestors(
+                                *leader_pubkey,
+                                &shred,
+                                DATA_PLANE_FANOUT,
+                                pubkey,
+                            );
+
+                        if pubkey == my_pubkey {
+                            layer_counts[layer] += 1;
+                            if let Some(parent) = parent {
+                                let values = node_to_shred_count_1hop.entry(parent).or_insert(0);
+                                *values += 1;
+                            } else {
+                                let values =
+                                    node_to_shred_count_1hop.entry(*leader_pubkey).or_insert(0);
+                                *values += 1;
+                            }
+
+                            if let Some(anchor) = anchor {
+                                let values = node_to_shred_count_1hop.entry(anchor).or_insert(0);
+                                *values += 1;
+                            }
+                        }
+
                         if let Some(parent) = parent {
                             let values = node_to_shred_count.entry(parent).or_insert(0);
                             *values += 1;
@@ -793,14 +817,69 @@ mod tests {
                     }
                 }
             }
+
+            info!(
+                "slot {} highest shred is {} (best guess)",
+                slot, highest_shred
+            );
+            for i in 0..=highest_shred {
+                let shred = Shred::new_from_data(
+                    slot,
+                    i as u32,
+                    0,
+                    &[],
+                    ShredFlags::LAST_SHRED_IN_SLOT,
+                    0,
+                    0,
+                    3,
+                );
+
+                let ((_, parent, layer), anchor) = cluster_nodes.get_retransmit_ancestors(
+                    *leader_pubkey,
+                    &shred,
+                    DATA_PLANE_FANOUT,
+                    my_pubkey,
+                );
+
+                layer_counts_total[layer] += 1;
+                if let Some(parent) = parent {
+                    let values = node_to_shred_count_total.entry(parent).or_insert(0);
+                    *values += 1;
+                } else {
+                    let values = node_to_shred_count_total.entry(*leader_pubkey).or_insert(0);
+                    *values += 1;
+                }
+
+                if let Some(anchor) = anchor {
+                    let values = node_to_shred_count_total.entry(anchor).or_insert(0);
+                    *values += 1;
+                }
+            }
         }
 
         for (node, shred) in node_to_shred_count {
             println!(
-                "Node {} was responsible for transmitting {} shreds",
+                "Node {} was in the path for transmitting me {} shreds that needed to be repaired",
                 node, shred
             );
         }
+        for (node, shred) in node_to_shred_count_total {
+            let failed = node_to_shred_count_1hop.entry(node).or_default();
+            let percent_failed = *failed as f64 * 100 as f64 / shred as f64;
+            println!(
+                "Connected Node {} possibly failed {} out of {} ({}%) shreds",
+                node, failed, shred, percent_failed,
+            );
+        }
+        for layer in 0..NUM_LAYERS {
+            let percent_failed =
+                layer_counts[layer] as f64 * 100 as f64 / layer_counts_total[layer] as f64;
+            println!(
+                "Layer {} had to repair {} out of {} ({}%) shreds",
+                layer, layer_counts[layer], layer_counts_total[layer], percent_failed,
+            );
+        }
+        println!("*** Note above percentage may be high because total shreds for given slot is not known (guessed based on highest repaired index) ***")
     }
 
     #[test]
