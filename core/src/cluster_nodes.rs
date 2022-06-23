@@ -48,6 +48,15 @@ pub struct Node {
     stake: u64,
 }
 
+impl Node {
+    fn id(&self) -> Pubkey {
+        match &self.node {
+            NodeId::ContactInfo(contact_info) => contact_info.id,
+            NodeId::Pubkey(pk) => *pk,
+        }
+    }
+}
+
 pub struct ClusterNodes<T> {
     pubkey: Pubkey, // The local node itself.
     // All staked nodes + other known tvu-peers + the node itself;
@@ -253,13 +262,14 @@ impl ClusterNodes<RetransmitStage> {
         shred: &Shred,
         fanout: usize,
         my_pubkey: Pubkey,
-    ) -> ((bool, Pubkey), Option<Pubkey>) {
+    ) -> ((bool, Option<Pubkey>), Option<Pubkey>) {
         let shred_seed = shred.seed2(slot_leader);
         let mut weighted_shuffle = self.weighted_shuffle.clone();
         // Exclude slot leader from list of nodes.
         if slot_leader == my_pubkey {
             error!("retransmit from slot leader: {}", slot_leader);
         } else if let Some(index) = self.index.get(&slot_leader) {
+            debug!("Removed slot leader at index {}", *index);
             weighted_shuffle.remove_index(*index);
         };
         let mut rng = ChaChaRng::from_seed(shred_seed);
@@ -271,6 +281,22 @@ impl ClusterNodes<RetransmitStage> {
             .iter()
             .position(|node| node.pubkey() == my_pubkey)
             .unwrap();
+
+        info!(
+            "turbine shred verifier,
+            leader: {},
+            slot: {}, shred_index: {},
+            self neighborhood index: {}",
+            slot_leader,
+            shred.slot(),
+            shred.index(),
+            self_index,
+        );
+        trace!(
+            "all cluster pubkeys: {:?}",
+            nodes.iter().map(|n| n.id()).collect::<Vec<Pubkey>>()
+        );
+
         (
             get_parent(fanout, self_index, &nodes),
             get_anchor(fanout, self_index, &nodes),
@@ -394,8 +420,13 @@ fn get_parent(
     fanout: usize,
     index: usize, // Local node's index within the nodes vector
     nodes: &[&Node],
-) -> (bool, Pubkey) {
+) -> (bool, Option<Pubkey>) {
     // Node's index within its neighborhood.
+    if index == 0 {
+        debug!("I am root");
+        return (true, None);
+    }
+
     let mut temp = index - 1;
     let mut layer = 0;
     loop {
@@ -413,7 +444,7 @@ fn get_parent(
     );
     if layer == 1 {
         debug!("Parent is root {}", nodes.get(0).unwrap().pubkey());
-        (true, nodes.get(0).unwrap().pubkey())
+        (true, Some(nodes.get(0).unwrap().pubkey()))
     } else {
         let mut parent = index % fanout;
         if parent == 0 {
@@ -425,7 +456,7 @@ fn get_parent(
             (parent - 1) / fanout + 1,
             parent - 1
         );
-        (false, nodes.get(parent).unwrap().pubkey())
+        (false, Some(nodes.get(parent).unwrap().pubkey()))
     }
 }
 
@@ -577,12 +608,16 @@ mod tests {
         regex::Regex,
         solana_gossip::cluster_info::DATA_PLANE_FANOUT,
         solana_ledger::{leader_schedule::LeaderSchedule, shred::ShredFlags},
-        solana_runtime::snapshot_utils::bank_fields_from_snapshot_archives,
+        solana_runtime::{
+            bank::BankFieldsToDeserialize, snapshot_utils::bank_fields_from_snapshot_archives,
+        },
+        solana_sdk::epoch_schedule::EpochSchedule,
         std::{
             fs::File,
             io::{BufRead, BufReader},
             ops::Index,
             path::Path,
+            str::FromStr,
         },
         substring::Substring,
     };
@@ -659,19 +694,15 @@ mod tests {
         }
     }
 
-    fn setup_cluster_node_data() -> (
-        ClusterNodes<RetransmitStage>,
-        Pubkey,
-        Option<LeaderSchedule>,
-    ) {
-        let mut rng = rand::thread_rng();
-        let mut nodes: Vec<_> = repeat_with(|| ContactInfo::new_rand(&mut rng, None))
-            .take(1_000)
-            .collect();
-        nodes.shuffle(&mut rng);
-        let this_node = nodes[0].clone();
+    fn get_bank_info() -> BankFieldsToDeserialize {
+        let snapshot_path = Path::new("./ledger");
+        bank_fields_from_snapshot_archives(snapshot_path).expect("Failed to read snapshot")
+    }
 
-        let my_pubkey = this_node.id;
+    fn get_cluster_info(
+        bank_info: &BankFieldsToDeserialize,
+    ) -> (Pubkey, ClusterInfo, EpochSchedule) {
+        let my_pubkey = Pubkey::from_str("5D1fNXzvv5NjV1ysLjirC4WY92RNsVH18vjmcszZd8on").unwrap();
         let this_node =
             ContactInfo::new_with_pubkey_socketaddr(&my_pubkey, &socketaddr!("127.0.0.1:1234"));
         let cluster_info = ClusterInfo::new(
@@ -680,61 +711,45 @@ mod tests {
             SocketAddrSpace::Unspecified,
         );
 
-        let snapshot_path = Path::new(".");
-        let (epoch, staked_nodes) = match bank_fields_from_snapshot_archives(snapshot_path) {
-            Ok(bank_fields) => (
-                bank_fields.epoch,
-                bank_fields
-                    .epoch_stakes
-                    .index(&bank_fields.epoch)
-                    .stakes()
-                    .staked_nodes(),
-            ),
-            _ => {
-                warn!(
-                    "Failed to read snapshot from file! Creating stake from random generated nodes"
-                );
-                let staked_nodes: HashMap<Pubkey, u64> = nodes
-                    .iter()
-                    .filter_map(|node| Some((node.id, rng.gen_range(0, 20))))
-                    .collect();
-                (0, Arc::new(staked_nodes))
-            }
-        };
+        (my_pubkey, cluster_info, bank_info.epoch_schedule)
+    }
 
-        let staked_nodes = std::sync::Arc::<
-            std::collections::HashMap<solana_sdk::pubkey::Pubkey, u64>,
-        >::try_unwrap(staked_nodes)
-        .unwrap();
-        for (pubkey, stake) in staked_nodes.clone() {
-            debug!("{} stake is {}", pubkey, stake);
-        }
-        let leader_schedule = solana_ledger::leader_schedule_utils::leader_schedule2(
+    fn get_cluster_nodes(
+        cluster_info: &ClusterInfo,
+        bank_info: &BankFieldsToDeserialize,
+        epoch: Epoch,
+    ) -> ClusterNodes<RetransmitStage> {
+        let staked_nodes = bank_info.epoch_stakes.index(&epoch).stakes().staked_nodes();
+        new_cluster_nodes::<RetransmitStage>(&cluster_info, staked_nodes.as_ref())
+    }
+
+    fn get_leader_schedule(bank_info: &BankFieldsToDeserialize, epoch: Epoch) -> LeaderSchedule {
+        let leader_stake_nodes = bank_info.epoch_stakes.index(&epoch).stakes().staked_nodes();
+        solana_ledger::leader_schedule_utils::leader_schedule2(
             epoch,
-            Some(staked_nodes.clone()),
-        );
-        trace!(
-            "Leader Schedule: {:?}",
-            leader_schedule.as_ref().unwrap().get_slot_leaders()
-        );
-        let cluster_nodes = new_cluster_nodes::<RetransmitStage>(&cluster_info, &staked_nodes);
-
-        (cluster_nodes, my_pubkey, leader_schedule)
+            Some(leader_stake_nodes.as_ref().clone()),
+        )
+        .unwrap()
     }
 
     #[test]
     fn trace_turbine_paths() {
         solana_logger::setup();
-        let (cluster_nodes, my_pubkey, leader_schedule) = setup_cluster_node_data();
+        let bank_info = get_bank_info();
+        let (my_pubkey, cluster_info, epoch_schedule) = get_cluster_info(&bank_info);
         let mut slot_to_repair_shred_map: HashMap<u64, Vec<u32>> = HashMap::new();
-        let filename = "example_log";
+        let filename = "tv2";
         load_slot_shred_map_from_file(filename, &mut slot_to_repair_shred_map);
         let mut node_to_shred_count: HashMap<Pubkey, u64> = HashMap::new();
         for (slot, shreds) in slot_to_repair_shred_map {
-            let leader_pubkey = leader_schedule.as_ref().unwrap().index(slot);
-            debug!(
-                "Leader is {} for slot {}: shreds {:?}",
-                *leader_pubkey, slot, shreds
+            let stake_epoch = epoch_schedule.get_leader_schedule_epoch(slot);
+            let cluster_nodes = get_cluster_nodes(&cluster_info, &bank_info, stake_epoch);
+            let (epoch, slot_offset) = epoch_schedule.get_epoch_and_slot_index(slot);
+            let leader_schedule = get_leader_schedule(&bank_info, epoch);
+            let leader_pubkey = leader_schedule.index(slot_offset);
+            info!(
+                "Leader is {} for slot {} (epoch {}, offset {}): shreds {:?}",
+                *leader_pubkey, slot, epoch, slot_offset, shreds
             );
             for shred_idx in shreds {
                 let shred = Shred::new_from_data(
@@ -752,17 +767,22 @@ mod tests {
                 q.add(my_pubkey).expect("Failed to add pubkey to queue");
                 while q.size() > 0 {
                     if let Ok(pubkey) = q.remove() {
-                        debug!("I am {}. Looking at shred {}", pubkey, shred_idx);
+                        info!("I am {}. Looking at shred {}", pubkey, shred_idx);
                         let ((is_root, parent), anchor) = cluster_nodes.get_retransmit_ancestors(
                             *leader_pubkey,
                             &shred,
                             DATA_PLANE_FANOUT,
                             pubkey,
                         );
-                        let values = node_to_shred_count.entry(parent).or_insert(0);
-                        *values += 1;
-                        if !is_root {
-                            q.add(parent).expect("Failed to add pubkey to queue");
+                        if let Some(parent) = parent {
+                            let values = node_to_shred_count.entry(parent).or_insert(0);
+                            *values += 1;
+                            if !is_root {
+                                q.add(parent).expect("Failed to add pubkey to queue");
+                            }
+                        } else {
+                            let values = node_to_shred_count.entry(*leader_pubkey).or_insert(0);
+                            *values += 1;
                         }
 
                         if let Some(anchor) = anchor {

@@ -985,7 +985,7 @@ pub struct BankFieldsToDeserialize {
     pub(crate) fee_rate_governor: FeeRateGovernor,
     pub(crate) collected_rent: u64,
     pub(crate) rent_collector: RentCollector,
-    pub(crate) epoch_schedule: EpochSchedule,
+    pub epoch_schedule: EpochSchedule,
     pub(crate) inflation: Inflation,
     pub(crate) stakes: Stakes<Delegation>,
     pub epoch_stakes: HashMap<Epoch, EpochStakes>,
