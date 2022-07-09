@@ -58,7 +58,7 @@ use {
         collections::{HashMap, HashSet},
         path::PathBuf,
         result,
-        sync::{Arc, Mutex, RwLock},
+        sync::{atomic::{AtomicU64,Ordering}, Arc, Mutex, RwLock},
         time::{Duration, Instant},
     },
     thiserror::Error,
@@ -287,11 +287,14 @@ fn execute_batches_internal(
         Mutex::new(HashMap::new());
 
     let mut execute_batches_elapsed = Measure::start("execute_batches_elapsed");
+    let active_threads = AtomicU64::new(0);
     let results: Vec<Result<()>> = PAR_THREAD_POOL.install(|| {
         batches
             .into_par_iter()
             .enumerate()
             .map(|(index, transaction_batch_with_indexes)| {
+                let idx = PAR_THREAD_POOL.current_thread_index().unwrap();
+                active_threads.fetch_or(1<<idx, Ordering::Relaxed);
                 let transaction_count = transaction_batch_with_indexes
                     .batch
                     .sanitized_transactions()
@@ -343,6 +346,9 @@ fn execute_batches_internal(
             .collect()
     });
     execute_batches_elapsed.stop();
+
+    let threads = active_threads.load(Ordering::Relaxed);
+    warn!("{} {} threads were active in execute_batchs_internal",threads.count_ones(),threads);
 
     first_err(&results)?;
 
@@ -1145,7 +1151,7 @@ fn confirm_slot_entries(
             num_txs
         })
         .sum::<usize>();
-    trace!(
+    warn!(
         "Fetched entries for slot {}, num_entries: {}, num_shreds: {}, num_txs: {}, slot_full: {}",
         slot,
         num_entries,

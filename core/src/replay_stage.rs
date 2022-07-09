@@ -2244,84 +2244,81 @@ impl ReplayStage {
         trace!("{} active bank(s) to replay", active_bank_slots.len());
 
         // Allow for concurrent replaying of slots from different forks.
-        let replay_result_vec: Vec<ReplaySlotFromBlockstore> = PAR_THREAD_POOL.install(|| {
-            active_bank_slots
-                .into_par_iter()
-                .map(|bank_slot| {
-                    let mut replay_result = ReplaySlotFromBlockstore {
-                        slot_is_dead: false,
-                        bank_slot,
-                        replay_result: None,
-                    };
-                    let my_pubkey = &my_pubkey.clone();
-                    trace!(
-                        "Replay active bank: slot {}, thread_idx {}",
-                        bank_slot,
-                        PAR_THREAD_POOL.current_thread_index().unwrap_or_default()
+        let replay_result_vec: Vec<ReplaySlotFromBlockstore> =active_bank_slots
+            .into_iter()
+            .map(|bank_slot| {
+                let mut replay_result = ReplaySlotFromBlockstore {
+                    slot_is_dead: false,
+                    bank_slot,
+                    replay_result: None,
+                };
+                let my_pubkey = &my_pubkey.clone();
+                warn!(
+                    "Replay active bank: slot {}",
+                    bank_slot
+                );
+                let mut progress_lock = progress.write().unwrap();
+                if progress_lock
+                    .get(&bank_slot)
+                    .map(|p| p.is_dead)
+                    .unwrap_or(false)
+                {
+                    // If the fork was marked as dead, don't replay it
+                    debug!("bank_slot {:?} is marked dead", bank_slot);
+                    replay_result.slot_is_dead = true;
+                    return replay_result;
+                }
+
+                let bank = &bank_forks.read().unwrap().get(bank_slot).unwrap();
+                let parent_slot = bank.parent_slot();
+                let prev_leader_slot = progress_lock.get_bank_prev_leader_slot(bank);
+                let (num_blocks_on_fork, num_dropped_blocks_on_fork) = {
+                    let stats = progress_lock
+                        .get(&parent_slot)
+                        .expect("parent of active bank must exist in progress map");
+                    let num_blocks_on_fork = stats.num_blocks_on_fork + 1;
+                    let new_dropped_blocks = bank.slot() - parent_slot - 1;
+                    let num_dropped_blocks_on_fork =
+                        stats.num_dropped_blocks_on_fork + new_dropped_blocks;
+                    (num_blocks_on_fork, num_dropped_blocks_on_fork)
+                };
+
+                let bank_progress = progress_lock.entry(bank.slot()).or_insert_with(|| {
+                    ForkProgress::new_from_bank(
+                        bank,
+                        my_pubkey,
+                        &vote_account.clone(),
+                        prev_leader_slot,
+                        num_blocks_on_fork,
+                        num_dropped_blocks_on_fork,
+                    )
+                });
+
+                let replay_stats = bank_progress.replay_stats.clone();
+                let replay_progress = bank_progress.replay_progress.clone();
+                drop(progress_lock);
+
+                if bank.collector_id() != my_pubkey {
+                    let mut replay_blockstore_time =
+                        Measure::start("replay_blockstore_into_bank");
+                    let blockstore_result = Self::replay_blockstore_into_bank(
+                        bank,
+                        blockstore,
+                        &replay_stats,
+                        &replay_progress,
+                        transaction_status_sender,
+                        &replay_vote_sender.clone(),
+                        transaction_cost_metrics_sender,
+                        &verify_recyclers.clone(),
                     );
-                    let mut progress_lock = progress.write().unwrap();
-                    if progress_lock
-                        .get(&bank_slot)
-                        .map(|p| p.is_dead)
-                        .unwrap_or(false)
-                    {
-                        // If the fork was marked as dead, don't replay it
-                        debug!("bank_slot {:?} is marked dead", bank_slot);
-                        replay_result.slot_is_dead = true;
-                        return replay_result;
-                    }
-
-                    let bank = &bank_forks.read().unwrap().get(bank_slot).unwrap();
-                    let parent_slot = bank.parent_slot();
-                    let prev_leader_slot = progress_lock.get_bank_prev_leader_slot(bank);
-                    let (num_blocks_on_fork, num_dropped_blocks_on_fork) = {
-                        let stats = progress_lock
-                            .get(&parent_slot)
-                            .expect("parent of active bank must exist in progress map");
-                        let num_blocks_on_fork = stats.num_blocks_on_fork + 1;
-                        let new_dropped_blocks = bank.slot() - parent_slot - 1;
-                        let num_dropped_blocks_on_fork =
-                            stats.num_dropped_blocks_on_fork + new_dropped_blocks;
-                        (num_blocks_on_fork, num_dropped_blocks_on_fork)
-                    };
-
-                    let bank_progress = progress_lock.entry(bank.slot()).or_insert_with(|| {
-                        ForkProgress::new_from_bank(
-                            bank,
-                            my_pubkey,
-                            &vote_account.clone(),
-                            prev_leader_slot,
-                            num_blocks_on_fork,
-                            num_dropped_blocks_on_fork,
-                        )
-                    });
-
-                    let replay_stats = bank_progress.replay_stats.clone();
-                    let replay_progress = bank_progress.replay_progress.clone();
-                    drop(progress_lock);
-
-                    if bank.collector_id() != my_pubkey {
-                        let mut replay_blockstore_time =
-                            Measure::start("replay_blockstore_into_bank");
-                        let blockstore_result = Self::replay_blockstore_into_bank(
-                            bank,
-                            blockstore,
-                            &replay_stats,
-                            &replay_progress,
-                            transaction_status_sender,
-                            &replay_vote_sender.clone(),
-                            transaction_cost_metrics_sender,
-                            &verify_recyclers.clone(),
-                        );
-                        replay_blockstore_time.stop();
-                        replay_result.replay_result = Some(blockstore_result);
-                        longest_replay_time_us
-                            .fetch_max(replay_blockstore_time.as_us(), Ordering::Relaxed);
-                    }
-                    replay_result
-                })
-                .collect()
-        });
+                    replay_blockstore_time.stop();
+                    replay_result.replay_result = Some(blockstore_result);
+                    longest_replay_time_us
+                        .fetch_max(replay_blockstore_time.as_us(), Ordering::Relaxed);
+                }
+                replay_result
+            })
+            .collect();
         // Accumulating time across all slots could inflate this number and make it seem like an
         // overly large amount of time is being spent on blockstore compared to other activities.
         replay_timing.replay_blockstore_us += longest_replay_time_us.load(Ordering::Relaxed);
@@ -2378,7 +2375,7 @@ impl ReplayStage {
                     r_replay_stats.execute_timings
                     );
                 did_complete_bank = true;
-                info!("bank frozen: {}", bank.slot());
+                warn!("bank frozen: {}", bank.slot());
                 let _ = cluster_slots_update_sender.send(vec![bank_slot]);
                 if let Some(transaction_status_sender) = transaction_status_sender {
                     transaction_status_sender.send_transaction_status_freeze_message(bank);
@@ -2460,7 +2457,7 @@ impl ReplayStage {
                 );
                 execute_timings.accumulate(&r_replay_stats.execute_timings);
             } else {
-                trace!(
+                warn!(
                     "bank {} not completed tick_height: {}, max_tick_height: {}",
                     bank.slot(),
                     bank.tick_height(),

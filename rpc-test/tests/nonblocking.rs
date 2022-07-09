@@ -14,6 +14,7 @@ use {
 
 #[tokio::test]
 async fn test_tpu_send_transaction() {
+    solana_logger::setup();
     let (test_validator, mint_keypair) = TestValidatorGenesis::default().start_async().await;
     let rpc_client = Arc::new(test_validator.get_async_rpc_client());
     let mut tpu_client = TpuClient::new(
