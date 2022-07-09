@@ -348,7 +348,7 @@ fn execute_batches_internal(
     execute_batches_elapsed.stop();
 
     let threads = active_threads.load(Ordering::Relaxed);
-    warn!("{} {} threads were active in execute_batchs_internal",threads.count_ones(),threads);
+    warn!("slot {}: {} {} threads were active in execute_batchs_internal",bank.slot(),threads.count_ones(),threads);
 
     first_err(&results)?;
 

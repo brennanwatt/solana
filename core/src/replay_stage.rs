@@ -2241,11 +2241,12 @@ impl ReplayStage {
         let longest_replay_time_us = AtomicU64::new(0);
 
         let active_bank_slots = bank_forks.read().unwrap().active_bank_slots();
-        trace!("{} active bank(s) to replay", active_bank_slots.len());
+        warn!("{} active bank(s) to replay", active_bank_slots.len());
 
         // Allow for concurrent replaying of slots from different forks.
-        let replay_result_vec: Vec<ReplaySlotFromBlockstore> =active_bank_slots
-            .into_iter()
+        let replay_result_vec: Vec<ReplaySlotFromBlockstore> = PAR_THREAD_POOL.install(|| {
+            active_bank_slots
+            .into_par_iter()
             .map(|bank_slot| {
                 let mut replay_result = ReplaySlotFromBlockstore {
                     slot_is_dead: false,
@@ -2318,7 +2319,8 @@ impl ReplayStage {
                 }
                 replay_result
             })
-            .collect();
+            .collect()
+        });
         // Accumulating time across all slots could inflate this number and make it seem like an
         // overly large amount of time is being spent on blockstore compared to other activities.
         replay_timing.replay_blockstore_us += longest_replay_time_us.load(Ordering::Relaxed);
