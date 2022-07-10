@@ -983,6 +983,10 @@ fn confirm_full_slot(
 pub struct ConfirmationTiming {
     pub started: Instant,
     pub replay_elapsed: u64,
+    pub replay_bank: u64,
+    pub replay_banks: u64,
+    pub replay_process: u64,
+    pub replay_process_all: u64,
     pub execute_batches_us: u64,
     pub poh_verify_elapsed: u64,
     pub transaction_verify_elapsed: u64,
@@ -1050,6 +1054,10 @@ impl Default for ConfirmationTiming {
         Self {
             started: Instant::now(),
             replay_elapsed: 0,
+            replay_bank: 0,
+            replay_banks: 0,
+            replay_process: 0,
+            replay_process_all: 0,
             execute_batches_us: 0,
             poh_verify_elapsed: 0,
             transaction_verify_elapsed: 0,

@@ -2228,6 +2228,7 @@ impl ReplayStage {
             active_bank_slots
                 .into_par_iter()
                 .map(|bank_slot| {
+                    let mut replay_bank_time = Measure::start("replay_concurrent_bank");
                     let bank_slot = *bank_slot;
                     let mut replay_result = ReplaySlotFromBlockstore {
                         slot_is_dead: false,
@@ -2299,6 +2300,8 @@ impl ReplayStage {
                     longest_replay_time_us
                         .fetch_max(replay_blockstore_time.as_us(), Ordering::Relaxed);
                 }
+                replay_bank_time.stop();
+                replay_stats.write().unwrap().replay_bank += replay_bank_time.as_us();
                 replay_result
             })
             .collect()
@@ -2324,6 +2327,7 @@ impl ReplayStage {
         replay_timing: &mut ReplayTiming,
         bank_slot: Slot,
     ) -> Vec<ReplaySlotFromBlockstore> {
+        let mut replay_bank_time = Measure::start("replay_concurrent_bank");
         let mut replay_result = ReplaySlotFromBlockstore {
             slot_is_dead: false,
             bank_slot,
@@ -2377,6 +2381,8 @@ impl ReplayStage {
                 replay_result.replay_result = Some(blockstore_result);
                 replay_timing.replay_blockstore_us += replay_blockstore_time.as_us();
             }
+            replay_bank_time.stop();
+            bank_progress.replay_stats.write().unwrap().replay_bank += replay_bank_time.as_us();
         }
 
         vec![replay_result]
@@ -2404,12 +2410,14 @@ impl ReplayStage {
         ancestor_hashes_replay_update_sender: &AncestorHashesReplayUpdateSender,
         block_metadata_notifier: Option<BlockMetadataNotifierLock>,
         replay_result_vec: &[ReplaySlotFromBlockstore],
+        replay_all_time_us: u64,
     ) -> bool {
         // TODO: See if processing of blockstore replay results and bank completion can be made thread safe.
         let mut did_complete_bank = false;
         let mut tx_count = 0;
         let mut execute_timings = ExecuteTimings::default();
         for replay_result in replay_result_vec {
+            let mut result_process_time = Measure::start("result_process_time");
             if replay_result.slot_is_dead {
                 continue;
             }
@@ -2443,19 +2451,19 @@ impl ReplayStage {
             }
 
             assert_eq!(bank_slot, bank.slot());
-            if bank.is_complete() {
-                let mut bank_complete_time = Measure::start("bank_complete_time");
-                let bank_progress = progress
+            let bank_progress = progress
                     .get_mut(&bank.slot())
                     .expect("Bank fork progress entry missing for completed bank");
+            let replay_stats = bank_progress.replay_stats.clone();
+            let replay_progress = bank_progress.replay_progress.clone();
+            if bank.is_complete() {
+                let mut bank_complete_time = Measure::start("bank_complete_time");
 
-                let replay_stats = bank_progress.replay_stats.clone();
-                let r_replay_stats = replay_stats.read().unwrap();
-                let replay_progress = bank_progress.replay_progress.clone();
+                let mut w_replay_stats = replay_stats.write().unwrap();
                 let r_replay_progress = replay_progress.read().unwrap();
                 debug!("bank {} is completed replay from blockstore, contribute to update cost with {:?}",
                     bank.slot(),
-                    r_replay_stats.execute_timings
+                    w_replay_stats.execute_timings
                     );
                 did_complete_bank = true;
                 warn!("bank frozen: {}", bank.slot());
@@ -2532,14 +2540,21 @@ impl ReplayStage {
                 }
                 bank_complete_time.stop();
 
-                r_replay_stats.report_stats(
+                result_process_time.stop();
+                w_replay_stats.replay_process += result_process_time.as_us();
+                w_replay_stats.replay_banks += replay_all_time_us;
+
+                w_replay_stats.report_stats(
                     bank.slot(),
                     r_replay_progress.num_entries,
                     r_replay_progress.num_shreds,
                     bank_complete_time.as_us(),
                 );
-                execute_timings.accumulate(&r_replay_stats.execute_timings);
+                execute_timings.accumulate(&w_replay_stats.execute_timings);
             } else {
+                result_process_time.stop();
+                replay_stats.write().unwrap().replay_process += result_process_time.as_us();
+                replay_stats.write().unwrap().replay_banks += replay_all_time_us;
                 warn!(
                     "bank {} not completed tick_height: {}, max_tick_height: {}",
                     bank.slot(),
@@ -2596,6 +2611,7 @@ impl ReplayStage {
             num_active_banks, active_bank_slots
         );
         if num_active_banks > 0 {
+            let mut replay_all_time = Measure::start("replay_all_time_us");
             let replay_result_vec = if num_active_banks > 1 {
                 Self::replay_active_banks_concurrently(
                     blockstore,
@@ -2625,6 +2641,7 @@ impl ReplayStage {
                     active_bank_slots[0],
                 )
             };
+            replay_all_time.stop();
 
             Self::process_replay_results(
                 blockstore,
@@ -2647,6 +2664,7 @@ impl ReplayStage {
                 ancestor_hashes_replay_update_sender,
                 block_metadata_notifier,
                 &replay_result_vec,
+                replay_all_time.as_us(),
             )
         } else {
             false

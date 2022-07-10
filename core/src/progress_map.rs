@@ -70,6 +70,10 @@ impl ReplaySlotStats {
                     self.started.elapsed().as_micros() as i64,
                     i64
                 ),
+                ("replay_bank", self.replay_bank as i64, i64),
+                ("replay_bank_wait", (self.replay_banks-self.replay_bank) as i64, i64),
+                ("replay_process", self.replay_process as i64, i64),
+                //("replay_process_wait", self.replay_process_wait as i64, i64),
                 ("bank_complete_time_us", bank_complete_time_us, i64),
                 ("total_entries", num_entries as i64, i64),
                 ("total_shreds", num_shreds as i64, i64),
