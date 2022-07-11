@@ -125,6 +125,21 @@ pub fn verify_udp_stats_access() -> Result<(), String> {
     Ok(())
 }
 
+#[cfg(target_os = "linux")]
+pub fn process_port_stats() {
+    let ipt = iptables::new(false).unwrap();
+
+    assert!(ipt.new_chain("nat", "NEWCHAINNAME").is_ok());
+    assert!(ipt.append("nat", "NEWCHAINNAME", "-j ACCEPT").is_ok());
+    assert!(ipt.exists("nat", "NEWCHAINNAME", "-j ACCEPT").unwrap());
+    assert!(ipt.delete("nat", "NEWCHAINNAME", "-j ACCEPT").is_ok());
+    assert!(ipt.delete_chain("nat", "NEWCHAINNAME").is_ok());
+}
+
+#[cfg(not(target_os = "linux"))]
+pub fn process_port_stats() {
+}
+
 impl SystemMonitorService {
     pub fn new(
         exit: Arc<AtomicBool>,
@@ -450,5 +465,10 @@ UdpLite: 0 0 0 0 0 0 0 0" as &[u8];
         assert!(SystemMonitorService::calc_percent(99, 100) < 100.0);
         let one_tb_as_kb = (1u64 << 40) >> 10;
         assert!(SystemMonitorService::calc_percent(one_tb_as_kb - 1, one_tb_as_kb) < 100.0);
+    }
+
+    #[test]
+    fn test_process_port_stats() {
+        process_port_stats();
     }
 }
