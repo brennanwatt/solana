@@ -125,15 +125,15 @@ pub fn verify_udp_stats_access() -> Result<(), String> {
     Ok(())
 }
 
-#[cfg(target_os = "linux")]
+use std::process::Command;
+//#[cfg(target_os = "linux")]
 pub fn process_port_stats() {
-    let ipt = iptables::new(false).unwrap();
-
-    assert!(ipt.new_chain("nat", "NEWCHAINNAME").is_ok());
-    assert!(ipt.append("nat", "NEWCHAINNAME", "-j ACCEPT").is_ok());
-    assert!(ipt.exists("nat", "NEWCHAINNAME", "-j ACCEPT").unwrap());
-    assert!(ipt.delete("nat", "NEWCHAINNAME", "-j ACCEPT").is_ok());
-    assert!(ipt.delete_chain("nat", "NEWCHAINNAME").is_ok());
+    let output = Command::new("iptables")
+        .args("-L -n -v -x")
+        .output()
+        .expect("failed to execute iptables");
+    let port_stats = output.stdout;
+    println("{:?}",port_stats);
 }
 
 #[cfg(not(target_os = "linux"))]

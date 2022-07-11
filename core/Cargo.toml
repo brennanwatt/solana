@@ -65,9 +65,6 @@ thiserror = "1.0"
 tokio = { version = "~1.14.1", features = ["full"] }
 trees = "0.4.2"
 
-[target.'cfg(target_os = "linux")'.dependencies]
-iptables = "0.5.0"
-
 [dev-dependencies]
 matches = "0.1.9"
 raptorq = "1.7.0"
