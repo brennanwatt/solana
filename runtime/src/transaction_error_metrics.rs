@@ -231,7 +231,7 @@ impl InstructionErrorMetrics {
             InstructionError::MaxAccountsDataSizeExceeded => {
                 self.max_accounts_data_size_exceeded += 1
             }
-            InstructionError::MaxAccountsExceeded => self.max_accounts_exceeded += 1,
+            InstructionError::ActiveVoteAccountClose => self.max_accounts_exceeded += 1,
         }
     }
 
