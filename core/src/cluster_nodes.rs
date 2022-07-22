@@ -744,6 +744,8 @@ mod tests {
         let mut node_to_shred_count_total: HashMap<Pubkey, u64> = HashMap::new(); // Number of shreds each node would have been directly responsible for sending to our node
         let mut layer_counts = vec![0; NUM_LAYERS];
         let mut layer_counts_total = vec![0; NUM_LAYERS];
+        let mut layer_counts_prev = vec![0; NUM_LAYERS];
+        let mut layer_counts_total_prev = vec![0; NUM_LAYERS];
         for (slot, shreds) in slot_to_repair_shred_map {
             let stake_epoch = epoch_schedule.get_leader_schedule_epoch(slot);
             let cluster_nodes = get_cluster_nodes(&cluster_info, &bank_info, stake_epoch);
@@ -854,6 +856,18 @@ mod tests {
                     let values = node_to_shred_count_total.entry(anchor).or_insert(0);
                     *values += 1;
                 }
+            }
+
+            println!("{} {} {} {}", leader_pubkey, slot, layer_counts[0]-layer_counts_prev[0], layer_counts_total[0] - layer_counts_total_prev[0]);
+            for layer in 0..NUM_LAYERS {
+                let percent_failed =
+                    (layer_counts[layer]-layer_counts_prev[layer]) as f64 * 100 as f64 / (layer_counts_total[layer] - layer_counts_total_prev[layer]) as f64;
+                info!(
+                    "Slot {} Layer {} had to repair {} out of {} ({}%) shreds",
+                    slot, layer, layer_counts[layer]-layer_counts_prev[layer], layer_counts_total[layer] - layer_counts_total_prev[layer], percent_failed,
+                );
+                layer_counts_prev[layer] = layer_counts[layer];
+                layer_counts_total_prev[layer] = layer_counts_total[layer];
             }
         }
 
