@@ -169,57 +169,69 @@ impl InstructionErrorMetrics {
     pub fn increment(&mut self, error_type: &InstructionError) {
         match error_type.clone() {
             InstructionError::GenericError => self.generic_error += 1,
-            InstructionError::InvalidArgument => self.generic_error += 1,
-            InstructionError::InvalidInstructionData => self.generic_error += 1,
-            InstructionError::InvalidAccountData => self.generic_error += 1,
-            InstructionError::AccountDataTooSmall => self.generic_error += 1,
-            InstructionError::InsufficientFunds => self.generic_error += 1,
-            InstructionError::IncorrectProgramId => self.generic_error += 1,
-            InstructionError::MissingRequiredSignature => self.generic_error += 1,
-            InstructionError::AccountAlreadyInitialized => self.generic_error += 1,
-            InstructionError::UninitializedAccount => self.generic_error += 1,
-            InstructionError::UnbalancedInstruction => self.generic_error += 1,
-            InstructionError::ModifiedProgramId => self.generic_error += 1,
-            InstructionError::ExternalAccountLamportSpend => self.generic_error += 1,
-            InstructionError::ExternalAccountDataModified => self.generic_error += 1,
-            InstructionError::ReadonlyLamportChange => self.generic_error += 1,
-            InstructionError::ReadonlyDataModified => self.generic_error += 1,
-            InstructionError::DuplicateAccountIndex => self.generic_error += 1,
-            InstructionError::ExecutableModified => self.generic_error += 1,
-            InstructionError::RentEpochModified => self.generic_error += 1,
-            InstructionError::NotEnoughAccountKeys => self.generic_error += 1,
-            InstructionError::AccountDataSizeChanged => self.generic_error += 1,
-            InstructionError::AccountNotExecutable => self.generic_error += 1,
-            InstructionError::AccountBorrowFailed => self.generic_error += 1,
-            InstructionError::AccountBorrowOutstanding => self.generic_error += 1,
-            InstructionError::DuplicateAccountOutOfSync => self.generic_error += 1,
-            InstructionError::Custom(_) => self.generic_error += 1,
-            InstructionError::InvalidError => self.generic_error += 1,
-            InstructionError::ExecutableDataModified => self.generic_error += 1,
-            InstructionError::ExecutableLamportChange => self.generic_error += 1,
-            InstructionError::ExecutableAccountNotRentExempt => self.generic_error += 1,
-            InstructionError::UnsupportedProgramId => self.generic_error += 1,
-            InstructionError::CallDepth => self.generic_error += 1,
-            InstructionError::MissingAccount => self.generic_error += 1,
-            InstructionError::ReentrancyNotAllowed => self.generic_error += 1,
-            InstructionError::MaxSeedLengthExceeded => self.generic_error += 1,
-            InstructionError::InvalidSeeds => self.generic_error += 1,
-            InstructionError::InvalidRealloc => self.generic_error += 1,
-            InstructionError::ComputationalBudgetExceeded => self.generic_error += 1,
-            InstructionError::PrivilegeEscalation => self.generic_error += 1,
-            InstructionError::ProgramEnvironmentSetupFailure => self.generic_error += 1,
-            InstructionError::ProgramFailedToComplete => self.generic_error += 1,
-            InstructionError::ProgramFailedToCompile => self.generic_error += 1,
-            InstructionError::Immutable => self.generic_error += 1,
-            InstructionError::IncorrectAuthority => self.generic_error += 1,
-            InstructionError::BorshIoError(_) => self.generic_error += 1,
-            InstructionError::AccountNotRentExempt => self.generic_error += 1,
-            InstructionError::InvalidAccountOwner => self.generic_error += 1,
-            InstructionError::ArithmeticOverflow => self.generic_error += 1,
-            InstructionError::UnsupportedSysvar => self.generic_error += 1,
-            InstructionError::IllegalOwner => self.generic_error += 1,
-            InstructionError::MaxAccountsDataSizeExceeded => self.generic_error += 1,
-            InstructionError::MaxAccountsExceeded => self.generic_error += 1,
+            InstructionError::InvalidArgument => self.invalid_argument += 1,
+            InstructionError::InvalidInstructionData => self.invalid_instruction_data += 1,
+            InstructionError::InvalidAccountData => self.invalid_account_data += 1,
+            InstructionError::AccountDataTooSmall => self.account_data_too_small += 1,
+            InstructionError::InsufficientFunds => self.insufficient_funds += 1,
+            InstructionError::IncorrectProgramId => self.incorrect_program_id += 1,
+            InstructionError::MissingRequiredSignature => self.missing_required_signature += 1,
+            InstructionError::AccountAlreadyInitialized => self.account_already_initialized += 1,
+            InstructionError::UninitializedAccount => self.uninitialized_account += 1,
+            InstructionError::UnbalancedInstruction => self.unbalanced_instruction += 1,
+            InstructionError::ModifiedProgramId => self.modified_program_id += 1,
+            InstructionError::ExternalAccountLamportSpend => {
+                self.external_account_lamport_spend += 1
+            }
+            InstructionError::ExternalAccountDataModified => {
+                self.external_account_data_modified += 1
+            }
+            InstructionError::ReadonlyLamportChange => self.readonly_lamport_change += 1,
+            InstructionError::ReadonlyDataModified => self.readonly_data_modified += 1,
+            InstructionError::DuplicateAccountIndex => self.duplicate_account_index += 1,
+            InstructionError::ExecutableModified => self.executable_modified += 1,
+            InstructionError::RentEpochModified => self.rent_epoch_modified += 1,
+            InstructionError::NotEnoughAccountKeys => self.not_enough_account_keys += 1,
+            InstructionError::AccountDataSizeChanged => self.account_data_size_changed += 1,
+            InstructionError::AccountNotExecutable => self.account_not_executable += 1,
+            InstructionError::AccountBorrowFailed => self.account_borrow_failed += 1,
+            InstructionError::AccountBorrowOutstanding => self.account_borrow_outstanding += 1,
+            InstructionError::DuplicateAccountOutOfSync => self.duplicate_account_out_of_sync += 1,
+            InstructionError::Custom(_) => self.custom += 1,
+            InstructionError::InvalidError => self.invalid_error += 1,
+            InstructionError::ExecutableDataModified => self.executable_data_modified += 1,
+            InstructionError::ExecutableLamportChange => self.executable_lamport_change += 1,
+            InstructionError::ExecutableAccountNotRentExempt => {
+                self.executable_account_not_rent_exempt += 1
+            }
+            InstructionError::UnsupportedProgramId => self.unsupported_program_id += 1,
+            InstructionError::CallDepth => self.call_depth += 1,
+            InstructionError::MissingAccount => self.missing_account += 1,
+            InstructionError::ReentrancyNotAllowed => self.reentrancy_not_allowed += 1,
+            InstructionError::MaxSeedLengthExceeded => self.max_seed_length_exceeded += 1,
+            InstructionError::InvalidSeeds => self.invalid_seeds += 1,
+            InstructionError::InvalidRealloc => self.invalid_realloc += 1,
+            InstructionError::ComputationalBudgetExceeded => {
+                self.computational_budget_exceeded += 1
+            }
+            InstructionError::PrivilegeEscalation => self.privilege_escalation += 1,
+            InstructionError::ProgramEnvironmentSetupFailure => {
+                self.program_environment_setup_failure += 1
+            }
+            InstructionError::ProgramFailedToComplete => self.program_failed_to_complete += 1,
+            InstructionError::ProgramFailedToCompile => self.program_failed_to_compile += 1,
+            InstructionError::Immutable => self.immutable += 1,
+            InstructionError::IncorrectAuthority => self.incorrect_authority += 1,
+            InstructionError::BorshIoError(_) => self.borsh_io_error += 1,
+            InstructionError::AccountNotRentExempt => self.account_not_rent_exempt += 1,
+            InstructionError::InvalidAccountOwner => self.invalid_account_owner += 1,
+            InstructionError::ArithmeticOverflow => self.arithmetic_overflow += 1,
+            InstructionError::UnsupportedSysvar => self.unsupported_sysvar += 1,
+            InstructionError::IllegalOwner => self.illegal_owner += 1,
+            InstructionError::MaxAccountsDataSizeExceeded => {
+                self.max_accounts_data_size_exceeded += 1
+            }
+            InstructionError::MaxAccountsExceeded => self.max_accounts_exceeded += 1,
         }
     }
 
@@ -331,7 +343,7 @@ impl InstructionErrorMetrics {
 
     pub fn report(&self, id: u32, slot: Slot) {
         datapoint_info!(
-            "banking_stage-leader_slot_transaction_errors",
+            "banking_stage-leader_slot_instruction_errors",
             ("id", id as i64, i64),
             ("slot", slot as i64, i64),
             ("generic", self.generic_error as i64, i64),
@@ -524,4 +536,16 @@ impl InstructionErrorMetrics {
             ),
         );
     }
+}
+
+#[cfg(test)]
+#[test]
+fn test_instruction_errors() {
+    solana_logger::setup();
+    let mut iem_total = InstructionErrorMetrics::default();
+    let mut iem = InstructionErrorMetrics::default();
+    iem.increment(&InstructionError::AccountAlreadyInitialized);
+    iem_total.accumulate(&iem);
+    iem_total.accumulate(&iem);
+    assert_eq!(iem_total.account_already_initialized, 2);
 }
