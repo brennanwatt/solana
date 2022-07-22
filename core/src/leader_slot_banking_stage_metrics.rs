@@ -49,6 +49,9 @@ pub(crate) struct ProcessTransactionsSummary {
 
     // Breakdown of all the transaction errors from transactions passed for execution
     pub error_counters: TransactionErrorMetrics,
+
+    // Breakdown of all the instructions errors from transactions passed for execution
+    pub instruction_error_counters: InstructionErrorMetrics,
 }
 
 // Metrics describing packets ingested/processed in various parts of BankingStage during this
@@ -250,6 +253,8 @@ pub(crate) struct LeaderSlotMetrics {
 
     transaction_error_metrics: TransactionErrorMetrics,
 
+    instruction_error_metrics: InstructionErrorMetrics,
+
     timing_metrics: LeaderSlotTimingMetrics,
 
     // Used by tests to check if the `self.report()` method was called
@@ -263,6 +268,7 @@ impl LeaderSlotMetrics {
             slot,
             packet_count_metrics: LeaderSlotPacketCountMetrics::new(),
             transaction_error_metrics: TransactionErrorMetrics::new(),
+            instruction_error_metrics: InstructionErrorMetrics::default(),
             timing_metrics: LeaderSlotTimingMetrics::new(bank_creation_time),
             is_reported: false,
         }
@@ -273,6 +279,7 @@ impl LeaderSlotMetrics {
 
         self.timing_metrics.report(self.id, self.slot);
         self.transaction_error_metrics.report(self.id, self.slot);
+        self.instruction_error_metrics.report(self.id, self.slot);
         self.packet_count_metrics.report(self.id, self.slot);
     }
 
@@ -438,6 +445,17 @@ impl LeaderSlotMetricsTracker {
         if let Some(leader_slot_metrics) = &mut self.leader_slot_metrics {
             leader_slot_metrics
                 .transaction_error_metrics
+                .accumulate(error_metrics);
+        }
+    }
+
+    pub(crate) fn accumulate_instruction_errors(
+        &mut self,
+        error_metrics: &InstructionErrorMetrics,
+    ) {
+        if let Some(leader_slot_metrics) = &mut self.leader_slot_metrics {
+            leader_slot_metrics
+                .instruction_error_metrics
                 .accumulate(error_metrics);
         }
     }
