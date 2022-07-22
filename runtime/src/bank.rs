@@ -67,7 +67,7 @@ use {
         storable_accounts::StorableAccounts,
         system_instruction_processor::{get_system_account_kind, SystemAccountKind},
         transaction_batch::TransactionBatch,
-        transaction_error_metrics::TransactionErrorMetrics,
+        transaction_error_metrics::{InstructionErrorMetrics, TransactionErrorMetrics},
         vote_account::{VoteAccount, VoteAccountsHashMap},
         vote_parser,
     },
@@ -683,6 +683,7 @@ pub struct LoadAndExecuteTransactionsOutput {
     pub executed_with_successful_result_count: usize,
     pub signature_count: u64,
     pub error_counters: TransactionErrorMetrics,
+    pub instruction_error_counters: InstructionErrorMetrics,
 }
 
 #[derive(Debug, Clone)]
@@ -4282,6 +4283,7 @@ impl Bank {
         timings: &mut ExecuteTimings,
         error_counters: &mut TransactionErrorMetrics,
         log_messages_bytes_limit: Option<usize>,
+        instruction_error_counters: &mut InstructionErrorMetrics,
     ) -> TransactionExecutionResult {
         let mut get_executors_time = Measure::start("get_executors_time");
         let executors = self.get_executors(&loaded_transaction.accounts);
@@ -4374,6 +4376,10 @@ impl Bank {
                     TransactionError::InvalidRentPayingAccount
                     | TransactionError::InsufficientFundsForRent { .. } => {
                         error_counters.invalid_rent_paying_account += 1;
+                    }
+                    TransactionError::InstructionError(_index, ref instruction_err) => {
+                        instruction_error_counters.increment(instruction_err);
+                        error_counters.instruction_error += 1;
                     }
                     _ => {
                         error_counters.instruction_error += 1;
@@ -4473,6 +4479,7 @@ impl Bank {
         debug!("processing transactions: {}", sanitized_txs.len());
         inc_new_counter_info!("bank-process_transactions", sanitized_txs.len());
         let mut error_counters = TransactionErrorMetrics::default();
+        let mut instruction_error_counters = InstructionErrorMetrics::default();
 
         let retryable_transaction_indexes: Vec<_> = batch
             .lock_results()
@@ -4568,6 +4575,7 @@ impl Bank {
                         timings,
                         &mut error_counters,
                         log_messages_bytes_limit,
+                        &mut instruction_error_counters,
                     )
                 }
             })
@@ -4702,6 +4710,7 @@ impl Bank {
             executed_with_successful_result_count,
             signature_count,
             error_counters,
+            instruction_error_counters,
         }
     }
 
