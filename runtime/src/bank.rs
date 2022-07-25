@@ -3953,6 +3953,7 @@ impl Bank {
 
     /// Execute a transaction using the provided loaded accounts and update
     /// the executors cache if the transaction was successful.
+    #[allow(clippy::too_many_arguments)]
     fn execute_loaded_transaction(
         &self,
         tx: &SanitizedTransaction,
@@ -4046,6 +4047,14 @@ impl Bank {
                     }
                     TransactionError::InstructionError(_index, ref instruction_err) => {
                         instruction_error_counters.increment(instruction_err);
+
+                        use solana_sdk::instruction::InstructionError;
+                        if tx.is_simple_vote_transaction() && error_counters.instruction_error == 0
+                        {
+                            if let InstructionError::Custom(x) = instruction_err {
+                                warn!("instruction_err custom {}", *x);
+                            }
+                        }
                         error_counters.instruction_error += 1;
                     }
                     _ => {
