@@ -392,6 +392,7 @@ pub fn rpc_bootstrap(
             warn!("BWLOG: started gossip");
         }
 
+        warn!("BWLOG: starting get_rpc_node");
         let rpc_node_details = get_rpc_node(
             &gossip.as_ref().unwrap().0,
             cluster_entrypoints,
@@ -399,6 +400,7 @@ pub fn rpc_bootstrap(
             &mut blacklisted_rpc_nodes,
             &bootstrap_config,
         );
+        warn!("BWLOG: completed get_rpc_node");
         if rpc_node_details.is_none() {
             return;
         }
@@ -407,8 +409,8 @@ pub fn rpc_bootstrap(
             snapshot_hash,
         } = rpc_node_details.unwrap();
 
-        info!(
-            "Using RPC service from node {}: {:?}",
+        warn!(
+            "BWLOG: Using RPC service from node {}: {:?}",
             rpc_contact_info.id, rpc_contact_info.rpc
         );
         let rpc_client = RpcClient::new_socket(rpc_contact_info.rpc);
@@ -512,7 +514,7 @@ pub fn rpc_bootstrap(
         if result.is_ok() {
             break;
         }
-        warn!("{}", result.unwrap_err());
+        warn!("BWLOG: not ok result {}", result.unwrap_err());
 
         if let Some(ref known_validators) = validator_config.known_validators {
             if known_validators.contains(&rpc_contact_info.id) {
@@ -1172,7 +1174,7 @@ fn download_snapshot(
                         return true; // Do not abort download from the one-and-only known validator
                     }
                 }
-                warn!("The snapshot download is too slow, throughput: {} < min speed {} bytes/sec, will abort \
+                warn!("BWLOG: The snapshot download is too slow, throughput: {} < min speed {} bytes/sec, will abort \
                            and try a different node. Abort count: {}, Progress detail: {:?}",
                            download_progress.last_throughput, minimal_snapshot_download_speed,
                            download_abort_count, download_progress);

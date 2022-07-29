@@ -210,8 +210,8 @@ pub fn download_file<'a, 'b>(
         .map_err(|err| format!("Unable to write {:?}: {:?}", temp_destination_file, err))?;
 
     source.progress_bar.finish_and_clear();
-    info!(
-        "  {}{}",
+    warn!(
+        "BWLOG:  {}{}",
         SPARKLE,
         format!(
             "Downloaded {} ({} bytes) in {:?}",
