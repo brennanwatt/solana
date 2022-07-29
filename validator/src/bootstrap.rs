@@ -1,6 +1,7 @@
 use {
     log::*,
     rand::{seq::SliceRandom, thread_rng, Rng},
+    rayon::prelude::*,
     solana_client::rpc_client::RpcClient,
     solana_core::validator::{ValidatorConfig, ValidatorStartProgress},
     solana_download_utils::{download_snapshot_archive, DownloadProgressRecord},
@@ -370,10 +371,12 @@ pub fn rpc_bootstrap(
 
     let mut blacklisted_rpc_nodes = HashSet::new();
     let mut gossip = None;
+    let mut rpc_vec: Vec<(ContactInfo, Option<SnapshotHash>, RpcClient)> = vec![];
     let mut download_abort_count = 0;
     let mut loop_count = 1;
     loop {
         warn!("BWLOG: loop_count {}",loop_count);
+        loop_count += 1;
         if gossip.is_none() {
             warn!("BWLOG: starting gossip");
             *start_progress.write().unwrap() = ValidatorStartProgress::SearchingForRpcService;
@@ -392,28 +395,51 @@ pub fn rpc_bootstrap(
             warn!("BWLOG: started gossip");
         }
 
-        warn!("BWLOG: starting get_rpc_node");
-        let rpc_node_details = get_rpc_node(
-            &gossip.as_ref().unwrap().0,
-            cluster_entrypoints,
-            validator_config,
-            &mut blacklisted_rpc_nodes,
-            &bootstrap_config,
-        );
-        warn!("BWLOG: completed get_rpc_node");
-        if rpc_node_details.is_none() {
-            return;
-        }
-        let GetRpcNodeResult {
-            rpc_contact_info,
-            snapshot_hash,
-        } = rpc_node_details.unwrap();
+        if rpc_vec.is_empty() {
+            warn!("BWLOG: starting get_rpc_node");
+            let mut rpc_node_details_vec = vec![];
+            for _ in 0..10 {
+                let rpc_node_details = get_rpc_node(
+                    &gossip.as_ref().unwrap().0,
+                    cluster_entrypoints,
+                    validator_config,
+                    &mut blacklisted_rpc_nodes,
+                    &bootstrap_config,
+                );
+                warn!("BWLOG: completed get_rpc_node");
+                if rpc_node_details.is_none() {
+                    break;
+                } else {
+                    rpc_node_details_vec.push(rpc_node_details)
+                }
+            }
 
-        warn!(
-            "BWLOG: Using RPC service from node {}: {:?}",
-            rpc_contact_info.id, rpc_contact_info.rpc
-        );
-        let rpc_client = RpcClient::new_socket(rpc_contact_info.rpc);
+            if rpc_node_details_vec.is_empty() {
+                // Couldn't find any viable RPC nodes!
+                return;
+            }
+
+            rpc_vec = rpc_node_details_vec.into_par_iter()
+                .map(|rpc_node_details| {
+                    let GetRpcNodeResult {
+                        rpc_contact_info,
+                        snapshot_hash,
+                    } = rpc_node_details.unwrap();
+
+                    warn!(
+                        "BWLOG: Using RPC service from node {}: {:?}",
+                        rpc_contact_info.id, rpc_contact_info.rpc
+                    );
+                    let rpc_client = RpcClient::new_socket_with_timeout(rpc_contact_info.rpc, Duration::from_secs(5));
+                    warn!("BWLOG: established RPC client socket from node {}: {:?}",
+                        rpc_contact_info.id, rpc_contact_info.rpc
+                    );
+
+                    (rpc_contact_info, snapshot_hash, rpc_client)
+                })
+                .collect();
+        }
+        let (rpc_contact_info, snapshot_hash, rpc_client) = rpc_vec.pop().unwrap();
 
         let result = match rpc_client.get_version() {
             Ok(rpc_version) => {
@@ -527,7 +553,6 @@ pub fn rpc_bootstrap(
             rpc_contact_info.id
         );
         blacklisted_rpc_nodes.insert(rpc_contact_info.id);
-        loop_count += 1;
     }
     if let Some((cluster_info, gossip_exit_flag, gossip_service)) = gossip.take() {
         cluster_info.save_contact_info();
