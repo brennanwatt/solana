@@ -874,6 +874,7 @@ impl Validator {
 
         let stats_reporter_service = StatsReporterService::new(stats_reporter_receiver, &exit);
 
+        warn!("BWLOG: starting GossipService::new");
         let gossip_service = GossipService::new(
             &cluster_info,
             Some(bank_forks.clone()),
@@ -883,6 +884,7 @@ impl Validator {
             Some(stats_reporter_sender.clone()),
             &exit,
         );
+        warn!("BWLOG: completed GossipService::new");
         let serve_repair = Arc::new(RwLock::new(ServeRepair::new(cluster_info.clone())));
         let serve_repair_service = ServeRepairService::new(
             &serve_repair,
@@ -912,6 +914,7 @@ impl Validator {
         let wait_for_vote_to_start_leader =
             !waited_for_supermajority && !config.no_wait_for_vote_to_start_leader;
 
+        warn!("BWLOG: starting PohService::new");
         let poh_service = PohService::new(
             poh_recorder.clone(),
             &poh_config,
@@ -921,6 +924,7 @@ impl Validator {
             config.poh_hashes_per_batch,
             record_receiver,
         );
+        warn!("BWLOG: completed PohService::new");
         assert_eq!(
             blockstore.get_new_shred_signals_len(),
             1,
@@ -944,6 +948,7 @@ impl Validator {
             exit.clone(),
         );
 
+        warn!("BWLOG: starting Tvu::new");
         let (replay_vote_sender, replay_vote_receiver) = unbounded();
         let tvu = Tvu::new(
             vote_account,
@@ -994,7 +999,9 @@ impl Validator {
             config.runtime_config.log_messages_bytes_limit,
             &connection_cache,
         );
+        warn!("BWLOG: completed Tvu::new");
 
+        warn!("BWLOG: starting Tpu::new");
         let tpu = Tpu::new(
             &cluster_info,
             &poh_recorder,
@@ -1030,6 +1037,7 @@ impl Validator {
             config.enable_quic_servers,
             &staked_nodes,
         );
+        warn!("BWLOG: completed Tpu::new");
 
         datapoint_info!(
             "validator-new",

@@ -424,7 +424,6 @@ fn get_cluster_shred_version(entrypoints: &[SocketAddr]) -> Option<u16> {
 }
 
 pub fn main() {
-    warn!("BWLOG: starting main");
     let default_dynamic_port_range =
         &format!("{}-{}", VALIDATOR_PORT_RANGE.0, VALIDATOR_PORT_RANGE.1);
     let default_genesis_archive_unpacked_size = &MAX_GENESIS_ARCHIVE_UNPACKED_SIZE.to_string();
@@ -2203,6 +2202,7 @@ pub fn main() {
     };
     let use_progress_bar = logfile.is_none();
     let _logger_thread = redirect_stderr_to_file(logfile);
+    warn!("BWLOG: log setup");
 
     info!("{} {}", crate_name!(), solana_version::version!());
     info!("Starting validator with: {:#?}", std::env::args_os());

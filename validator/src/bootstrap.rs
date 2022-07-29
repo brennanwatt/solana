@@ -348,6 +348,7 @@ pub fn rpc_bootstrap(
     maximum_snapshot_download_abort: u64,
     socket_addr_space: SocketAddrSpace,
 ) {
+    
     if do_port_check {
         let mut order: Vec<_> = (0..cluster_entrypoints.len()).collect();
         order.shuffle(&mut thread_rng());
@@ -370,8 +371,11 @@ pub fn rpc_bootstrap(
     let mut blacklisted_rpc_nodes = HashSet::new();
     let mut gossip = None;
     let mut download_abort_count = 0;
+    let mut loop_count = 1;
     loop {
+        warn!("BWLOG: loop_count {}",loop_count);
         if gossip.is_none() {
+            warn!("BWLOG: starting gossip");
             *start_progress.write().unwrap() = ValidatorStartProgress::SearchingForRpcService;
 
             gossip = Some(start_gossip_node(
@@ -385,6 +389,7 @@ pub fn rpc_bootstrap(
                 should_check_duplicate_instance,
                 socket_addr_space,
             ));
+            warn!("BWLOG: started gossip");
         }
 
         let rpc_node_details = get_rpc_node(
@@ -416,6 +421,7 @@ pub fn rpc_bootstrap(
             Err(err) => Err(format!("Failed to get RPC node version: {}", err)),
         }
         .and_then(|_| {
+            warn!("BWLOG: starting download_then_check_genesis_hash");
             let genesis_config = download_then_check_genesis_hash(
                 &rpc_contact_info.rpc,
                 ledger_path,
@@ -424,6 +430,7 @@ pub fn rpc_bootstrap(
                 bootstrap_config.no_genesis_fetch,
                 use_progress_bar,
             );
+            warn!("BWLOG: completed download_then_check_genesis_hash");
 
             if let Ok(genesis_config) = genesis_config {
                 let genesis_hash = genesis_config.hash();
@@ -447,6 +454,7 @@ pub fn rpc_bootstrap(
                     ));
                 }
             }
+            warn!("BWLOG: completed check download_then_check_genesis_hash");
 
             let (cluster_info, gossip_exit_flag, gossip_service) = gossip.take().unwrap();
             cluster_info.save_contact_info();
@@ -458,6 +466,7 @@ pub fn rpc_bootstrap(
                 .map_err(|err| format!("Failed to get RPC node slot: {}", err))?;
             info!("RPC node root slot: {}", rpc_client_slot);
 
+            warn!("BWLOG: starting download_snapshots");
             download_snapshots(
                 full_snapshot_archives_dir,
                 incremental_snapshot_archives_dir,
@@ -516,6 +525,7 @@ pub fn rpc_bootstrap(
             rpc_contact_info.id
         );
         blacklisted_rpc_nodes.insert(rpc_contact_info.id);
+        loop_count += 1;
     }
     if let Some((cluster_info, gossip_exit_flag, gossip_service)) = gossip.take() {
         cluster_info.save_contact_info();
@@ -1043,6 +1053,7 @@ fn download_snapshots(
             full_snapshot_hash.0, full_snapshot_hash.1
         );
     } else {
+        warn!("BWLOG: starting download_snapshot");
         download_snapshot(
             full_snapshot_archives_dir,
             incremental_snapshot_archives_dir,
@@ -1057,6 +1068,7 @@ fn download_snapshots(
             full_snapshot_hash,
             SnapshotType::FullSnapshot,
         )?;
+        warn!("BWLOG: completed download_snapshot");
     }
 
     // Check and see if we've already got the incremental snapshot; if not, download it
@@ -1074,6 +1086,7 @@ fn download_snapshots(
                 incremental_snapshot_hash.0, incremental_snapshot_hash.1
             );
         } else {
+            warn!("BWLOG: starting download_snapshot (incremental)");
             download_snapshot(
                 full_snapshot_archives_dir,
                 incremental_snapshot_archives_dir,
@@ -1088,9 +1101,11 @@ fn download_snapshots(
                 incremental_snapshot_hash,
                 SnapshotType::IncrementalSnapshot(full_snapshot_hash.0),
             )?;
+            warn!("BWLOG: completed download_snapshot (incremental)");
         }
     }
 
+    warn!("BWLOG: completed download_snapshots");
     Ok(())
 }
 
