@@ -424,6 +424,7 @@ fn get_cluster_shred_version(entrypoints: &[SocketAddr]) -> Option<u16> {
 }
 
 pub fn main() {
+    warn!("BWLOG: starting main");
     let default_dynamic_port_range =
         &format!("{}-{}", VALIDATOR_PORT_RANGE.0, VALIDATOR_PORT_RANGE.1);
     let default_genesis_archive_unpacked_size = &MAX_GENESIS_ARCHIVE_UNPACKED_SIZE.to_string();
@@ -2531,7 +2532,7 @@ pub fn main() {
         exit(1);
     }
     let full_api = matches.is_present("full_rpc_api");
-
+    warn!("BWLOG: starting ValidatorConfig");
     let mut validator_config = ValidatorConfig {
         require_tower: matches.is_present("require_tower"),
         tower_storage,
@@ -2897,6 +2898,7 @@ pub fn main() {
     if matches.is_present("halt_on_known_validators_accounts_hash_mismatch") {
         validator_config.halt_on_known_validators_accounts_hash_mismatch = true;
     }
+    warn!("BWLOG: completed ValidatorConfig");
 
     let public_rpc_addr = matches.value_of("public_rpc_addr").map(|addr| {
         solana_net_utils::parse_host_port(addr).unwrap_or_else(|e| {
@@ -3041,6 +3043,7 @@ pub fn main() {
     let identity_keypair = Arc::new(identity_keypair);
 
     let should_check_duplicate_instance = !matches.is_present("no_duplicate_instance_check");
+    warn!("BWLOG: starting rpc_bootstrap");
     if !cluster_entrypoints.is_empty() {
         bootstrap::rpc_bootstrap(
             &node,
@@ -3064,12 +3067,14 @@ pub fn main() {
         );
         *start_progress.write().unwrap() = ValidatorStartProgress::Initializing;
     }
+    warn!("BWLOG: completed rpc_bootstrap");
 
     if operation == Operation::Initialize {
         info!("Validator ledger initialization complete");
         return;
     }
 
+    warn!("BWLOG: starting Validator::new");
     let validator = Validator::new(
         node,
         identity_keypair,
@@ -3084,6 +3089,7 @@ pub fn main() {
         tpu_use_quic,
         tpu_connection_pool_size,
     );
+    warn!("BWLOG: completed Validator::new");
     *admin_service_post_init.write().unwrap() =
         Some(admin_rpc_service::AdminRpcRequestMetadataPostInit {
             bank_forks: validator.bank_forks.clone(),
@@ -3098,6 +3104,7 @@ pub fn main() {
         });
     }
     info!("Validator initialized");
+    warn!("BWLOG: validator initialized");
     validator.join();
     info!("Validator exiting..");
 }
