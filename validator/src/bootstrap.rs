@@ -18,7 +18,7 @@ use {
         snapshot_archive_info::SnapshotArchiveInfoGetter,
         snapshot_package::SnapshotType,
         snapshot_utils::{
-            self, DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN,
+            self, ArchiveFormat, DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN,
             DEFAULT_MAX_INCREMENTAL_SNAPSHOT_ARCHIVES_TO_RETAIN,
         },
     },
@@ -580,13 +580,23 @@ pub fn rpc_bootstrap(
                     }
                 })
                 .map(|(rpc_contact_info, snapshot_hash, rpc_client)| {
-                    let download_speed = 5; /*get_file_download_speed(
-                                                &format!(
-                                                    "http://{}/{}",
-                                                    rpc_contact_info.rpc,
-                                                    destination_path.file_name().unwrap().to_str().unwrap()
-                                                )
-                                            ).unwrap();*/
+                    let snapshot_archives_remote_dir =
+                        snapshot_utils::build_snapshot_archives_remote_dir(
+                            full_snapshot_archives_dir,
+                        );
+                    let desired_snapshot_hash = snapshot_hash.unwrap().full;
+                    let destination_path = snapshot_utils::build_full_snapshot_archive_path(
+                        &snapshot_archives_remote_dir,
+                        desired_snapshot_hash.0,
+                        &desired_snapshot_hash.1,
+                        ArchiveFormat::TarZstd,
+                    );
+                    let download_speed = get_file_download_speed(&format!(
+                        "http://{}/{}",
+                        rpc_contact_info.rpc,
+                        destination_path.file_name().unwrap().to_str().unwrap()
+                    ))
+                    .unwrap();
                     (download_speed, rpc_contact_info, snapshot_hash, rpc_client)
                 })
                 .collect();

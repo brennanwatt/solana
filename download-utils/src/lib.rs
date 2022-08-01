@@ -55,7 +55,7 @@ pub struct DownloadProgressRecord {
 type DownloadProgressCallback<'a> = Box<dyn FnMut(&DownloadProgressRecord) -> bool + 'a>;
 type DownloadProgressCallbackOption<'a> = Option<DownloadProgressCallback<'a>>;
 
-pub fn get_file_download_speed (url: &str) -> Result<f64, String> {
+pub fn get_file_download_speed(url: &str) -> Result<usize, String> {
     warn!("BWLOG: get_file_download_speed");
     let download_start = Instant::now();
 
@@ -70,7 +70,7 @@ pub fn get_file_download_speed (url: &str) -> Result<f64, String> {
 
     let duration_ms = Instant::now().duration_since(download_start).as_millis();
     warn!("BWLOG: read {} bytes in {} ms", num_bytes, duration_ms);
-    Ok(num_bytes as f64 / duration_ms as f64)
+    Ok(num_bytes as usize / duration_ms as usize)
 }
 
 /// This callback allows the caller to get notified of the download progress modelled by DownloadProgressRecord
