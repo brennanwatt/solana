@@ -61,12 +61,14 @@ pub fn get_file_download_speed(url: &str) -> Result<usize, String> {
         .send()
         .map_err(|err| err.to_string())?;
 
-    let buf = &mut [0; 1_000_000];
+    const BYTES_TO_DOWNLOAD_FOR_SPEED_TEST: usize = 262_144;
+    let buf = &mut [0; BYTES_TO_DOWNLOAD_FOR_SPEED_TEST * 2];
     let mut total_bytes: usize = 0;
     let download_start = Instant::now();
-    for _ in 0..10 {
-        if let Ok(bytes) = res.read(buf) {
-            total_bytes = total_bytes.saturating_add(bytes);
+    while let Ok(bytes) = res.read(buf) {
+        total_bytes = total_bytes.saturating_add(bytes);
+        if total_bytes >= BYTES_TO_DOWNLOAD_FOR_SPEED_TEST {
+            break;
         }
     }
     let duration_ms = Instant::now().duration_since(download_start).as_millis() as usize;

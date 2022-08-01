@@ -501,7 +501,7 @@ pub fn rpc_bootstrap(
 
     let blacklisted_rpc_nodes = RwLock::new(HashSet::new());
     let mut gossip = None;
-    let mut rpc_vec: Vec<(usize, ContactInfo, Option<SnapshotHash>, RpcClient)> = vec![];
+    let mut vetted_rpc_nodes: Vec<(usize, ContactInfo, Option<SnapshotHash>, RpcClient)> = vec![];
     let mut download_abort_count = 0;
     let mut loop_count = 1;
     loop {
@@ -525,7 +525,7 @@ pub fn rpc_bootstrap(
             warn!("BWLOG: started gossip");
         }
 
-        if rpc_vec.is_empty() {
+        if vetted_rpc_nodes.is_empty() {
             warn!("BWLOG: starting get_rpc_node");
             let rpc_node_details_vec = get_rpc_nodes(
                 &gossip.as_ref().unwrap().0,
@@ -539,7 +539,7 @@ pub fn rpc_bootstrap(
                 return;
             }
 
-            rpc_vec = rpc_node_details_vec
+            vetted_rpc_nodes = rpc_node_details_vec
                 .into_par_iter()
                 .map(|rpc_node_details| {
                     let GetRpcNodeResult {
@@ -580,29 +580,38 @@ pub fn rpc_bootstrap(
                     }
                 })
                 .map(|(rpc_contact_info, snapshot_hash, rpc_client)| {
-                    let snapshot_archives_remote_dir =
-                        snapshot_utils::build_snapshot_archives_remote_dir(
-                            full_snapshot_archives_dir,
+                    let full_snapshot_url = {
+                        let desired_snapshot_hash = snapshot_hash.unwrap().full;
+                        let destination_path = snapshot_utils::build_full_snapshot_archive_path(
+                            &snapshot_utils::build_snapshot_archives_remote_dir(
+                                full_snapshot_archives_dir,
+                            ),
+                            desired_snapshot_hash.0,
+                            &desired_snapshot_hash.1,
+                            ArchiveFormat::TarZstd,
                         );
-                    let desired_snapshot_hash = snapshot_hash.unwrap().full;
-                    let destination_path = snapshot_utils::build_full_snapshot_archive_path(
-                        &snapshot_archives_remote_dir,
-                        desired_snapshot_hash.0,
-                        &desired_snapshot_hash.1,
-                        ArchiveFormat::TarZstd,
-                    );
-                    let download_speed = get_file_download_speed(&format!(
-                        "http://{}/{}",
-                        rpc_contact_info.rpc,
-                        destination_path.file_name().unwrap().to_str().unwrap()
-                    ))
-                    .unwrap();
+                        format!(
+                            "http://{}/{}",
+                            rpc_contact_info.rpc,
+                            destination_path.file_name().unwrap().to_str().unwrap()
+                        )
+                    };
+                    let download_speed = match get_file_download_speed(&full_snapshot_url) {
+                        Ok(download_speed) => download_speed,
+                        Err(err) => {
+                            warn!("error estimating snapshot download speed: {}", err);
+                            0
+                        }
+                    };
                     (download_speed, rpc_contact_info, snapshot_hash, rpc_client)
                 })
                 .collect();
         }
-        rpc_vec.sort_by_key(|k| k.0);
-        let (_download_speed, rpc_contact_info, snapshot_hash, rpc_client) = rpc_vec.pop().unwrap();
+
+        // Sort by estimated download speed to reduce startup time.
+        vetted_rpc_nodes.sort_by_key(|k| k.0);
+        let (_download_speed, rpc_contact_info, snapshot_hash, rpc_client) =
+            vetted_rpc_nodes.pop().unwrap();
 
         match attempt_download_genesis_and_snapshot(
             &rpc_contact_info,
