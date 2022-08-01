@@ -37,7 +37,6 @@ use {
             atomic::{AtomicBool, Ordering},
             Arc, RwLock,
         },
-        thread::sleep,
         time::{Duration, Instant},
     },
 };
@@ -397,25 +396,15 @@ pub fn rpc_bootstrap(
 
         if rpc_vec.is_empty() {
             warn!("BWLOG: starting get_rpc_node");
-            let mut rpc_node_details_vec = vec![];
-            for _ in 0..10 {
-                let rpc_node_details = get_rpc_node(
-                    &gossip.as_ref().unwrap().0,
-                    cluster_entrypoints,
-                    validator_config,
-                    &mut blacklisted_rpc_nodes,
-                    &bootstrap_config,
-                );
-                warn!("BWLOG: completed get_rpc_node");
-                if rpc_node_details.is_none() {
-                    break;
-                } else {
-                    rpc_node_details_vec.push(rpc_node_details)
-                }
-            }
-
+            let rpc_node_details_vec = get_rpc_node(
+                &gossip.as_ref().unwrap().0,
+                cluster_entrypoints,
+                validator_config,
+                &mut blacklisted_rpc_nodes,
+                &bootstrap_config,
+            );
+            warn!("BWLOG: completed get_rpc_node");
             if rpc_node_details_vec.is_empty() {
-                // Couldn't find any viable RPC nodes!
                 return;
             }
 
@@ -424,7 +413,7 @@ pub fn rpc_bootstrap(
                     let GetRpcNodeResult {
                         rpc_contact_info,
                         snapshot_hash,
-                    } = rpc_node_details.unwrap();
+                    } = rpc_node_details;
 
                     warn!(
                         "BWLOG: Using RPC service from node {}: {:?}",
@@ -571,12 +560,12 @@ fn get_rpc_node(
     validator_config: &ValidatorConfig,
     blacklisted_rpc_nodes: &mut HashSet<Pubkey>,
     bootstrap_config: &RpcBootstrapConfig,
-) -> Option<GetRpcNodeResult> {
+) -> Vec<GetRpcNodeResult> {
     let mut blacklist_timeout = Instant::now();
     let mut newer_cluster_snapshot_timeout = None;
     let mut retry_reason = None;
     loop {
-        sleep(Duration::from_secs(1));
+        //sleep(Duration::from_secs(1));
         info!("\n{}", cluster_info.rpc_info_trace());
 
         let rpc_peers = get_rpc_peers(
@@ -600,10 +589,10 @@ fn get_rpc_node(
                 continue;
             } else {
                 let random_peer = &rpc_peers[thread_rng().gen_range(0, rpc_peers.len())];
-                return Some(GetRpcNodeResult {
+                return vec![GetRpcNodeResult {
                     rpc_contact_info: random_peer.clone(),
                     snapshot_hash: None,
-                });
+                }];
             }
         }
 
@@ -620,7 +609,7 @@ fn get_rpc_node(
                 Some(newer_cluster_snapshot_timeout) => {
                     if newer_cluster_snapshot_timeout.elapsed().as_secs() > 180 {
                         warn!("Giving up, did not get newer snapshots from the cluster.");
-                        return None;
+                        return vec![];
                     }
                 }
             }
@@ -631,25 +620,21 @@ fn get_rpc_node(
                 .iter()
                 .map(|peer_snapshot_hash| peer_snapshot_hash.rpc_contact_info.id)
                 .collect::<Vec<_>>();
-            let PeerSnapshotHash {
-                rpc_contact_info: final_rpc_contact_info,
-                snapshot_hash: final_snapshot_hash,
-            } = get_final_peer_snapshot_hash(&peer_snapshot_hashes);
-            info!(
-                "Highest available snapshot slot is {}, available from {} node{}: {:?}",
-                final_snapshot_hash
-                    .incr
-                    .map(|(slot, _hash)| slot)
-                    .unwrap_or(final_snapshot_hash.full.0),
+            warn!(
+                "BWLOG: Highest available snapshot slot available from {} node{}: {:?}",
                 rpc_peers.len(),
                 if rpc_peers.len() > 1 { "s" } else { "" },
                 rpc_peers,
             );
-
-            return Some(GetRpcNodeResult {
-                rpc_contact_info: final_rpc_contact_info,
-                snapshot_hash: Some(final_snapshot_hash),
-            });
+            let rpc_node_results = peer_snapshot_hashes.iter().map(|peer_snapshot_hash| {
+                GetRpcNodeResult {
+                    rpc_contact_info: peer_snapshot_hash.rpc_contact_info.clone(),
+                    snapshot_hash: Some(peer_snapshot_hash.snapshot_hash),
+                }
+            })
+            .take(32)
+            .collect();
+            return rpc_node_results;
         }
     }
 }
@@ -1006,29 +991,6 @@ fn retain_peer_snapshot_hashes_with_highest_incremental_snapshot_slot(
         "retain peer snapshot hashes with highest incremental snapshot slot: {:?}",
         &peer_snapshot_hashes
     );
-}
-
-/// Get a final peer from the remaining peer snapshot hashes.  At this point all the snapshot
-/// hashes should (must) be the same, and only the peers are different.  Pick an element from
-/// the slice at random and return it.
-fn get_final_peer_snapshot_hash(peer_snapshot_hashes: &[PeerSnapshotHash]) -> PeerSnapshotHash {
-    assert!(!peer_snapshot_hashes.is_empty());
-
-    // pick a final rpc peer at random
-    let final_peer_snapshot_hash =
-        &peer_snapshot_hashes[thread_rng().gen_range(0, peer_snapshot_hashes.len())];
-
-    // It is a programmer bug if the assert fires!  By the time this function is called, the
-    // only remaining `incremental_snapshot_hashes` should all be the same.
-    assert!(
-        peer_snapshot_hashes.iter().all(|peer_snapshot_hash| {
-            peer_snapshot_hash.snapshot_hash == final_peer_snapshot_hash.snapshot_hash
-        }),
-        "To safely pick a peer at random, all the snapshot hashes must be the same"
-    );
-
-    trace!("final peer snapshot hash: {:?}", final_peer_snapshot_hash);
-    final_peer_snapshot_hash.clone()
 }
 
 /// Check to see if we can use our local snapshots, otherwise download newer ones.
