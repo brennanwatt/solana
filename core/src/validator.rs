@@ -388,7 +388,7 @@ impl Validator {
         let id = identity_keypair.pubkey();
         assert_eq!(id, node.info.id);
 
-        warn!("identity: {}", id);
+        warn!("BWLOG: validator identity: {}", id);
         warn!("vote account: {}", vote_account);
 
         if !config.no_os_network_stats_reporting {
@@ -457,7 +457,7 @@ impl Validator {
             }
         }
 
-        info!("Cleaning accounts paths..");
+        warn!("BWLOG: Cleaning accounts paths..");
         *start_progress.write().unwrap() = ValidatorStartProgress::CleaningAccounts;
         let mut start = Measure::start("clean_accounts_paths");
         for accounts_path in &config.account_paths {
@@ -469,7 +469,7 @@ impl Validator {
             }
         }
         start.stop();
-        info!("done. {}", start);
+        warn!("BWLOG: Done cleaning accounts paths. {}", start);
 
         let exit = Arc::new(AtomicBool::new(false));
         {
@@ -499,17 +499,20 @@ impl Validator {
             transaction_notifier.is_some()
         );
 
+        warn!("BWLOG: starting SystemMonitorService::new");
         let system_monitor_service = Some(SystemMonitorService::new(
             Arc::clone(&exit),
             !config.no_os_memory_stats_reporting,
             !config.no_os_network_stats_reporting,
             !config.no_os_cpu_stats_reporting,
         ));
+        warn!("BWLOG: completed SystemMonitorService::new");
 
         let (poh_timing_point_sender, poh_timing_point_receiver) = unbounded();
         let poh_timing_report_service =
             PohTimingReportService::new(poh_timing_point_receiver, &exit);
 
+        warn!("BWLOG: starting load_blockstore");
         let (
             genesis_config,
             bank_forks,
@@ -540,6 +543,7 @@ impl Validator {
             transaction_notifier,
             Some(poh_timing_point_sender.clone()),
         );
+        warn!("BWLOG: completed load_blockstore");
 
         node.info.wallclock = timestamp();
         node.info.shred_version = compute_shred_version(
@@ -664,6 +668,7 @@ impl Validator {
             )
         };
 
+        warn!("BWLOG: starting ProcessBlockStore");
         let leader_schedule_cache = Arc::new(leader_schedule_cache);
         let mut process_blockstore = ProcessBlockStore::new(
             &id,
@@ -680,6 +685,7 @@ impl Validator {
             accounts_background_request_sender.clone(),
             config,
         );
+        warn!("BWLOG: completed ProcessBlockStore");
 
         maybe_warp_slot(
             config,
@@ -735,6 +741,7 @@ impl Validator {
             max_slots.clone(),
         );
 
+        warn!("BWLOG: starting PohRecorder");
         let poh_config = Arc::new(genesis_config.poh_config.clone());
         let startup_verification_complete;
         let (poh_recorder, entry_receiver, record_receiver) = {
@@ -756,6 +763,7 @@ impl Validator {
             )
         };
         let poh_recorder = Arc::new(RwLock::new(poh_recorder));
+        warn!("BWLOG: completed PohRecorder");
 
         let staked_nodes = Arc::new(RwLock::new(StakedNodes::default()));
 

@@ -41,6 +41,8 @@ use {
     },
 };
 
+pub const MAX_RPC_CONNECTIONS_FOR_SNAPSHOT_DOWNLOAD: usize = 32;
+
 #[derive(Debug)]
 pub struct RpcBootstrapConfig {
     pub no_genesis_fetch: bool,
@@ -348,7 +350,6 @@ pub fn rpc_bootstrap(
     maximum_snapshot_download_abort: u64,
     socket_addr_space: SocketAddrSpace,
 ) {
-    
     if do_port_check {
         let mut order: Vec<_> = (0..cluster_entrypoints.len()).collect();
         order.shuffle(&mut thread_rng());
@@ -374,7 +375,7 @@ pub fn rpc_bootstrap(
     let mut download_abort_count = 0;
     let mut loop_count = 1;
     loop {
-        warn!("BWLOG: loop_count {}",loop_count);
+        warn!("BWLOG: loop_count {}", loop_count);
         loop_count += 1;
         if gossip.is_none() {
             warn!("BWLOG: starting gossip");
@@ -396,7 +397,7 @@ pub fn rpc_bootstrap(
 
         if rpc_vec.is_empty() {
             warn!("BWLOG: starting get_rpc_node");
-            let rpc_node_details_vec = get_rpc_node(
+            let rpc_node_details_vec = get_rpc_nodes(
                 &gossip.as_ref().unwrap().0,
                 cluster_entrypoints,
                 validator_config,
@@ -408,7 +409,8 @@ pub fn rpc_bootstrap(
                 return;
             }
 
-            rpc_vec = rpc_node_details_vec.into_par_iter()
+            rpc_vec = rpc_node_details_vec
+                .into_par_iter()
                 .map(|rpc_node_details| {
                     let GetRpcNodeResult {
                         rpc_contact_info,
@@ -419,8 +421,12 @@ pub fn rpc_bootstrap(
                         "BWLOG: Using RPC service from node {}: {:?}",
                         rpc_contact_info.id, rpc_contact_info.rpc
                     );
-                    let rpc_client = RpcClient::new_socket_with_timeout(rpc_contact_info.rpc, Duration::from_secs(5));
-                    warn!("BWLOG: established RPC client socket from node {}: {:?}",
+                    let rpc_client = RpcClient::new_socket_with_timeout(
+                        rpc_contact_info.rpc,
+                        Duration::from_secs(5),
+                    );
+                    warn!(
+                        "BWLOG: established RPC client socket from node {}: {:?}",
                         rpc_contact_info.id, rpc_contact_info.rpc
                     );
 
@@ -550,11 +556,10 @@ pub fn rpc_bootstrap(
     }
 }
 
-/// Get an RPC peer node to download from.
+/// Get RPC peer node candidates to download from.
 ///
-/// This function finds the highest compatible snapshots from the cluster, then picks one peer
-/// at random to use (return).
-fn get_rpc_node(
+/// This function finds the highest compatible snapshots from the cluster and returns RPC peers.
+fn get_rpc_nodes(
     cluster_info: &ClusterInfo,
     cluster_entrypoints: &[ContactInfo],
     validator_config: &ValidatorConfig,
@@ -565,7 +570,6 @@ fn get_rpc_node(
     let mut newer_cluster_snapshot_timeout = None;
     let mut retry_reason = None;
     loop {
-        //sleep(Duration::from_secs(1));
         info!("\n{}", cluster_info.rpc_info_trace());
 
         let rpc_peers = get_rpc_peers(
@@ -626,14 +630,14 @@ fn get_rpc_node(
                 if rpc_peers.len() > 1 { "s" } else { "" },
                 rpc_peers,
             );
-            let rpc_node_results = peer_snapshot_hashes.iter().map(|peer_snapshot_hash| {
-                GetRpcNodeResult {
+            let rpc_node_results = peer_snapshot_hashes
+                .iter()
+                .map(|peer_snapshot_hash| GetRpcNodeResult {
                     rpc_contact_info: peer_snapshot_hash.rpc_contact_info.clone(),
                     snapshot_hash: Some(peer_snapshot_hash.snapshot_hash),
-                }
-            })
-            .take(32)
-            .collect();
+                })
+                .take(MAX_RPC_CONNECTIONS_FOR_SNAPSHOT_DOWNLOAD)
+                .collect();
             return rpc_node_results;
         }
     }
@@ -1042,7 +1046,7 @@ fn download_snapshots(
             full_snapshot_hash.0, full_snapshot_hash.1
         );
     } else {
-        warn!("BWLOG: starting download_snapshot");
+        warn!("BWLOG: starting download_snapshot (full)");
         download_snapshot(
             full_snapshot_archives_dir,
             incremental_snapshot_archives_dir,

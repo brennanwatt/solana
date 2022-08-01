@@ -116,7 +116,7 @@ pub fn download_file<'a, 'b>(
         );
         progress_bar.set_message(format!("{}Downloading~ {}", TRUCK, url));
     } else {
-        info!("Downloading {} bytes from {}", download_size, url);
+        warn!("BWLOG: Downloading {} bytes from {}", download_size, url);
     }
 
     struct DownloadProgress<'e, 'f, R> {
