@@ -56,21 +56,26 @@ type DownloadProgressCallback<'a> = Box<dyn FnMut(&DownloadProgressRecord) -> bo
 type DownloadProgressCallbackOption<'a> = Option<DownloadProgressCallback<'a>>;
 
 pub fn get_file_download_speed(url: &str) -> Result<usize, String> {
-    warn!("BWLOG: get_file_download_speed");
-    let download_start = Instant::now();
-
-    let mut res = reqwest::blocking::get(url).unwrap();
+    let mut res = reqwest::blocking::Client::new()
+        .get(url)
+        .send()
+        .map_err(|err| err.to_string())?;
 
     let buf = &mut [0; 1_000_000];
-    let num_bytes = if let Ok(bytes) = res.read(buf) {
-        bytes
-    } else {
-        0
-    };
+    let mut total_bytes: usize = 0;
+    let download_start = Instant::now();
+    for _ in 0..10 {
+        if let Ok(bytes) = res.read(buf) {
+            total_bytes = total_bytes.saturating_add(bytes);
+        }
+    }
+    let duration_ms = Instant::now().duration_since(download_start).as_millis() as usize;
 
-    let duration_ms = Instant::now().duration_since(download_start).as_millis();
-    warn!("BWLOG: read {} bytes in {} ms", num_bytes, duration_ms);
-    Ok(num_bytes as usize / duration_ms as usize)
+    warn!(
+        "BWLOG: read {} bytes in {} ms from {}",
+        total_bytes, duration_ms, url
+    );
+    Ok(total_bytes.saturating_div(duration_ms) as usize)
 }
 
 /// This callback allows the caller to get notified of the download progress modelled by DownloadProgressRecord
