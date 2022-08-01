@@ -1402,9 +1402,11 @@ fn load_blockstore(
         }
     }
 
+    warn!("BWLOG: Starting PoH speed test");
     if !config.no_poh_speed_test {
         check_poh_speed(&genesis_config, None);
     }
+    warn!("BWLOG: Completed PoH speed test");
 
     let BlockstoreSignals {
         mut blockstore,
@@ -1462,6 +1464,7 @@ fn load_blockstore(
             TransactionHistoryServices::default()
         };
 
+    warn!("BWLOG: Starting load_bank_forks");
     let (bank_forks, mut leader_schedule_cache, starting_snapshot_hashes) =
         bank_forks_utils::load_bank_forks(
             &genesis_config,
@@ -1475,6 +1478,7 @@ fn load_blockstore(
                 .as_ref(),
             accounts_update_notifier,
         );
+    warn!("BWLOG: Completed load_bank_forks");
 
     // Before replay starts, set the callbacks in each of the banks in BankForks so that
     // all dropped banks come through the `pruned_banks_receiver` channel. This way all bank
@@ -1514,6 +1518,7 @@ fn load_blockstore(
         }
     }
 
+    warn!("BWLOG: Starting set_fixed_leader_schedule");
     leader_schedule_cache.set_fixed_leader_schedule(config.fixed_leader_schedule.clone());
     {
         let mut bank_forks = bank_forks.write().unwrap();
@@ -1525,6 +1530,7 @@ fn load_blockstore(
                 .set_shrink_paths(shrink_paths.clone());
         }
     }
+    warn!("BWLOG: Completed set_fixed_leader_schedule");
 
     (
         genesis_config,
