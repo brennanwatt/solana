@@ -102,7 +102,7 @@ enum Operation {
 const EXCLUDE_KEY: &str = "account-index-exclude-key";
 const INCLUDE_KEY: &str = "account-index-include-key";
 // The default minimal snapshot download speed (bytes/second)
-const DEFAULT_MIN_SNAPSHOT_DOWNLOAD_SPEED: u64 = 10485760;
+const DEFAULT_MIN_SNAPSHOT_DOWNLOAD_SPEED: u64 = 10_485_760;
 // The maximum times of snapshot download abort and retry
 const MAX_SNAPSHOT_DOWNLOAD_ABORT: u32 = 5;
 const MILLIS_PER_SECOND: u64 = 1000;

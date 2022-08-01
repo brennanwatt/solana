@@ -55,6 +55,24 @@ pub struct DownloadProgressRecord {
 type DownloadProgressCallback<'a> = Box<dyn FnMut(&DownloadProgressRecord) -> bool + 'a>;
 type DownloadProgressCallbackOption<'a> = Option<DownloadProgressCallback<'a>>;
 
+pub fn get_file_download_speed (url: &str) -> Result<f64, String> {
+    warn!("BWLOG: get_file_download_speed");
+    let download_start = Instant::now();
+
+    let mut res = reqwest::blocking::get(url).unwrap();
+
+    let buf = &mut [0; 1_000_000];
+    let num_bytes = if let Ok(bytes) = res.read(buf) {
+        bytes
+    } else {
+        0
+    };
+
+    let duration_ms = Instant::now().duration_since(download_start).as_millis();
+    warn!("BWLOG: read {} bytes in {} ms", num_bytes, duration_ms);
+    Ok(num_bytes as f64 / duration_ms as f64)
+}
+
 /// This callback allows the caller to get notified of the download progress modelled by DownloadProgressRecord
 /// Return "true" to continue the download
 /// Return "false" to abort the download

@@ -4,7 +4,9 @@ use {
     rayon::prelude::*,
     solana_client::rpc_client::RpcClient,
     solana_core::validator::{ValidatorConfig, ValidatorStartProgress},
-    solana_download_utils::{download_snapshot_archive, DownloadProgressRecord},
+    solana_download_utils::{
+        download_snapshot_archive, get_file_download_speed, DownloadProgressRecord,
+    },
     solana_genesis_utils::download_then_check_genesis_hash,
     solana_gossip::{
         cluster_info::{ClusterInfo, Node},
@@ -29,7 +31,7 @@ use {
     },
     solana_streamer::socket::SocketAddrSpace,
     std::{
-        collections::{HashMap, HashSet},
+        collections::{hash_map::RandomState, HashMap, HashSet},
         net::{SocketAddr, TcpListener, UdpSocket},
         path::Path,
         process::exit,
@@ -324,9 +326,137 @@ struct PeerSnapshotHash {
 /// A snapshot hash.  In this context (bootstrap *with* incremental snapshots), a snapshot hash
 /// is _both_ a full snapshot hash and an (optional) incremental snapshot hash.
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
-struct SnapshotHash {
+pub struct SnapshotHash {
     full: (Slot, Hash),
     incr: Option<(Slot, Hash)>,
+}
+
+pub fn fail_rpc_node(
+    err: String,
+    known_validators: &Option<HashSet<Pubkey, RandomState>>,
+    rpc_id: &Pubkey,
+    blacklisted_rpc_nodes: &mut HashSet<Pubkey, RandomState>,
+) {
+    warn!("BWLOG: not ok result {}", err);
+    if let Some(ref known_validators) = known_validators {
+        if known_validators.contains(rpc_id) {
+            return;
+        }
+    }
+
+    info!("Excluding {} as a future RPC candidate", rpc_id);
+    blacklisted_rpc_nodes.insert(*rpc_id);
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn attempt_download_genesis_and_snapshot(
+    rpc_contact_info: &ContactInfo,
+    ledger_path: &Path,
+    validator_config: &mut ValidatorConfig,
+    bootstrap_config: &RpcBootstrapConfig,
+    use_progress_bar: bool,
+    gossip: &mut Option<(Arc<ClusterInfo>, Arc<AtomicBool>, GossipService)>,
+    rpc_client: &RpcClient,
+    full_snapshot_archives_dir: &Path,
+    incremental_snapshot_archives_dir: &Path,
+    maximum_local_snapshot_age: Slot,
+    start_progress: &Arc<RwLock<ValidatorStartProgress>>,
+    minimal_snapshot_download_speed: f32,
+    maximum_snapshot_download_abort: u64,
+    download_abort_count: &mut u64,
+    snapshot_hash: Option<SnapshotHash>,
+    identity_keypair: &Arc<Keypair>,
+    vote_account: &Pubkey,
+    authorized_voter_keypairs: Arc<RwLock<Vec<Arc<Keypair>>>>,
+) -> Result<(), String> {
+    warn!("BWLOG: starting download_then_check_genesis_hash");
+    let genesis_config = download_then_check_genesis_hash(
+        &rpc_contact_info.rpc,
+        ledger_path,
+        validator_config.expected_genesis_hash,
+        bootstrap_config.max_genesis_archive_unpacked_size,
+        bootstrap_config.no_genesis_fetch,
+        use_progress_bar,
+    );
+    warn!("BWLOG: completed download_then_check_genesis_hash");
+
+    if let Ok(genesis_config) = genesis_config {
+        let genesis_hash = genesis_config.hash();
+        if validator_config.expected_genesis_hash.is_none() {
+            info!("Expected genesis hash set to {}", genesis_hash);
+            validator_config.expected_genesis_hash = Some(genesis_hash);
+        }
+    }
+
+    if let Some(expected_genesis_hash) = validator_config.expected_genesis_hash {
+        // Sanity check that the RPC node is using the expected genesis hash before
+        // downloading a snapshot from it
+        let rpc_genesis_hash = rpc_client
+            .get_genesis_hash()
+            .map_err(|err| format!("Failed to get genesis hash: {}", err))?;
+
+        if expected_genesis_hash != rpc_genesis_hash {
+            return Err(format!(
+                "Genesis hash mismatch: expected {} but RPC node genesis hash is {}",
+                expected_genesis_hash, rpc_genesis_hash
+            ));
+        }
+    }
+    warn!("BWLOG: completed check download_then_check_genesis_hash");
+
+    let (cluster_info, gossip_exit_flag, gossip_service) = gossip.take().unwrap();
+    cluster_info.save_contact_info();
+    gossip_exit_flag.store(true, Ordering::Relaxed);
+    gossip_service.join().unwrap();
+
+    let rpc_client_slot = rpc_client
+        .get_slot_with_commitment(CommitmentConfig::finalized())
+        .map_err(|err| format!("Failed to get RPC node slot: {}", err))?;
+    info!("RPC node root slot: {}", rpc_client_slot);
+
+    warn!("BWLOG: starting download_snapshots");
+    if let Err(err) = download_snapshots(
+        full_snapshot_archives_dir,
+        incremental_snapshot_archives_dir,
+        validator_config,
+        bootstrap_config,
+        use_progress_bar,
+        maximum_local_snapshot_age,
+        start_progress,
+        minimal_snapshot_download_speed,
+        maximum_snapshot_download_abort,
+        download_abort_count,
+        snapshot_hash,
+        rpc_contact_info,
+    ) {
+        return Err(err);
+    };
+
+    if let Some(url) = bootstrap_config.check_vote_account.as_ref() {
+        let rpc_client = RpcClient::new(url);
+        check_vote_account(
+            &rpc_client,
+            &identity_keypair.pubkey(),
+            vote_account,
+            &authorized_voter_keypairs
+                .read()
+                .unwrap()
+                .iter()
+                .map(|k| k.pubkey())
+                .collect::<Vec<_>>(),
+        )
+        .unwrap_or_else(|err| {
+            // Consider failures here to be more likely due to user error (eg,
+            // incorrect `solana-validator` command-line arguments) rather than the
+            // RPC node failing.
+            //
+            // Power users can always use the `--no-check-vote-account` option to
+            // bypass this check entirely
+            error!("{}", err);
+            exit(1);
+        });
+    }
+    Ok(())
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -369,9 +499,9 @@ pub fn rpc_bootstrap(
         return;
     }
 
-    let mut blacklisted_rpc_nodes = HashSet::new();
+    let blacklisted_rpc_nodes = RwLock::new(HashSet::new());
     let mut gossip = None;
-    let mut rpc_vec: Vec<(ContactInfo, Option<SnapshotHash>, RpcClient)> = vec![];
+    let mut rpc_vec: Vec<(usize, ContactInfo, Option<SnapshotHash>, RpcClient)> = vec![];
     let mut download_abort_count = 0;
     let mut loop_count = 1;
     loop {
@@ -401,7 +531,7 @@ pub fn rpc_bootstrap(
                 &gossip.as_ref().unwrap().0,
                 cluster_entrypoints,
                 validator_config,
-                &mut blacklisted_rpc_nodes,
+                &mut blacklisted_rpc_nodes.write().unwrap(),
                 &bootstrap_config,
             );
             warn!("BWLOG: completed get_rpc_node");
@@ -432,123 +562,70 @@ pub fn rpc_bootstrap(
 
                     (rpc_contact_info, snapshot_hash, rpc_client)
                 })
+                .filter(|(rpc_contact_info, _snapshot_hash, rpc_client)| {
+                    match rpc_client.get_version() {
+                        Ok(rpc_version) => {
+                            info!("RPC node version: {}", rpc_version.solana_core);
+                            true
+                        }
+                        Err(err) => {
+                            fail_rpc_node(
+                                format!("Failed to get RPC node version: {}", err),
+                                &validator_config.known_validators,
+                                &rpc_contact_info.id,
+                                &mut blacklisted_rpc_nodes.write().unwrap(),
+                            );
+                            false
+                        }
+                    }
+                })
+                .map(|(rpc_contact_info, snapshot_hash, rpc_client)| {
+                    let download_speed = 5; /*get_file_download_speed(
+                                                &format!(
+                                                    "http://{}/{}",
+                                                    rpc_contact_info.rpc,
+                                                    destination_path.file_name().unwrap().to_str().unwrap()
+                                                )
+                                            ).unwrap();*/
+                    (download_speed, rpc_contact_info, snapshot_hash, rpc_client)
+                })
                 .collect();
         }
-        let (rpc_contact_info, snapshot_hash, rpc_client) = rpc_vec.pop().unwrap();
+        rpc_vec.sort_by_key(|k| k.0);
+        let (_download_speed, rpc_contact_info, snapshot_hash, rpc_client) = rpc_vec.pop().unwrap();
 
-        let result = match rpc_client.get_version() {
-            Ok(rpc_version) => {
-                info!("RPC node version: {}", rpc_version.solana_core);
-                Ok(())
-            }
-            Err(err) => Err(format!("Failed to get RPC node version: {}", err)),
-        }
-        .and_then(|_| {
-            warn!("BWLOG: starting download_then_check_genesis_hash");
-            let genesis_config = download_then_check_genesis_hash(
-                &rpc_contact_info.rpc,
-                ledger_path,
-                validator_config.expected_genesis_hash,
-                bootstrap_config.max_genesis_archive_unpacked_size,
-                bootstrap_config.no_genesis_fetch,
-                use_progress_bar,
-            );
-            warn!("BWLOG: completed download_then_check_genesis_hash");
-
-            if let Ok(genesis_config) = genesis_config {
-                let genesis_hash = genesis_config.hash();
-                if validator_config.expected_genesis_hash.is_none() {
-                    info!("Expected genesis hash set to {}", genesis_hash);
-                    validator_config.expected_genesis_hash = Some(genesis_hash);
-                }
-            }
-
-            if let Some(expected_genesis_hash) = validator_config.expected_genesis_hash {
-                // Sanity check that the RPC node is using the expected genesis hash before
-                // downloading a snapshot from it
-                let rpc_genesis_hash = rpc_client
-                    .get_genesis_hash()
-                    .map_err(|err| format!("Failed to get genesis hash: {}", err))?;
-
-                if expected_genesis_hash != rpc_genesis_hash {
-                    return Err(format!(
-                        "Genesis hash mismatch: expected {} but RPC node genesis hash is {}",
-                        expected_genesis_hash, rpc_genesis_hash
-                    ));
-                }
-            }
-            warn!("BWLOG: completed check download_then_check_genesis_hash");
-
-            let (cluster_info, gossip_exit_flag, gossip_service) = gossip.take().unwrap();
-            cluster_info.save_contact_info();
-            gossip_exit_flag.store(true, Ordering::Relaxed);
-            gossip_service.join().unwrap();
-
-            let rpc_client_slot = rpc_client
-                .get_slot_with_commitment(CommitmentConfig::finalized())
-                .map_err(|err| format!("Failed to get RPC node slot: {}", err))?;
-            info!("RPC node root slot: {}", rpc_client_slot);
-
-            warn!("BWLOG: starting download_snapshots");
-            download_snapshots(
-                full_snapshot_archives_dir,
-                incremental_snapshot_archives_dir,
-                validator_config,
-                &bootstrap_config,
-                use_progress_bar,
-                maximum_local_snapshot_age,
-                start_progress,
-                minimal_snapshot_download_speed,
-                maximum_snapshot_download_abort,
-                &mut download_abort_count,
-                snapshot_hash,
-                &rpc_contact_info,
-            )
-        })
-        .map(|_| {
-            if let Some(url) = bootstrap_config.check_vote_account.as_ref() {
-                let rpc_client = RpcClient::new(url);
-                check_vote_account(
-                    &rpc_client,
-                    &identity_keypair.pubkey(),
-                    vote_account,
-                    &authorized_voter_keypairs
-                        .read()
-                        .unwrap()
-                        .iter()
-                        .map(|k| k.pubkey())
-                        .collect::<Vec<_>>(),
-                )
-                .unwrap_or_else(|err| {
-                    // Consider failures here to be more likely due to user error (eg,
-                    // incorrect `solana-validator` command-line arguments) rather than the
-                    // RPC node failing.
-                    //
-                    // Power users can always use the `--no-check-vote-account` option to
-                    // bypass this check entirely
-                    error!("{}", err);
-                    exit(1);
-                });
-            }
-        });
-
-        if result.is_ok() {
-            break;
-        }
-        warn!("BWLOG: not ok result {}", result.unwrap_err());
-
-        if let Some(ref known_validators) = validator_config.known_validators {
-            if known_validators.contains(&rpc_contact_info.id) {
-                continue; // Never blacklist a known node
+        match attempt_download_genesis_and_snapshot(
+            &rpc_contact_info,
+            ledger_path,
+            validator_config,
+            &bootstrap_config,
+            use_progress_bar,
+            &mut gossip,
+            &rpc_client,
+            full_snapshot_archives_dir,
+            incremental_snapshot_archives_dir,
+            maximum_local_snapshot_age,
+            start_progress,
+            minimal_snapshot_download_speed,
+            maximum_snapshot_download_abort,
+            &mut download_abort_count,
+            snapshot_hash,
+            identity_keypair,
+            vote_account,
+            authorized_voter_keypairs.clone(),
+        ) {
+            Ok(()) => break,
+            Err(err) => {
+                fail_rpc_node(
+                    err,
+                    &validator_config.known_validators,
+                    &rpc_contact_info.id,
+                    &mut blacklisted_rpc_nodes.write().unwrap(),
+                );
             }
         }
-
-        info!(
-            "Excluding {} as a future RPC candidate",
-            rpc_contact_info.id
-        );
-        blacklisted_rpc_nodes.insert(rpc_contact_info.id);
     }
+
     if let Some((cluster_info, gossip_exit_flag, gossip_service)) = gossip.take() {
         cluster_info.save_contact_info();
         gossip_exit_flag.store(true, Ordering::Relaxed);
