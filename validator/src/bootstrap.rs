@@ -560,54 +560,54 @@ pub fn rpc_bootstrap(
                         rpc_contact_info.id, rpc_contact_info.rpc
                     );
 
-                    (rpc_contact_info, snapshot_hash, rpc_client)
+                    (0, rpc_contact_info, snapshot_hash, rpc_client)
                 })
-                .filter(|(rpc_contact_info, _snapshot_hash, rpc_client)| {
-                    match rpc_client.get_version() {
-                        Ok(rpc_version) => {
-                            info!("RPC node version: {}", rpc_version.solana_core);
-                            true
+                .filter(
+                    |(_download_speed, rpc_contact_info, _snapshot_hash, rpc_client)| {
+                        match rpc_client.get_version() {
+                            Ok(rpc_version) => {
+                                info!("RPC node version: {}", rpc_version.solana_core);
+                                true
+                            }
+                            Err(err) => {
+                                fail_rpc_node(
+                                    format!("Failed to get RPC node version: {}", err),
+                                    &validator_config.known_validators,
+                                    &rpc_contact_info.id,
+                                    &mut blacklisted_rpc_nodes.write().unwrap(),
+                                );
+                                false
+                            }
                         }
-                        Err(err) => {
-                            fail_rpc_node(
-                                format!("Failed to get RPC node version: {}", err),
-                                &validator_config.known_validators,
-                                &rpc_contact_info.id,
-                                &mut blacklisted_rpc_nodes.write().unwrap(),
-                            );
-                            false
-                        }
-                    }
-                })
-                .map(|(rpc_contact_info, snapshot_hash, rpc_client)| {
-                    let full_snapshot_url = {
-                        let desired_snapshot_hash = snapshot_hash.unwrap().full;
-                        let destination_path = snapshot_utils::build_full_snapshot_archive_path(
-                            &snapshot_utils::build_snapshot_archives_remote_dir(
-                                full_snapshot_archives_dir,
-                            ),
-                            desired_snapshot_hash.0,
-                            &desired_snapshot_hash.1,
-                            ArchiveFormat::TarZstd,
-                        );
-                        format!(
-                            "http://{}/{}",
-                            rpc_contact_info.rpc,
-                            destination_path.file_name().unwrap().to_str().unwrap()
-                        )
-                    };
-                    let download_speed = match get_file_download_speed(&full_snapshot_url) {
-                        Ok(download_speed) => download_speed,
-                        Err(err) => {
-                            warn!("error estimating snapshot download speed: {}", err);
-                            0
-                        }
-                    };
-                    (download_speed, rpc_contact_info, snapshot_hash, rpc_client)
-                })
+                    },
+                )
                 .collect();
         }
 
+        let desired_snapshot_hash = vetted_rpc_nodes[0].2.unwrap().full;
+        let destination_path = snapshot_utils::build_full_snapshot_archive_path(
+            &snapshot_utils::build_snapshot_archives_remote_dir(full_snapshot_archives_dir),
+            desired_snapshot_hash.0,
+            &desired_snapshot_hash.1,
+            ArchiveFormat::TarZstd,
+        );
+        vetted_rpc_nodes
+            .iter_mut()
+            .for_each(|(download_speed, rpc_contact_info, _, _)| {
+                let full_snapshot_url = format!(
+                    "http://{}/{}",
+                    rpc_contact_info.rpc,
+                    destination_path.file_name().unwrap().to_str().unwrap()
+                );
+                *download_speed = match get_file_download_speed(&full_snapshot_url) {
+                    Ok(download_speed) => download_speed,
+                    Err(err) => {
+                        warn!("error estimating snapshot download speed: {}", err);
+                        0
+                    }
+                };
+                warn!("BWLOG: {} download speed {}", rpc_contact_info.rpc, *download_speed);
+            });
         // Sort by estimated download speed to reduce startup time.
         vetted_rpc_nodes.sort_by_key(|k| k.0);
         let (_download_speed, rpc_contact_info, snapshot_hash, rpc_client) =
