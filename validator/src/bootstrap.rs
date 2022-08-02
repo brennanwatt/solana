@@ -43,7 +43,7 @@ use {
     },
 };
 
-pub const MAX_RPC_CONNECTIONS_FOR_SNAPSHOT_DOWNLOAD: usize = 32;
+pub const MAX_RPC_CONNECTIONS_FOR_SNAPSHOT_DOWNLOAD: usize = 16;
 
 #[derive(Debug)]
 pub struct RpcBootstrapConfig {
@@ -508,7 +508,6 @@ pub fn rpc_bootstrap(
         warn!("BWLOG: loop_count {}", loop_count);
         loop_count += 1;
         if gossip.is_none() {
-            warn!("BWLOG: starting gossip");
             *start_progress.write().unwrap() = ValidatorStartProgress::SearchingForRpcService;
 
             gossip = Some(start_gossip_node(
@@ -522,7 +521,6 @@ pub fn rpc_bootstrap(
                 should_check_duplicate_instance,
                 socket_addr_space,
             ));
-            warn!("BWLOG: started gossip");
         }
 
         while vetted_rpc_nodes.is_empty() {
@@ -584,6 +582,7 @@ pub fn rpc_bootstrap(
                 .collect();
 
             if !vetted_rpc_nodes.is_empty() {
+                warn!("BWLOG: Checking speed for {} nodes", vetted_rpc_nodes.len());
                 let desired_snapshot_hash = vetted_rpc_nodes[0].2.unwrap().full;
                 let destination_path = snapshot_utils::build_full_snapshot_archive_path(
                     &snapshot_utils::build_snapshot_archives_remote_dir(full_snapshot_archives_dir),
