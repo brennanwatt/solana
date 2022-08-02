@@ -525,7 +525,8 @@ pub fn rpc_bootstrap(
             warn!("BWLOG: started gossip");
         }
 
-        if vetted_rpc_nodes.is_empty() {
+        while vetted_rpc_nodes.is_empty() {
+            
             warn!("BWLOG: starting get_rpc_node");
             let rpc_node_details_vec = get_rpc_nodes(
                 &gossip.as_ref().unwrap().0,
@@ -582,34 +583,38 @@ pub fn rpc_bootstrap(
                     },
                 )
                 .collect();
+
+            if !vetted_rpc_nodes.is_empty() {
+                let desired_snapshot_hash = vetted_rpc_nodes[0].2.unwrap().full;
+                let destination_path = snapshot_utils::build_full_snapshot_archive_path(
+                    &snapshot_utils::build_snapshot_archives_remote_dir(full_snapshot_archives_dir),
+                    desired_snapshot_hash.0,
+                    &desired_snapshot_hash.1,
+                    ArchiveFormat::TarZstd,
+                );
+                vetted_rpc_nodes
+                    .iter_mut()
+                    .for_each(|(download_speed, rpc_contact_info, _, _)| {
+                        let full_snapshot_url = format!(
+                            "http://{}/{}",
+                            rpc_contact_info.rpc,
+                            destination_path.file_name().unwrap().to_str().unwrap()
+                        );
+                        *download_speed = match get_file_download_speed(&full_snapshot_url) {
+                            Ok(download_speed) => download_speed,
+                            Err(err) => {
+                                warn!("error estimating snapshot download speed: {}", err);
+                                0
+                            }
+                        };
+                        warn!("BWLOG: {} download speed {}", rpc_contact_info.rpc, *download_speed);
+                    });
+
+                // Sort by estimated download speed to reduce startup time.
+                vetted_rpc_nodes.sort_by_key(|k| k.0);
+            }
         }
 
-        let desired_snapshot_hash = vetted_rpc_nodes[0].2.unwrap().full;
-        let destination_path = snapshot_utils::build_full_snapshot_archive_path(
-            &snapshot_utils::build_snapshot_archives_remote_dir(full_snapshot_archives_dir),
-            desired_snapshot_hash.0,
-            &desired_snapshot_hash.1,
-            ArchiveFormat::TarZstd,
-        );
-        vetted_rpc_nodes
-            .iter_mut()
-            .for_each(|(download_speed, rpc_contact_info, _, _)| {
-                let full_snapshot_url = format!(
-                    "http://{}/{}",
-                    rpc_contact_info.rpc,
-                    destination_path.file_name().unwrap().to_str().unwrap()
-                );
-                *download_speed = match get_file_download_speed(&full_snapshot_url) {
-                    Ok(download_speed) => download_speed,
-                    Err(err) => {
-                        warn!("error estimating snapshot download speed: {}", err);
-                        0
-                    }
-                };
-                warn!("BWLOG: {} download speed {}", rpc_contact_info.rpc, *download_speed);
-            });
-        // Sort by estimated download speed to reduce startup time.
-        vetted_rpc_nodes.sort_by_key(|k| k.0);
         let (_download_speed, rpc_contact_info, snapshot_hash, rpc_client) =
             vetted_rpc_nodes.pop().unwrap();
 
