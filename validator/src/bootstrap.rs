@@ -43,7 +43,7 @@ use {
     },
 };
 
-pub const MAX_RPC_CONNECTIONS_FOR_SNAPSHOT_DOWNLOAD: usize = 16;
+pub const MAX_RPC_CONNECTIONS_FOR_SNAPSHOT_DOWNLOAD: usize = 32;
 
 #[derive(Debug)]
 pub struct RpcBootstrapConfig {
@@ -590,14 +590,11 @@ pub fn rpc_bootstrap(
                     &desired_snapshot_hash.1,
                     ArchiveFormat::TarZstd,
                 );
-                vetted_rpc_nodes
-                    .iter_mut()
-                    .for_each(|(download_speed, rpc_contact_info, _, _)| {
-                        let full_snapshot_url = format!(
-                            "http://{}/{}",
-                            rpc_contact_info.rpc,
-                            destination_path.file_name().unwrap().to_str().unwrap()
-                        );
+                let destination_path = destination_path.file_name().unwrap().to_str().unwrap();
+                vetted_rpc_nodes.par_iter_mut().for_each(
+                    |(download_speed, rpc_contact_info, _, _)| {
+                        let full_snapshot_url =
+                            format!("http://{}/{}", rpc_contact_info.rpc, destination_path);
                         *download_speed = match get_file_download_speed(&full_snapshot_url) {
                             Ok(download_speed) => download_speed,
                             Err(err) => {
@@ -605,11 +602,8 @@ pub fn rpc_bootstrap(
                                 0
                             }
                         };
-                        warn!(
-                            "BWLOG: {} download speed {}",
-                            rpc_contact_info.rpc, *download_speed
-                        );
-                    });
+                    },
+                );
 
                 // Sort by estimated download speed to reduce startup time.
                 vetted_rpc_nodes.sort_by_key(|k| k.0);
