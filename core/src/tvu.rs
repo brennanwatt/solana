@@ -154,6 +154,7 @@ impl Tvu {
             bank_forks.clone(),
             exit,
         );
+        warn!("BWLOG: ShredFetchStage");
 
         let (verified_sender, verified_receiver) = unbounded();
         let (retransmit_sender, retransmit_receiver) = unbounded();
@@ -166,6 +167,7 @@ impl Tvu {
             verified_sender,
             turbine_disabled,
         );
+        warn!("BWLOG: sigverify_shreds");
 
         let retransmit_stage = RetransmitStage::new(
             bank_forks.clone(),
@@ -176,6 +178,7 @@ impl Tvu {
             max_slots.clone(),
             Some(rpc_subscriptions.clone()),
         );
+        warn!("BWLOG: RetransmitStage");
 
         let cluster_slots = Arc::new(ClusterSlots::default());
         let (duplicate_slots_reset_sender, duplicate_slots_reset_receiver) = unbounded();
@@ -207,6 +210,7 @@ impl Tvu {
                 ancestor_hashes_replay_update_receiver,
             )
         };
+        warn!("BWLOG: WindowService");
 
         let (cluster_slots_update_sender, cluster_slots_update_receiver) = unbounded();
         let cluster_slots_service = ClusterSlotsService::new(
@@ -217,6 +221,7 @@ impl Tvu {
             cluster_slots_update_receiver,
             exit.clone(),
         );
+        warn!("BWLOG: ClusterSlotsService");
 
         let (ledger_cleanup_slot_sender, ledger_cleanup_slot_receiver) = unbounded();
         let replay_stage_config = ReplayStageConfig {
@@ -237,6 +242,7 @@ impl Tvu {
             tower_storage: tower_storage.clone(),
             wait_to_vote_slot,
         };
+        warn!("BWLOG: ReplayStageConfig");
 
         let (voting_sender, voting_receiver) = unbounded();
         let voting_service = VotingService::new(
@@ -246,6 +252,7 @@ impl Tvu {
             tower_storage,
             bank_forks.clone(),
         );
+        warn!("BWLOG: VotingService");
 
         let warm_quic_cache_service = if connection_cache.use_quic() {
             Some(WarmQuicCacheService::new(
@@ -288,6 +295,7 @@ impl Tvu {
             block_metadata_notifier,
             log_messages_bytes_limit,
         );
+        warn!("BWLOG: ReplayStage");
 
         let ledger_cleanup_service = tvu_config.max_ledger_shreds.map(|max_ledger_shreds| {
             LedgerCleanupService::new(
@@ -299,6 +307,7 @@ impl Tvu {
                 tvu_config.rocksdb_max_compaction_jitter,
             )
         });
+        warn!("BWLOG: LedgerCleanupService");
 
         Tvu {
             fetch_stage,
