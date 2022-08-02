@@ -426,7 +426,7 @@ impl ReplayStage {
             wait_to_vote_slot,
         } = config;
 
-        trace!("replay stage");
+        warn!("BWLOG: replay stage");
         // Start the replay stage loop
         let (lockouts_sender, commitment_service) = AggregateCommitmentService::new(
             &exit,
@@ -472,6 +472,7 @@ impl ReplayStage {
                     (r_bank_forks.working_bank(), r_bank_forks.get_vote_only_mode_signal())
                 };
 
+                warn!("BWLOG: reset_poh_recorder");
                 Self::reset_poh_recorder(
                     &my_pubkey,
                     &blockstore,
@@ -479,6 +480,7 @@ impl ReplayStage {
                     &poh_recorder,
                     &leader_schedule_cache,
                 );
+                warn!("BWLOG: completed reset_poh_recorder");
 
                 loop {
                     // Stop getting entries if we get exit signal
