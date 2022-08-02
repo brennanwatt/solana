@@ -526,7 +526,6 @@ pub fn rpc_bootstrap(
         }
 
         while vetted_rpc_nodes.is_empty() {
-            
             warn!("BWLOG: starting get_rpc_node");
             let rpc_node_details_vec = get_rpc_nodes(
                 &gossip.as_ref().unwrap().0,
@@ -607,7 +606,10 @@ pub fn rpc_bootstrap(
                                 0
                             }
                         };
-                        warn!("BWLOG: {} download speed {}", rpc_contact_info.rpc, *download_speed);
+                        warn!(
+                            "BWLOG: {} download speed {}",
+                            rpc_contact_info.rpc, *download_speed
+                        );
                     });
 
                 // Sort by estimated download speed to reduce startup time.

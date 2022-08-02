@@ -61,8 +61,8 @@ pub fn get_file_download_speed(url: &str) -> Result<usize, String> {
         .send()
         .map_err(|err| err.to_string())?;
 
-    const SPEED_TEST_BYTES_TO_DOWNLOAD: usize = 262_144;
-    const SPEED_TEST_TIMEOUT_MS: u128 = 500;
+    const SPEED_TEST_BYTES_TO_DOWNLOAD: usize = 1024 * 1024;
+    const SPEED_TEST_TIMEOUT_MS: u128 = 1000;
     let buf = &mut [0; SPEED_TEST_BYTES_TO_DOWNLOAD * 2];
     let mut total_bytes: usize = 0;
     let download_start = Instant::now();
@@ -75,12 +75,15 @@ pub fn get_file_download_speed(url: &str) -> Result<usize, String> {
         }
     }
     let duration_ms = Instant::now().duration_since(download_start).as_millis() as usize;
-
+    let download_speed = total_bytes.saturating_div(duration_ms) as usize;
     warn!(
-        "BWLOG: read {} bytes in {} ms from {}",
-        total_bytes, duration_ms, url
+        "BWLOG: read {} bytes in {} ms ({} kB/s) from {}",
+        total_bytes,
+        duration_ms,
+        download_speed * 1000 / 1024,
+        url
     );
-    Ok(total_bytes.saturating_div(duration_ms) as usize)
+    Ok(download_speed)
 }
 
 /// This callback allows the caller to get notified of the download progress modelled by DownloadProgressRecord
