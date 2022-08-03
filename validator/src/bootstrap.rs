@@ -579,39 +579,35 @@ pub fn rpc_bootstrap(
                         }
                     },
                 )
+                .map(|(_, rpc_contact_info, snapshot_hash, rpc_client)| {
+                    let desired_snapshot_hash = snapshot_hash.unwrap().full;
+                    let destination_path = snapshot_utils::build_full_snapshot_archive_path(
+                        &snapshot_utils::build_snapshot_archives_remote_dir(
+                            full_snapshot_archives_dir,
+                        ),
+                        desired_snapshot_hash.0,
+                        &desired_snapshot_hash.1,
+                        ArchiveFormat::TarZstd,
+                    );
+                    let destination_path = destination_path.file_name().unwrap().to_str().unwrap();
+                    let full_snapshot_url =
+                        format!("http://{}/{}", rpc_contact_info.rpc, destination_path);
+                    let download_speed = match get_file_download_speed(&full_snapshot_url) {
+                        Ok(download_speed) => download_speed,
+                        Err(err) => {
+                            warn!("error estimating snapshot download speed: {}", err);
+                            0
+                        }
+                    };
+                    (download_speed, rpc_contact_info, snapshot_hash, rpc_client)
+                })
                 .collect();
 
-            if !vetted_rpc_nodes.is_empty() {
-                warn!("BWLOG: Checking speed for {} nodes", vetted_rpc_nodes.len());
-                let desired_snapshot_hash = vetted_rpc_nodes[0].2.unwrap().full;
-                let destination_path = snapshot_utils::build_full_snapshot_archive_path(
-                    &snapshot_utils::build_snapshot_archives_remote_dir(full_snapshot_archives_dir),
-                    desired_snapshot_hash.0,
-                    &desired_snapshot_hash.1,
-                    ArchiveFormat::TarZstd,
-                );
-                let destination_path = destination_path.file_name().unwrap().to_str().unwrap();
-                vetted_rpc_nodes.par_iter_mut().for_each(
-                    |(download_speed, rpc_contact_info, _, _)| {
-                        let full_snapshot_url =
-                            format!("http://{}/{}", rpc_contact_info.rpc, destination_path);
-                        *download_speed = match get_file_download_speed(&full_snapshot_url) {
-                            Ok(download_speed) => download_speed,
-                            Err(err) => {
-                                warn!("error estimating snapshot download speed: {}", err);
-                                0
-                            }
-                        };
-                    },
-                );
-
-                // Sort by estimated download speed to reduce startup time.
-                vetted_rpc_nodes.sort_by_key(|k| k.0);
-            }
+            // Sort by estimated download speed to reduce startup time.
+            vetted_rpc_nodes.sort_by_key(|k| k.0);
         }
 
-        let (_download_speed, rpc_contact_info, snapshot_hash, rpc_client) =
-            vetted_rpc_nodes.pop().unwrap();
+        let (_, rpc_contact_info, snapshot_hash, rpc_client) = vetted_rpc_nodes.pop().unwrap();
 
         match attempt_download_genesis_and_snapshot(
             &rpc_contact_info,
