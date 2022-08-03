@@ -504,6 +504,7 @@ pub fn rpc_bootstrap(
     let mut vetted_rpc_nodes: Vec<(usize, ContactInfo, Option<SnapshotHash>, RpcClient)> = vec![];
     let mut download_abort_count = 0;
     let mut loop_count = 1;
+    let speed_test_lock = RwLock::new(1);
     loop {
         warn!("BWLOG: loop_count {}", loop_count);
         loop_count += 1;
@@ -592,6 +593,7 @@ pub fn rpc_bootstrap(
                     let destination_path = destination_path.file_name().unwrap().to_str().unwrap();
                     let full_snapshot_url =
                         format!("http://{}/{}", rpc_contact_info.rpc, destination_path);
+                    let lock = speed_test_lock.write().unwrap();
                     let download_speed = match get_file_download_speed(&full_snapshot_url) {
                         Ok(download_speed) => download_speed,
                         Err(err) => {
@@ -599,6 +601,7 @@ pub fn rpc_bootstrap(
                             0
                         }
                     };
+                    drop(lock);
                     (download_speed, rpc_contact_info, snapshot_hash, rpc_client)
                 })
                 .collect();
