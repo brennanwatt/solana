@@ -816,6 +816,7 @@ pub fn process_blockstore_from_root(
 
     let mut timing = ExecuteTimings::default();
 
+    warn!("BWLOG: load_frozen_forks");
     // Iterate and replay slots from blockstore starting from `start_slot`
     if let Some(start_slot_meta) = blockstore
         .meta(start_slot)
@@ -844,6 +845,7 @@ pub fn process_blockstore_from_root(
             start_slot
         );
     };
+    warn!("BWLOG: completed load_frozen_forks");
 
     let processing_time = now.elapsed();
 

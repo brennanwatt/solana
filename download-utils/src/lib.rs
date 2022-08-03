@@ -62,28 +62,39 @@ pub fn get_file_download_speed(url: &str) -> Result<usize, String> {
         .map_err(|err| err.to_string())?;
 
     const SPEED_TEST_BYTES_TO_DOWNLOAD: usize = 100 * 1024 * 1024;
-    const SPEED_TEST_TIMEOUT_MS: u128 = 30_000;
+    const SPEED_TEST_MEASURE_START_MS: u128 = 20_000;
+    const SPEED_TEST_DURATION_MS: u128 = 30_000;
     let mut buffer = vec![0_u8; SPEED_TEST_BYTES_TO_DOWNLOAD];
     let mut total_bytes: usize = 0;
+    let mut start_bytes: usize = 0;
     let download_start = Instant::now();
     while let Ok(bytes) = res.read(&mut buffer) {
         total_bytes = total_bytes.saturating_add(bytes);
-        if total_bytes >= SPEED_TEST_BYTES_TO_DOWNLOAD
-            || Instant::now().duration_since(download_start).as_millis() > SPEED_TEST_TIMEOUT_MS
-        {
+        let elapsed_ms = Instant::now().duration_since(download_start).as_millis();
+        if elapsed_ms > SPEED_TEST_DURATION_MS {
             break;
+        } else if elapsed_ms > SPEED_TEST_MEASURE_START_MS
+            && start_bytes != 0
+        {
+            start_bytes = total_bytes;
         }
     }
-    let duration_ms = Instant::now().duration_since(download_start).as_millis() as usize;
-    let download_speed = total_bytes.saturating_div(duration_ms) as usize;
+    let speed_test_bytes = total_bytes.saturating_sub(start_bytes);
+    let speed_test_time = SPEED_TEST_DURATION_MS - SPEED_TEST_MEASURE_START_MS;
+    let speed_test_download_speed = speed_test_bytes.saturating_div(speed_test_time as usize);
+    let overall_download_speed = total_bytes.saturating_div(SPEED_TEST_DURATION_MS as usize);
     warn!(
-        "BWLOG: read {} bytes in {} ms ({} kB/s) from {}",
+        "BWLOG: read {} bytes in {} ms ({} kB/s) from {}. And \
+        read {} bytes in {} ms ({} kB/s) at the end",
         total_bytes,
-        duration_ms,
-        download_speed * 1000 / 1024,
-        url
+        SPEED_TEST_DURATION_MS,
+        overall_download_speed * 1000 / 1024,
+        url,
+        speed_test_bytes,
+        SPEED_TEST_DURATION_MS-SPEED_TEST_MEASURE_START_MS,
+        speed_test_download_speed * 1000 / 1024,
     );
-    Ok(download_speed)
+    Ok(speed_test_download_speed)
 }
 
 /// This callback allows the caller to get notified of the download progress modelled by DownloadProgressRecord
