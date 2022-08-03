@@ -1264,6 +1264,8 @@ fn download_snapshot(
                 *download_abort_count += 1;
                 false
             } else {
+                warn!("BWLOG: The snapshot download is fast enough, throughput: {} > min speed {} bytes/sec",
+                           download_progress.last_throughput, minimal_snapshot_download_speed);
                 true
             }
         })),
