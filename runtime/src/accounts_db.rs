@@ -6687,6 +6687,7 @@ impl AccountsDb {
 
             self.calculate_accounts_hash_without_index(config, &storages, timings)
         } else {
+            warn!("BWLOG: start calculate_accounts_hash");
             self.calculate_accounts_hash(slot, config)
         }
     }

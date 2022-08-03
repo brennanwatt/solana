@@ -43,7 +43,7 @@ use {
     },
 };
 
-pub const MAX_RPC_CONNECTIONS_FOR_SNAPSHOT_DOWNLOAD: usize = 32;
+pub const MAX_RPC_CONNECTIONS_EVALUATED_PER_ITERATION: usize = 64;
 
 #[derive(Debug)]
 pub struct RpcBootstrapConfig {
@@ -337,7 +337,7 @@ pub fn fail_rpc_node(
     rpc_id: &Pubkey,
     blacklisted_rpc_nodes: &mut HashSet<Pubkey, RandomState>,
 ) {
-    warn!("BWLOG: not ok result {}", err);
+    warn!("BWLOG: Error with {} - {}", rpc_id, err);
     if let Some(ref known_validators) = known_validators {
         if known_validators.contains(rpc_id) {
             return;
@@ -533,7 +533,7 @@ pub fn rpc_bootstrap(
                 &mut blacklisted_rpc_nodes.write().unwrap(),
                 &bootstrap_config,
             );
-            
+
             if rpc_node_details_vec.is_empty() {
                 return;
             }
@@ -580,15 +580,13 @@ pub fn rpc_bootstrap(
                 )
                 .collect();
 
-                let mut super_node_found = false;
-                let mut num_viable_nodes_found = 0;
-                let found_sufficient_nodes = RwLock::new(false);
+            let mut super_node_found = false;
+            let mut num_viable_nodes_found = 0;
+            let found_sufficient_nodes = RwLock::new(false);
 
-                vetted_rpc_nodes = vetted_rpc_nodes
+            vetted_rpc_nodes = vetted_rpc_nodes
                 .into_iter()
-                .take_while(|_| {
-                    !*found_sufficient_nodes.read().unwrap()
-                })
+                .take_while(|_| !*found_sufficient_nodes.read().unwrap())
                 .map(|(_, rpc_contact_info, snapshot_hash, rpc_client)| {
                     let desired_snapshot_hash = snapshot_hash.unwrap().full;
                     let destination_path = snapshot_utils::build_full_snapshot_archive_path(
@@ -619,15 +617,18 @@ pub fn rpc_bootstrap(
                         if *download_speed > 40_000 {
                             super_node_found = true;
                         }
-                        if num_viable_nodes_found > 2 || super_node_found {
+                        if num_viable_nodes_found > 4 || super_node_found {
                             let mut x = found_sufficient_nodes.write().unwrap();
                             *x = true;
                         }
-                        warn!("BWLOG: num_viable_nodes_found {} super_node_found {}", num_viable_nodes_found, super_node_found);
+                        warn!(
+                            "BWLOG: num_viable_nodes_found {} super_node_found {}",
+                            num_viable_nodes_found, super_node_found
+                        );
                         true
                     } else {
                         fail_rpc_node(
-                            format!("RPC node failed speed test"),
+                            "RPC node failed speed test".to_string(),
                             &validator_config.known_validators,
                             &rpc_contact_info.id,
                             &mut blacklisted_rpc_nodes.write().unwrap(),
@@ -762,7 +763,7 @@ fn get_rpc_nodes(
                     rpc_contact_info: peer_snapshot_hash.rpc_contact_info.clone(),
                     snapshot_hash: Some(peer_snapshot_hash.snapshot_hash),
                 })
-                .take(MAX_RPC_CONNECTIONS_FOR_SNAPSHOT_DOWNLOAD)
+                .take(MAX_RPC_CONNECTIONS_EVALUATED_PER_ITERATION)
                 .collect();
             return rpc_node_results;
         }
