@@ -533,7 +533,7 @@ pub fn rpc_bootstrap(
                 &mut blacklisted_rpc_nodes.write().unwrap(),
                 &bootstrap_config,
             );
-            warn!("BWLOG: completed get_rpc_node");
+            
             if rpc_node_details_vec.is_empty() {
                 return;
             }
@@ -578,6 +578,17 @@ pub fn rpc_bootstrap(
                         }
                     },
                 )
+                .collect();
+
+                let mut super_node_found = false;
+                let mut num_viable_nodes_found = 0;
+                let found_sufficient_nodes = RwLock::new(false);
+
+                vetted_rpc_nodes = vetted_rpc_nodes
+                .into_iter()
+                .take_while(|_| {
+                    *found_sufficient_nodes.read().unwrap()
+                })
                 .map(|(_, rpc_contact_info, snapshot_hash, rpc_client)| {
                     let desired_snapshot_hash = snapshot_hash.unwrap().full;
                     let destination_path = snapshot_utils::build_full_snapshot_archive_path(
@@ -604,6 +615,15 @@ pub fn rpc_bootstrap(
                 })
                 .filter(|(download_speed, rpc_contact_info, _, _)| {
                     if *download_speed > 5_000 {
+                        num_viable_nodes_found += 1;
+                        if *download_speed > 40_000 {
+                            super_node_found = true;
+                        }
+                        if num_viable_nodes_found > 2 || super_node_found {
+                            let mut x = found_sufficient_nodes.write().unwrap();
+                            *x = true;
+                        }
+                        warn!("BWLOG: num_viable_nodes_found {} super_node_found {}", num_viable_nodes_found, super_node_found);
                         true
                     } else {
                         fail_rpc_node(

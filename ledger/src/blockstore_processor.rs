@@ -867,6 +867,7 @@ pub fn process_blockstore_from_root(
         );
     }
     time_cap.stop();
+    warn!("BWLOG: completed calculate_and_verify_capitalization");
 
     datapoint_info!(
         "process_blockstore_from_root",
@@ -886,6 +887,7 @@ pub fn process_blockstore_from_root(
         let bank_forks = bank_forks.read().unwrap();
         let mut bank_slots = bank_forks.banks().keys().copied().collect::<Vec<_>>();
         bank_slots.sort_unstable();
+        warn!("BWLOG: completed sort_unstable");
 
         info!(
             "ledger processed in {}. root slot is {}, {} bank{}: {}",

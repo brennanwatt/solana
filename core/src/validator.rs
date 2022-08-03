@@ -1668,7 +1668,7 @@ impl<'a> ProcessBlockStore<'a> {
                 &self.accounts_background_request_sender,
             )
             .unwrap_or_else(|err| {
-                error!("Failed to load ledger: {:?}", err);
+                error!("BWLOG: Failed to load ledger: {:?}", err);
                 abort()
             });
             warn!("BWLOG: completed process_blockstore_from_root");
