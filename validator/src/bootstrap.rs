@@ -587,7 +587,7 @@ pub fn rpc_bootstrap(
                 vetted_rpc_nodes = vetted_rpc_nodes
                 .into_iter()
                 .take_while(|_| {
-                    *found_sufficient_nodes.read().unwrap()
+                    !*found_sufficient_nodes.read().unwrap()
                 })
                 .map(|(_, rpc_contact_info, snapshot_hash, rpc_client)| {
                     let desired_snapshot_hash = snapshot_hash.unwrap().full;
