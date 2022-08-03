@@ -115,6 +115,7 @@ pub fn load_bank_forks(
         false
     };
 
+    warn!("BWLOG: bank_forks_from_snapshot");
     let (bank_forks, starting_snapshot_hashes) = if snapshot_present {
         bank_forks_from_snapshot(
             genesis_config,
@@ -151,6 +152,7 @@ pub fn load_bank_forks(
 
         (bank_forks, None)
     };
+    warn!("BWLOG: completed bank_forks_from_snapshot");
 
     let mut leader_schedule_cache =
         LeaderScheduleCache::new_from_bank(&bank_forks.read().unwrap().root_bank());
@@ -192,6 +194,7 @@ fn bank_forks_from_snapshot(
         process::exit(1);
     }
 
+    warn!("BWLOG: bank_from_latest_snapshot_archives");
     let (mut deserialized_bank, full_snapshot_archive_info, incremental_snapshot_archive_info) =
         snapshot_utils::bank_from_latest_snapshot_archives(
             &snapshot_config.bank_snapshots_dir,
@@ -214,6 +217,7 @@ fn bank_forks_from_snapshot(
             accounts_update_notifier,
         )
         .expect("Load from snapshot failed");
+    warn!("BWLOG: completed bank_from_latest_snapshot_archives");
 
     if let Some(shrink_paths) = shrink_paths {
         deserialized_bank.set_shrink_paths(shrink_paths);

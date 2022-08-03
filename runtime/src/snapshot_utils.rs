@@ -903,6 +903,7 @@ pub fn bank_from_snapshot_archives(
     accounts_db_config: Option<AccountsDbConfig>,
     accounts_update_notifier: Option<AccountsUpdateNotifier>,
 ) -> Result<(Bank, BankFromArchiveTimings)> {
+    warn!("BWLOG: verify_and_unarchive_snapshots");
     let (unarchived_full_snapshot, mut unarchived_incremental_snapshot) =
         verify_and_unarchive_snapshots(
             bank_snapshots_dir,
@@ -910,6 +911,7 @@ pub fn bank_from_snapshot_archives(
             incremental_snapshot_archive_info,
             account_paths,
         )?;
+    warn!("BWLOG: completed verify_and_unarchive_snapshots");
 
     let mut unpacked_append_vec_map = unarchived_full_snapshot.unpacked_append_vec_map;
     if let Some(ref mut unarchive_preparation_result) = unarchived_incremental_snapshot {
@@ -940,7 +942,7 @@ pub fn bank_from_snapshot_archives(
         accounts_update_notifier,
     )?;
     measure_rebuild.stop();
-    info!("{}", measure_rebuild);
+    warn!("BWLOG: rebuild_bank_from_snapshots {}", measure_rebuild);
 
     let mut measure_verify = Measure::start("verify");
     if !bank.verify_snapshot_bank(
@@ -952,6 +954,7 @@ pub fn bank_from_snapshot_archives(
         panic!("Snapshot bank for slot {} failed to verify", bank.slot());
     }
     measure_verify.stop();
+    warn!("BWLOG: verify_snapshot_bank {}", measure_verify);
 
     let timings = BankFromArchiveTimings {
         rebuild_bank_from_snapshots_us: measure_rebuild.as_us(),
