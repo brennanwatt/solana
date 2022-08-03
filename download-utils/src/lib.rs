@@ -61,10 +61,9 @@ pub fn get_file_download_speed(url: &str) -> Result<usize, String> {
         .send()
         .map_err(|err| err.to_string())?;
 
-    const SPEED_TEST_BYTES_TO_DOWNLOAD: usize = 100 * 1024 * 1024;
-    const SPEED_TEST_MEASURE_START_MS: u128 = 50_000;
-    const SPEED_TEST_DURATION_MS: u128 = 60_000;
-    let mut buffer = vec![0_u8; SPEED_TEST_BYTES_TO_DOWNLOAD];
+    const SPEED_TEST_MEASURE_START_MS: u128 = 15_000;
+    const SPEED_TEST_DURATION_MS: u128 = 20_000;
+    let mut buffer = vec![0_u8; 10 * 1024 * 1024];
     let mut total_bytes: usize = 0;
     let mut start_bytes: usize = 0;
     let download_start = Instant::now();

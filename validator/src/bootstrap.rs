@@ -37,7 +37,7 @@ use {
         process::exit,
         sync::{
             atomic::{AtomicBool, Ordering},
-            Arc, RwLock,
+            Arc, Mutex, RwLock,
         },
         time::{Duration, Instant},
     },
@@ -504,7 +504,7 @@ pub fn rpc_bootstrap(
     let mut vetted_rpc_nodes: Vec<(usize, ContactInfo, Option<SnapshotHash>, RpcClient)> = vec![];
     let mut download_abort_count = 0;
     let mut loop_count = 1;
-    let speed_test_lock = RwLock::new(1);
+    let speed_test_lock = Arc::new(Mutex::new(0));
     loop {
         warn!("BWLOG: loop_count {}", loop_count);
         loop_count += 1;
@@ -562,21 +562,19 @@ pub fn rpc_bootstrap(
                     (0, rpc_contact_info, snapshot_hash, rpc_client)
                 })
                 .filter(
-                    |(_download_speed, rpc_contact_info, _snapshot_hash, rpc_client)| {
-                        match rpc_client.get_version() {
-                            Ok(rpc_version) => {
-                                info!("RPC node version: {}", rpc_version.solana_core);
-                                true
-                            }
-                            Err(err) => {
-                                fail_rpc_node(
-                                    format!("Failed to get RPC node version: {}", err),
-                                    &validator_config.known_validators,
-                                    &rpc_contact_info.id,
-                                    &mut blacklisted_rpc_nodes.write().unwrap(),
-                                );
-                                false
-                            }
+                    |(_, rpc_contact_info, _, rpc_client)| match rpc_client.get_version() {
+                        Ok(rpc_version) => {
+                            info!("RPC node version: {}", rpc_version.solana_core);
+                            true
+                        }
+                        Err(err) => {
+                            fail_rpc_node(
+                                format!("Failed to get RPC node version: {}", err),
+                                &validator_config.known_validators,
+                                &rpc_contact_info.id,
+                                &mut blacklisted_rpc_nodes.write().unwrap(),
+                            );
+                            false
                         }
                     },
                 )
@@ -593,7 +591,7 @@ pub fn rpc_bootstrap(
                     let destination_path = destination_path.file_name().unwrap().to_str().unwrap();
                     let full_snapshot_url =
                         format!("http://{}/{}", rpc_contact_info.rpc, destination_path);
-                    let lock = speed_test_lock.write().unwrap();
+                    let lock = speed_test_lock.lock().unwrap();
                     let download_speed = match get_file_download_speed(&full_snapshot_url) {
                         Ok(download_speed) => download_speed,
                         Err(err) => {
@@ -603,6 +601,19 @@ pub fn rpc_bootstrap(
                     };
                     drop(lock);
                     (download_speed, rpc_contact_info, snapshot_hash, rpc_client)
+                })
+                .filter(|(download_speed, rpc_contact_info, _, _)| {
+                    if *download_speed > 5_000 {
+                        true
+                    } else {
+                        fail_rpc_node(
+                            format!("RPC node failed speed test"),
+                            &validator_config.known_validators,
+                            &rpc_contact_info.id,
+                            &mut blacklisted_rpc_nodes.write().unwrap(),
+                        );
+                        false
+                    }
                 })
                 .collect();
 
