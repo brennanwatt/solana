@@ -790,7 +790,7 @@ pub fn process_blockstore_from_root(
     assert!(bank.parent().is_none());
 
     let start_slot = bank.slot();
-    info!("Processing ledger from slot {}...", start_slot);
+    warn!("BW: Processing ledger from slot {}...", start_slot);
     let now = Instant::now();
 
     // ensure start_slot is rooted for correct replay

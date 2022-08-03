@@ -1657,6 +1657,7 @@ impl<'a> ProcessBlockStore<'a> {
                     }
                 });
             }
+            warn!("BWLOG: process_blockstore_from_root");
             blockstore_processor::process_blockstore_from_root(
                 self.blockstore,
                 self.bank_forks,
@@ -1670,6 +1671,7 @@ impl<'a> ProcessBlockStore<'a> {
                 error!("Failed to load ledger: {:?}", err);
                 abort()
             });
+            warn!("BWLOG: completed process_blockstore_from_root");
 
             exit.store(true, Ordering::Relaxed);
 
