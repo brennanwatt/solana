@@ -4018,6 +4018,7 @@ impl AccountsDb {
         const DIRTY_STORES_CLEANING_THRESHOLD: usize = 10_000;
         const OUTER_CHUNK_SIZE: usize = 2000;
         if is_startup && self.caching_enabled {
+            warn!("BWLOG: shrink_all_slots is_startup && self.caching_enabled");
             let slots = self.all_slots_in_storage();
             let threads = num_cpus::get();
             let inner_chunk_size = std::cmp::max(OUTER_CHUNK_SIZE / threads, 1);
@@ -4032,6 +4033,7 @@ impl AccountsDb {
                 }
             });
         } else {
+            warn!("BWLOG: NOT shrink_all_slots is_startup && self.caching_enabled");
             for slot in self.all_slots_in_storage() {
                 if self.caching_enabled {
                     self.shrink_slot_forced(slot);

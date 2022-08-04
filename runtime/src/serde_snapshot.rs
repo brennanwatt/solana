@@ -498,6 +498,7 @@ fn reconstruct_bank_from_fields<E>(
 where
     E: SerializableStorage + std::marker::Sync,
 {
+    warn!("BWLOG: start reconstruct_accountsdb_from_fields");
     let (accounts_db, reconstructed_accounts_db_info) = reconstruct_accountsdb_from_fields(
         snapshot_accounts_db_fields,
         account_paths,
@@ -511,9 +512,11 @@ where
         accounts_db_config,
         accounts_update_notifier,
     )?;
+    warn!("BWLOG: completed reconstruct_accountsdb_from_fields");
 
     let bank_rc = BankRc::new(Accounts::new_empty(accounts_db), bank_fields.slot);
 
+    warn!("BWLOG: start new_from_fields");
     // if limit_load_slot_count_from_snapshot is set, then we need to side-step some correctness checks beneath this call
     let debug_do_not_add_builtins = limit_load_slot_count_from_snapshot.is_some();
     let bank = Bank::new_from_fields(
@@ -525,6 +528,7 @@ where
         debug_do_not_add_builtins,
         reconstructed_accounts_db_info.accounts_data_len,
     );
+    warn!("BWLOG: completed new_from_fields");
 
     info!("rent_collector: {:?}", bank.rent_collector());
 

@@ -754,7 +754,8 @@ fn get_rpc_nodes(
                 .map(|peer_snapshot_hash| peer_snapshot_hash.rpc_contact_info.id)
                 .collect::<Vec<_>>();
             warn!(
-                "BWLOG: Highest available snapshot slot available from {} node{}: {:?}",
+                "BWLOG: Highest available snapshot {:?} available from {} node{}: {:?}",
+                peer_snapshot_hashes[0].snapshot_hash,
                 rpc_peers.len(),
                 if rpc_peers.len() > 1 { "s" } else { "" },
                 rpc_peers,
@@ -1116,10 +1117,6 @@ fn retain_peer_snapshot_hashes_with_highest_incremental_snapshot_slot(
         };
     });
 
-    warn!(
-        "BWLOG: highest_incremental_snapshot_hash = {:?}",
-        highest_incremental_snapshot_hash
-    );
     peer_snapshot_hashes.retain(|peer_snapshot_hash| {
         peer_snapshot_hash.snapshot_hash.incr == highest_incremental_snapshot_hash
     });
@@ -1147,6 +1144,7 @@ fn download_snapshots(
     rpc_contact_info: &ContactInfo,
 ) -> Result<(), String> {
     if snapshot_hash.is_none() {
+        warn!("BWLOG: snapshot_hash is none");
         return Ok(());
     }
     let SnapshotHash {
@@ -1163,6 +1161,7 @@ fn download_snapshots(
         incremental_snapshot_hash,
         bootstrap_config.incremental_snapshot_fetch,
     ) {
+        warn!("BWLOG: local snapshots are new enough");
         return Ok(());
     }
 
