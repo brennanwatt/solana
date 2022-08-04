@@ -556,10 +556,6 @@ pub fn rpc_bootstrap(
                         rpc_contact_info.rpc,
                         Duration::from_secs(5),
                     );
-                    warn!(
-                        "BWLOG: established RPC client socket from node {}: {:?}",
-                        rpc_contact_info.id, rpc_contact_info.rpc
-                    );
 
                     (0, rpc_contact_info, snapshot_hash, rpc_client)
                 })
@@ -1198,6 +1194,10 @@ fn download_snapshots(
 
     // Check and see if we've already got the incremental snapshot; if not, download it
     if let Some(incremental_snapshot_hash) = incremental_snapshot_hash {
+        warn!(
+            "BWLOG: Incremental snapshot slot: {}",
+            incremental_snapshot_hash.0
+        );
         if snapshot_utils::get_incremental_snapshot_archives(incremental_snapshot_archives_dir)
             .into_iter()
             .any(|snapshot_archive| {
@@ -1212,7 +1212,7 @@ fn download_snapshots(
             );
         } else {
             warn!("BWLOG: starting download_snapshot (incremental)");
-            download_snapshot(
+            match download_snapshot(
                 full_snapshot_archives_dir,
                 incremental_snapshot_archives_dir,
                 validator_config,
@@ -1225,7 +1225,23 @@ fn download_snapshots(
                 rpc_contact_info,
                 incremental_snapshot_hash,
                 SnapshotType::IncrementalSnapshot(full_snapshot_hash.0),
-            )?;
+            ) {
+                Ok(()) => (),
+                Err(err) => {
+                    if should_use_local_snapshot(
+                        full_snapshot_archives_dir,
+                        incremental_snapshot_archives_dir,
+                        maximum_local_snapshot_age,
+                        full_snapshot_hash,
+                        Some(incremental_snapshot_hash),
+                        bootstrap_config.incremental_snapshot_fetch,
+                    ) {
+                        warn!("BWLOG: incremental snapshot download failed, but local snapshots are new enough");
+                        return Ok(());
+                    }
+                    return Err(err);
+                }
+            }
             warn!("BWLOG: completed download_snapshot (incremental)");
         }
     }

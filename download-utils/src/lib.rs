@@ -356,7 +356,7 @@ pub fn download_snapshot_archive<'a, 'b>(
             progress_notify_callback,
         ) {
             Ok(()) => return Ok(()),
-            Err(err) => info!("{}", err),
+            Err(err) => warn!("BWLOG: {}", err),
         }
     }
     Err(format!(
