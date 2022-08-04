@@ -161,6 +161,7 @@ pub struct ValidatorConfig {
     pub no_os_memory_stats_reporting: bool,
     pub no_os_network_stats_reporting: bool,
     pub no_os_cpu_stats_reporting: bool,
+    pub no_os_disk_stats_reporting: bool,
     pub poh_pinned_cpu_core: usize,
     pub poh_hashes_per_batch: u64,
     pub account_indexes: AccountSecondaryIndexes,
@@ -223,6 +224,7 @@ impl Default for ValidatorConfig {
             no_os_memory_stats_reporting: true,
             no_os_network_stats_reporting: true,
             no_os_cpu_stats_reporting: true,
+            no_os_disk_stats_reporting: true,
             poh_pinned_cpu_core: poh_service::DEFAULT_PINNED_CPU_CORE,
             poh_hashes_per_batch: poh_service::DEFAULT_HASHES_PER_BATCH,
             account_indexes: AccountSecondaryIndexes::default(),
@@ -505,6 +507,7 @@ impl Validator {
             !config.no_os_memory_stats_reporting,
             !config.no_os_network_stats_reporting,
             !config.no_os_cpu_stats_reporting,
+            !config.no_os_disk_stats_reporting,
         ));
         warn!("BWLOG: completed SystemMonitorService::new");
 
@@ -893,14 +896,14 @@ impl Validator {
             &exit,
         );
         warn!("BWLOG: completed GossipService::new");
-        let serve_repair = Arc::new(RwLock::new(ServeRepair::new(cluster_info.clone())));
+        let serve_repair = ServeRepair::new(cluster_info.clone(), bank_forks.clone());
         let serve_repair_service = ServeRepairService::new(
-            &serve_repair,
-            Some(blockstore.clone()),
+            serve_repair,
+            blockstore.clone(),
             node.sockets.serve_repair,
             socket_addr_space,
             stats_reporter_sender,
-            &exit,
+            exit.clone(),
         );
 
         let waited_for_supermajority = if let Ok(waited) = wait_for_supermajority(
