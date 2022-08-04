@@ -547,8 +547,10 @@ pub fn rpc_bootstrap(
                     } = rpc_node_details;
 
                     warn!(
-                        "BWLOG: Using RPC service from node {}: {:?}",
-                        rpc_contact_info.id, rpc_contact_info.rpc
+                        "BWLOG: Using RPC service from node {}: {:?}, full slot {}",
+                        rpc_contact_info.id,
+                        rpc_contact_info.rpc,
+                        snapshot_hash.unwrap().full.0,
                     );
                     let rpc_client = RpcClient::new_socket_with_timeout(
                         rpc_contact_info.rpc,

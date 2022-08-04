@@ -6670,6 +6670,7 @@ impl AccountsDb {
             let mut collect_time = Measure::start("collect");
             let (combined_maps, slots) = self.get_snapshot_storages(slot, None, config.ancestors);
             collect_time.stop();
+            warn!("BWLOG: collect_time {}", collect_time);
 
             let mut sort_time = Measure::start("sort_storages");
             let min_root = self.accounts_index.min_alive_root();
@@ -6679,6 +6680,7 @@ impl AccountsDb {
                 Some(slot),
             );
             sort_time.stop();
+            warn!("BWLOG: sort_time {}", sort_time);
 
             let mut timings = HashStats {
                 collect_snapshots_us: collect_time.as_us(),
@@ -6686,6 +6688,7 @@ impl AccountsDb {
                 ..HashStats::default()
             };
             timings.calc_storage_size_quartiles(&combined_maps);
+            warn!("BWLOG: completed calc_storage_size_quartiles");
 
             self.calculate_accounts_hash_without_index(config, &storages, timings)
         } else {
@@ -6706,6 +6709,7 @@ impl AccountsDb {
         let (hash, total_lamports) =
             self.calculate_accounts_hash_helper(use_index, slot, &config)?;
         if debug_verify {
+            warn!("BWLOG: debug_verify=true");
             // calculate the other way (store or non-store) and verify results match.
             let (hash_other, total_lamports_other) =
                 self.calculate_accounts_hash_helper(!use_index, slot, &config)?;
@@ -6732,6 +6736,7 @@ impl AccountsDb {
         is_startup: bool,
     ) -> (Hash, u64) {
         let check_hash = false;
+        warn!("BWLOG: calculate_accounts_hash_helper_with_verify");
         let (hash, total_lamports) = self
             .calculate_accounts_hash_helper_with_verify(
                 use_index,
@@ -6750,6 +6755,7 @@ impl AccountsDb {
                 expected_capitalization,
             )
             .unwrap(); // unwrap here will never fail since check_hash = false
+        warn!("BWLOG: completed calculate_accounts_hash_helper_with_verify");
         self.set_accounts_hash(slot, hash);
         (hash, total_lamports)
     }
