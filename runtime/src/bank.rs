@@ -7151,6 +7151,7 @@ impl Bank {
             self.clean_accounts(true, true, last_full_snapshot_slot);
         }
         clean_time.stop();
+        warn!("BWLOG: {}", clean_time);
 
         let mut shrink_all_slots_time = Measure::start("shrink_all_slots");
         if !accounts_db_skip_shrink && self.slot() > 0 {
@@ -7158,6 +7159,7 @@ impl Bank {
             self.shrink_all_slots(true, last_full_snapshot_slot);
         }
         shrink_all_slots_time.stop();
+        warn!("BWLOG: {}", shrink_all_slots_time);
 
         let (mut verify, verify_time_us) = if !self.rc.accounts.accounts_db.skip_initial_hash_calc {
             info!("verify_bank_hash..");
@@ -7186,6 +7188,7 @@ impl Bank {
         // Order and short-circuiting is significant; verify_hash requires a valid bank hash
         verify = verify && self.verify_hash();
         verify2_time.stop();
+        warn!("BWLOG: {}", verify2_time);
 
         datapoint_info!(
             "verify_snapshot_bank",

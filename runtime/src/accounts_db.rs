@@ -6942,10 +6942,13 @@ impl AccountsDb {
             Ok(final_result)
         };
         let result = if use_bg_thread_pool {
+            warn!("BWLOG: scan_and_hash use_bg_thread_pool=true");
             self.thread_pool_clean.install(scan_and_hash)
         } else {
+            warn!("BWLOG: scan_and_hash use_bg_thread_pool=false");
             scan_and_hash()
         };
+        warn!("BWLOG: completed scan_and_hash");
         self.assert_safe_squashing_accounts_hash(
             storages.max_slot_inclusive(),
             config.epoch_schedule,

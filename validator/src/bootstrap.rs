@@ -1116,6 +1116,10 @@ fn retain_peer_snapshot_hashes_with_highest_incremental_snapshot_slot(
         };
     });
 
+    warn!(
+        "BWLOG: highest_incremental_snapshot_hash = {:?}",
+        highest_incremental_snapshot_hash
+    );
     peer_snapshot_hashes.retain(|peer_snapshot_hash| {
         peer_snapshot_hash.snapshot_hash.incr == highest_incremental_snapshot_hash
     });
@@ -1203,8 +1207,8 @@ fn download_snapshots(
                     && snapshot_archive.base_slot() == full_snapshot_hash.0
             })
         {
-            info!(
-                "Incremental snapshot archive already exists locally. Skipping download. slot: {}, hash: {}",
+            warn!(
+                "BWLOG: Incremental snapshot archive already exists locally. Skipping download. slot: {}, hash: {}",
                 incremental_snapshot_hash.0, incremental_snapshot_hash.1
             );
         } else {

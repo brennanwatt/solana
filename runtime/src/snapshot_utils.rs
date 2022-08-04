@@ -813,6 +813,7 @@ fn verify_and_unarchive_snapshots(
         std::cmp::max(1, num_cpus::get() / 4),
     );
 
+    warn!("BWLOG: unarchive_snapshot full");
     let unarchived_full_snapshot = unarchive_snapshot(
         &bank_snapshots_dir,
         TMP_SNAPSHOT_ARCHIVE_PREFIX,
@@ -822,6 +823,7 @@ fn verify_and_unarchive_snapshots(
         full_snapshot_archive_info.archive_format(),
         parallel_divisions,
     )?;
+    warn!("BWLOG: completed unarchive_snapshot full");
 
     let unarchived_incremental_snapshot =
         if let Some(incremental_snapshot_archive_info) = incremental_snapshot_archive_info {
@@ -838,6 +840,7 @@ fn verify_and_unarchive_snapshots(
         } else {
             None
         };
+    warn!("BWLOG: completed unarchive_snapshot incremental");
 
     Ok((unarchived_full_snapshot, unarchived_incremental_snapshot))
 }
@@ -1509,6 +1512,10 @@ fn unpack_snapshot_local(
         .map(|_| SharedBufferReader::new(&shared_buffer))
         .collect::<Vec<_>>();
 
+    warn!(
+        "BWLOG: start unpack_append_vec_map with {} parallel_divisions",
+        parallel_divisions
+    );
     // create 'parallel_divisions' # of parallel workers, each responsible for 1/parallel_divisions of all the files to extract.
     let all_unpacked_append_vec_map = readers
         .into_par_iter()
@@ -1522,11 +1529,13 @@ fn unpack_snapshot_local(
             unpack_snapshot(&mut archive, ledger_dir, account_paths, parallel_selector)
         })
         .collect::<Vec<_>>();
+    warn!("BWLOG: completed unpack_append_vec_map");
 
     let mut unpacked_append_vec_map = UnpackedAppendVecMap::new();
     for h in all_unpacked_append_vec_map {
         unpacked_append_vec_map.extend(h?);
     }
+    warn!("BWLOG: completed unpack_append_vec_map results parse");
 
     Ok(unpacked_append_vec_map)
 }
@@ -1680,6 +1689,7 @@ fn rebuild_bank_from_snapshots(
             .map(|root_paths| root_paths.snapshot_path),
     };
 
+    warn!("BWLOG: Start deserialize_snapshot_data_files (bank)");
     let bank = deserialize_snapshot_data_files(&snapshot_root_paths, |snapshot_streams| {
         Ok(
             match incremental_snapshot_version.unwrap_or(full_snapshot_version) {
@@ -1702,6 +1712,7 @@ fn rebuild_bank_from_snapshots(
             }?,
         )
     })?;
+    warn!("BWLOG: completed deserialize_snapshot_data_files");
 
     // The status cache is rebuilt from the latest snapshot.  So, if there's an incremental
     // snapshot, use that.  Otherwise use the full snapshot.
@@ -1719,6 +1730,7 @@ fn rebuild_bank_from_snapshots(
             },
         )
         .join(SNAPSHOT_STATUS_CACHE_FILENAME);
+    warn!("BWLOG: Start deserialize_snapshot_data_files (slot deltas)");
     let slot_deltas = deserialize_snapshot_data_file(&status_cache_path, |stream| {
         info!(
             "Rebuilding status cache from {}",
@@ -1731,10 +1743,13 @@ fn rebuild_bank_from_snapshots(
             .deserialize_from(stream)?;
         Ok(slot_deltas)
     })?;
+    warn!("BWLOG: Start deserialize_snapshot_data_files");
 
     bank.status_cache.write().unwrap().append(&slot_deltas);
 
+    warn!("BWLOG: Start prepare_rewrites_for_hash");
     bank.prepare_rewrites_for_hash();
+    warn!("BWLOG: completed prepare_rewrites_for_hash");
 
     info!("Loaded bank for slot: {}", bank.slot());
     Ok(bank)
