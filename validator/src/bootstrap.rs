@@ -188,8 +188,8 @@ fn get_rpc_peers(
         return None;
     }
 
-    info!(
-        "Searching for an RPC service with shred version {}{}...",
+    warn!(
+        "BWLOG: Searching for an RPC service with shred version {}{}...",
         shred_version,
         retry_reason
             .as_ref()
@@ -222,8 +222,8 @@ fn get_rpc_peers(
         .filter(|rpc_peer| is_known_validator(&rpc_peer.id, &validator_config.known_validators))
         .count();
 
-    info!(
-        "Total {} RPC nodes found. {} known, {} blacklisted ",
+    warn!(
+        "BWLOG: Total {} RPC nodes found. {} known, {} blacklisted ",
         rpc_peers_total, rpc_known_peers, rpc_peers_blacklisted
     );
 
@@ -307,7 +307,7 @@ fn check_vote_account(
     Ok(())
 }
 
-/// Struct to wrap the return value from get_rpc_node().  The `rpc_contact_info` is the peer to
+/// Struct to wrap the return value from get_rpc_nodes().  The `rpc_contact_info` is the peer to
 /// download from, and `snapshot_hash` is the (optional) full and (optional) incremental
 /// snapshots to download.
 #[derive(Debug)]
@@ -521,7 +521,7 @@ pub fn rpc_bootstrap(
         }
 
         while vetted_rpc_nodes.is_empty() {
-            warn!("BWLOG: starting get_rpc_node");
+            warn!("BWLOG: starting get_rpc_nodes");
             let rpc_node_details_vec = get_rpc_nodes(
                 &gossip.as_ref().unwrap().0,
                 cluster_entrypoints,

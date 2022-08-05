@@ -47,6 +47,7 @@ impl AccountsHashVerifier {
         fault_injection_rate_slots: u64,
         snapshot_config: Option<SnapshotConfig>,
     ) -> Self {
+        warn!("BWLOG: AccountsHashVerifier");
         let exit = exit.clone();
         let cluster_info = cluster_info.clone();
         let t_accounts_hash_verifier = Builder::new()

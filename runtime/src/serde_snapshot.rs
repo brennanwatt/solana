@@ -623,6 +623,10 @@ fn remap_and_reconstruct_slot_storage<E>(
 where
     E: SerializableStorage,
 {
+    warn!(
+        "BWLOG: remap_and_reconstruct_slot_storage entry length = {}",
+        slot_storage.len()
+    );
     slot_storage
         .iter()
         .map(|storage_entry| {
@@ -656,6 +660,10 @@ fn remap_and_reconstruct_storages<E>(
 where
     E: SerializableStorage + std::marker::Sync,
 {
+    warn!(
+        "BWLOG: remap_and_reconstruct_storages num slots = {}",
+        snapshot_storages.len()
+    );
     snapshot_storages
         .into_par_iter()
         .map(|(slot, slot_storage)| {
@@ -663,7 +671,7 @@ where
                 *slot,
                 remap_and_reconstruct_slot_storage(
                     *slot,
-                    slot_storage,
+                    &slot_storage,
                     unpacked_append_vec_map,
                     next_append_vec_id,
                     num_collisions,

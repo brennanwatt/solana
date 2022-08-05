@@ -1712,7 +1712,7 @@ fn rebuild_bank_from_snapshots(
             }?,
         )
     })?;
-    warn!("BWLOG: completed deserialize_snapshot_data_files");
+    warn!("BWLOG: completed deserialize_snapshot_data_files (bank)");
 
     // The status cache is rebuilt from the latest snapshot.  So, if there's an incremental
     // snapshot, use that.  Otherwise use the full snapshot.
@@ -1743,7 +1743,7 @@ fn rebuild_bank_from_snapshots(
             .deserialize_from(stream)?;
         Ok(slot_deltas)
     })?;
-    warn!("BWLOG: Start deserialize_snapshot_data_files");
+    warn!("BWLOG: completed deserialize_snapshot_data_files (slot deltas)");
 
     bank.status_cache.write().unwrap().append(&slot_deltas);
 

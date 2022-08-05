@@ -2521,6 +2521,7 @@ impl AccountsDb {
 
         let mut measure_all = Measure::start("clean_accounts");
         let max_clean_root = self.max_clean_root(max_clean_root);
+        warn!("BWLOG: clean_accounts - max_clean_root found");
 
         // hold a lock to prevent slot shrinking from running because it might modify some rooted
         // slot storages which can not happen as long as we're cleaning accounts because we're also
@@ -2528,12 +2529,15 @@ impl AccountsDb {
         let mut candidates_v1 = self.shrink_candidate_slots_v1.lock().unwrap();
         self.report_store_stats();
 
+        let mut clean_keys = Measure::start("clean_keys");
         let mut key_timings = CleanKeyTimings::default();
         let mut pubkeys = self.construct_candidate_clean_keys(
             max_clean_root,
             last_full_snapshot_slot,
             &mut key_timings,
         );
+        clean_keys.stop();
+        warn!("BWLOG: clean_accounts - {}", clean_keys);
 
         let mut sort = Measure::start("sort");
         if is_startup {
@@ -6750,7 +6754,7 @@ impl AccountsDb {
         is_startup: bool,
     ) -> (Hash, u64) {
         let check_hash = false;
-        warn!("BWLOG: calculate_accounts_hash_helper_with_verify");
+        warn!("BWLOG: calculate_accounts_hash_helper_with_verify from update_accounts_hash_with_index_option");
         let (hash, total_lamports) = self
             .calculate_accounts_hash_helper_with_verify(
                 use_index,
@@ -6820,6 +6824,7 @@ impl AccountsDb {
             pubkey_to_bin_index: 0,
         };
 
+        warn!("BWLOG: scan_account_storage_no_bank");
         let result: Vec<BinnedHashData> = self.scan_account_storage_no_bank(
             cache_hash_data,
             config,
@@ -6829,6 +6834,7 @@ impl AccountsDb {
             &bin_calculator,
             stats,
         );
+        warn!("BWLOG: completed scan_account_storage_no_bank");
 
         stats.sort_time_total_us += sort_time.load(Ordering::Relaxed);
 
@@ -7045,6 +7051,7 @@ impl AccountsDb {
         let check_hash = false; // this will not be supported anymore
                                 // interesting to consider this
         let is_startup = true;
+        warn!("BWLOG: calculate_accounts_hash_helper_with_verify from verify_bank_hash_and_lamports_new");
         let (calculated_hash, calculated_lamports) = self
             .calculate_accounts_hash_helper_with_verify(
                 use_index,
@@ -8389,6 +8396,7 @@ impl AccountsDb {
         // pass == 1 only runs if verify == true.
         // verify checks that all the expected items are in the accounts index and measures how long it takes to look them all up
         let passes = if verify { 2 } else { 1 };
+        warn!("BWLOG: generate_index passes={}", passes);
         for pass in 0..passes {
             if pass == 0 {
                 self.accounts_index
@@ -8610,6 +8618,7 @@ impl AccountsDb {
             }
             timings.report();
         }
+        warn!("BWLOG: generate_index passes complete");
 
         self.accounts_index.log_secondary_indexes();
 
