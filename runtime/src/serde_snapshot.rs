@@ -623,32 +623,51 @@ fn remap_and_reconstruct_slot_storage<E>(
 where
     E: SerializableStorage,
 {
-    warn!(
-        "BWLOG: remap_and_reconstruct_slot_storage entry length = {}",
-        slot_storage.len()
-    );
-    slot_storage
-        .iter()
-        .map(|storage_entry| {
-            let file_name = AppendVec::file_name(slot, storage_entry.id());
-            let append_vec_path = unpacked_append_vec_map.get(&file_name).ok_or_else(|| {
-                io::Error::new(
-                    io::ErrorKind::NotFound,
-                    format!("{} not found in unpacked append vecs", file_name),
-                )
-            })?;
+    if slot_storage.len() == 1 {
+        let storage_entry = &slot_storage[0];
+        let file_name = AppendVec::file_name(slot, storage_entry.id());
+        let append_vec_path = unpacked_append_vec_map.get(&file_name).ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::NotFound,
+                format!("{} not found in unpacked append vecs", file_name),
+            )
+        })?;
 
-            let new_storage_entry = remap_and_reconstruct_single_storage(
-                slot,
-                storage_entry.id(),
-                storage_entry.current_len(),
-                append_vec_path,
-                next_append_vec_id,
-                num_collisions,
-            )?;
-            Ok((new_storage_entry.append_vec_id(), new_storage_entry))
-        })
-        .collect::<Result<HashMap<AppendVecId, _>, Error>>()
+        let new_storage_entry = remap_and_reconstruct_single_storage(
+            slot,
+            storage_entry.id(),
+            storage_entry.current_len(),
+            append_vec_path,
+            next_append_vec_id,
+            num_collisions,
+        )?;
+        let mut x: HashMap<AppendVecId, Arc<AccountStorageEntry>> = HashMap::new();
+        x.insert(new_storage_entry.append_vec_id(), new_storage_entry);
+        Ok(x)
+    } else {
+        slot_storage
+            .iter()
+            .map(|storage_entry| {
+                let file_name = AppendVec::file_name(slot, storage_entry.id());
+                let append_vec_path = unpacked_append_vec_map.get(&file_name).ok_or_else(|| {
+                    io::Error::new(
+                        io::ErrorKind::NotFound,
+                        format!("{} not found in unpacked append vecs", file_name),
+                    )
+                })?;
+
+                let new_storage_entry = remap_and_reconstruct_single_storage(
+                    slot,
+                    storage_entry.id(),
+                    storage_entry.current_len(),
+                    append_vec_path,
+                    next_append_vec_id,
+                    num_collisions,
+                )?;
+                Ok((new_storage_entry.append_vec_id(), new_storage_entry))
+            })
+            .collect::<Result<HashMap<AppendVecId, _>, Error>>()
+    }
 }
 
 fn remap_and_reconstruct_storages<E>(

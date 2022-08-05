@@ -12,7 +12,7 @@ use {
 };
 
 #[derive(Debug)]
-pub(crate) struct VerifyAccountsHashInBackground {
+pub struct VerifyAccountsHashInBackground {
     /// true when verification has completed or never had to run in background
     pub(crate) verified: Arc<AtomicBool>,
     /// enable waiting for verification to become complete

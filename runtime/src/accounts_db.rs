@@ -1166,7 +1166,7 @@ pub struct AccountsDb {
     /// number of slots remaining where filler accounts should be added
     pub filler_account_slots_remaining: AtomicU64,
 
-    pub(crate) verify_accounts_hash_in_bg: VerifyAccountsHashInBackground,
+    pub verify_accounts_hash_in_bg: VerifyAccountsHashInBackground,
 
     // # of passes should be a function of the total # of accounts that are active.
     // higher passes = slower total time, lower dynamic memory usage
@@ -2433,9 +2433,11 @@ impl AccountsDb {
         last_full_snapshot_slot: Option<Slot>,
         timings: &mut CleanKeyTimings,
     ) -> Vec<Pubkey> {
+        warn!("BWLOG: construct_candidate_clean_keys - start");
         let mut dirty_store_processing_time = Measure::start("dirty_store_processing");
         let max_slot = max_clean_root.unwrap_or_else(|| self.accounts_index.max_root_inclusive());
         let mut dirty_stores = Vec::with_capacity(self.dirty_stores.len());
+        warn!("BWLOG: construct_candidate_clean_keys - allocate");
         self.dirty_stores.retain(|(slot, _store_id), store| {
             if *slot > max_slot {
                 true
@@ -2444,6 +2446,7 @@ impl AccountsDb {
                 false
             }
         });
+        warn!("BWLOG: construct_candidate_clean_keys - retain");
         let dirty_stores_len = dirty_stores.len();
         let pubkeys = DashSet::new();
         for (_slot, store) in dirty_stores {
@@ -2451,6 +2454,7 @@ impl AccountsDb {
                 pubkeys.insert(account.meta.pubkey);
             });
         }
+        warn!("BWLOG: construct_candidate_clean_keys - insert to DashSet");
         trace!(
             "dirty_stores.len: {} pubkeys.len: {}",
             dirty_stores_len,
@@ -8534,6 +8538,7 @@ impl AccountsDb {
                     len as usize
                 })
                 .sum();
+            warn!("BWLOG: generate_index - completed total items summation");
 
             let mut index_flush_us = 0;
             if pass == 0 {
@@ -8542,22 +8547,21 @@ impl AccountsDb {
                 self.accounts_index.set_startup(Startup::Normal);
                 m.stop();
                 index_flush_us = m.as_us();
+                warn!("BWLOG: generate_index - {}", m);
 
                 // this has to happen before visit_duplicate_pubkeys_during_startup below
                 // get duplicate keys from acct idx. We have to wait until we've finished flushing.
-                for (slot, key) in self
-                    .accounts_index
+                self.accounts_index
                     .retrieve_duplicate_keys_from_startup()
-                    .into_iter()
+                    .par_iter()
                     .flatten()
-                {
-                    match self.uncleaned_pubkeys.entry(slot) {
-                        Occupied(mut occupied) => occupied.get_mut().push(key),
+                    .for_each(|(slot, key)| match self.uncleaned_pubkeys.entry(*slot) {
+                        Occupied(mut occupied) => occupied.get_mut().push(*key),
                         Vacant(vacant) => {
-                            vacant.insert(vec![key]);
+                            vacant.insert(vec![*key]);
                         }
-                    }
-                }
+                    });
+                warn!("BWLOG: generate_index - completed insert keys to slots");
             }
 
             let storage_info_timings = storage_info_timings.into_inner().unwrap();
