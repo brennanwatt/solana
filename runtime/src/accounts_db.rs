@@ -2514,6 +2514,7 @@ impl AccountsDb {
         is_startup: bool,
         last_full_snapshot_slot: Option<Slot>,
     ) {
+        warn!("BWLOG: clean_accounts - start");
         let _guard = self.active_stats.activate(ActiveStatItem::Clean);
 
         let ancient_account_cleans = AtomicU64::default();
@@ -2542,6 +2543,7 @@ impl AccountsDb {
                 .install(|| pubkeys.par_sort_unstable());
         }
         sort.stop();
+        warn!("BWLOG: clean_accounts - {}", sort);
 
         let total_keys_count = pubkeys.len();
         let mut accounts_scan = Measure::start("accounts_scan");
@@ -2650,6 +2652,7 @@ impl AccountsDb {
             }
         };
         accounts_scan.stop();
+        warn!("BWLOG: clean_accounts - {}", accounts_scan);
 
         let mut clean_old_rooted = Measure::start("clean_old_roots");
         let (purged_account_slots, removed_accounts) = self.clean_accounts_older_than_root(
@@ -2664,6 +2667,7 @@ impl AccountsDb {
             self.do_reset_uncleaned_roots_v1(&mut candidates_v1, max_clean_root);
         }
         clean_old_rooted.stop();
+        warn!("BWLOG: clean_accounts - {}", clean_old_rooted);
 
         let mut store_counts_time = Measure::start("store_counts");
 
@@ -2720,10 +2724,12 @@ impl AccountsDb {
             });
         }
         store_counts_time.stop();
+        warn!("BWLOG: clean_accounts - {}", store_counts_time);
 
         let mut calc_deps_time = Measure::start("calc_deps");
         Self::calc_delete_dependencies(&purges_zero_lamports, &mut store_counts);
         calc_deps_time.stop();
+        warn!("BWLOG: clean_accounts - {}", calc_deps_time);
 
         let mut purge_filter = Measure::start("purge_filter");
         self.filter_zero_lamport_clean_for_incremental_snapshots(
@@ -2733,6 +2739,7 @@ impl AccountsDb {
             &mut purges_zero_lamports,
         );
         purge_filter.stop();
+        warn!("BWLOG: clean_accounts - {}", purge_filter);
 
         let mut reclaims_time = Measure::start("reclaims");
         // Recalculate reclaims with new purge set
@@ -2763,6 +2770,7 @@ impl AccountsDb {
         );
 
         reclaims_time.stop();
+        warn!("BWLOG: clean_accounts - {}", reclaims_time);
         measure_all.stop();
 
         self.clean_accounts_stats.report();
@@ -2874,6 +2882,7 @@ impl AccountsDb {
             ),
             ("next_store_id", self.next_id.load(Ordering::Relaxed), i64),
         );
+        warn!("BWLOG: clean_accounts - completed");
     }
 
     /// Removes the accounts in the input `reclaims` from the tracked "count" of
@@ -4027,16 +4036,13 @@ impl AccountsDb {
                 threads
             );
             slots.chunks(OUTER_CHUNK_SIZE).for_each(|chunk| {
-                warn!("BWLOG: outer chunk");
                 chunk.par_chunks(inner_chunk_size).for_each(|slots| {
                     for slot in slots {
                         self.shrink_slot_forced(*slot);
                     }
                 });
-                warn!("BWLOG: outer chunk done");
                 if self.dirty_stores.len() > DIRTY_STORES_CLEANING_THRESHOLD {
                     self.clean_accounts(None, is_startup, last_full_snapshot_slot);
-                    warn!("BWLOG: cleaned accounts");
                 }
             });
         } else {
@@ -6922,6 +6928,7 @@ impl AccountsDb {
                     },
                 };
 
+                warn!("BWLOG: scan_snapshot_stores_with_cache");
                 let result = self.scan_snapshot_stores_with_cache(
                     &cache_hash_data,
                     storages,
@@ -6931,7 +6938,9 @@ impl AccountsDb {
                     config,
                     hash.filler_account_suffix.as_ref(),
                 )?;
+                warn!("BWLOG: completed scan_snapshot_stores_with_cache");
 
+                warn!("BWLOG: rest_of_hash_calculation");
                 let (hash, lamports, for_next_pass) = hash.rest_of_hash_calculation(
                     result,
                     &mut stats,
@@ -6939,6 +6948,7 @@ impl AccountsDb {
                     previous_pass,
                     bins_per_pass,
                 );
+                warn!("BWLOG: completed rest_of_hash_calculation");
                 previous_pass = for_next_pass;
                 final_result = (hash, lamports);
             }

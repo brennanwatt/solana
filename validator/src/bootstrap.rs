@@ -378,7 +378,6 @@ pub fn attempt_download_genesis_and_snapshot(
         bootstrap_config.no_genesis_fetch,
         use_progress_bar,
     );
-    warn!("BWLOG: completed download_then_check_genesis_hash");
 
     if let Ok(genesis_config) = genesis_config {
         let genesis_hash = genesis_config.hash();
@@ -503,11 +502,8 @@ pub fn rpc_bootstrap(
     let mut gossip = None;
     let mut vetted_rpc_nodes: Vec<(usize, ContactInfo, Option<SnapshotHash>, RpcClient)> = vec![];
     let mut download_abort_count = 0;
-    let mut loop_count = 1;
     let speed_test_lock = Arc::new(Mutex::new(0));
     loop {
-        warn!("BWLOG: loop_count {}", loop_count);
-        loop_count += 1;
         if gossip.is_none() {
             *start_progress.write().unwrap() = ValidatorStartProgress::SearchingForRpcService;
 
@@ -545,13 +541,6 @@ pub fn rpc_bootstrap(
                         rpc_contact_info,
                         snapshot_hash,
                     } = rpc_node_details;
-
-                    warn!(
-                        "BWLOG: Using RPC service from node {}: {:?}, full slot {}",
-                        rpc_contact_info.id,
-                        rpc_contact_info.rpc,
-                        snapshot_hash.unwrap().full.0,
-                    );
                     let rpc_client = RpcClient::new_socket_with_timeout(
                         rpc_contact_info.rpc,
                         Duration::from_secs(5),
@@ -619,10 +608,6 @@ pub fn rpc_bootstrap(
                             let mut x = found_sufficient_nodes.write().unwrap();
                             *x = true;
                         }
-                        warn!(
-                            "BWLOG: num_viable_nodes_found {} super_node_found {}",
-                            num_viable_nodes_found, super_node_found
-                        );
                         true
                     } else {
                         fail_rpc_node(
@@ -750,11 +735,10 @@ fn get_rpc_nodes(
                 .map(|peer_snapshot_hash| peer_snapshot_hash.rpc_contact_info.id)
                 .collect::<Vec<_>>();
             warn!(
-                "BWLOG: Highest available snapshot {:?} available from {} node{}: {:?}",
+                "BWLOG: Highest available snapshot {:?} available from {} node{}",
                 peer_snapshot_hashes[0].snapshot_hash,
                 rpc_peers.len(),
                 if rpc_peers.len() > 1 { "s" } else { "" },
-                rpc_peers,
             );
             let rpc_node_results = peer_snapshot_hashes
                 .iter()
@@ -1194,10 +1178,6 @@ fn download_snapshots(
 
     // Check and see if we've already got the incremental snapshot; if not, download it
     if let Some(incremental_snapshot_hash) = incremental_snapshot_hash {
-        warn!(
-            "BWLOG: Incremental snapshot slot: {}",
-            incremental_snapshot_hash.0
-        );
         if snapshot_utils::get_incremental_snapshot_archives(incremental_snapshot_archives_dir)
             .into_iter()
             .any(|snapshot_archive| {
@@ -1211,7 +1191,10 @@ fn download_snapshots(
                 incremental_snapshot_hash.0, incremental_snapshot_hash.1
             );
         } else {
-            warn!("BWLOG: starting download_snapshot (incremental)");
+            warn!(
+                "BWLOG: starting download_snapshot (incremental) slot: {}",
+                incremental_snapshot_hash.0
+            );
             match download_snapshot(
                 full_snapshot_archives_dir,
                 incremental_snapshot_archives_dir,

@@ -390,7 +390,7 @@ impl Validator {
         let id = identity_keypair.pubkey();
         assert_eq!(id, node.info.id);
 
-        warn!("BWLOG: validator identity: {}", id);
+        warn!("validator identity: {}", id);
         warn!("vote account: {}", vote_account);
 
         if !config.no_os_network_stats_reporting {
@@ -459,7 +459,6 @@ impl Validator {
             }
         }
 
-        warn!("BWLOG: Cleaning accounts paths..");
         *start_progress.write().unwrap() = ValidatorStartProgress::CleaningAccounts;
         let mut start = Measure::start("clean_accounts_paths");
         for accounts_path in &config.account_paths {
@@ -471,7 +470,6 @@ impl Validator {
             }
         }
         start.stop();
-        warn!("BWLOG: Done cleaning accounts paths. {}", start);
 
         let exit = Arc::new(AtomicBool::new(false));
         {
@@ -501,7 +499,6 @@ impl Validator {
             transaction_notifier.is_some()
         );
 
-        warn!("BWLOG: starting SystemMonitorService::new");
         let system_monitor_service = Some(SystemMonitorService::new(
             Arc::clone(&exit),
             !config.no_os_memory_stats_reporting,
@@ -509,7 +506,6 @@ impl Validator {
             !config.no_os_cpu_stats_reporting,
             !config.no_os_disk_stats_reporting,
         ));
-        warn!("BWLOG: completed SystemMonitorService::new");
 
         let (poh_timing_point_sender, poh_timing_point_receiver) = unbounded();
         let poh_timing_report_service =
@@ -1012,7 +1008,6 @@ impl Validator {
         );
         warn!("BWLOG: completed Tvu::new");
 
-        warn!("BWLOG: starting Tpu::new");
         let tpu = Tpu::new(
             &cluster_info,
             &poh_recorder,
@@ -1048,7 +1043,6 @@ impl Validator {
             config.enable_quic_servers,
             &staked_nodes,
         );
-        warn!("BWLOG: completed Tpu::new");
 
         datapoint_info!(
             "validator-new",
@@ -1405,11 +1399,9 @@ fn load_blockstore(
         }
     }
 
-    warn!("BWLOG: Starting PoH speed test");
     if !config.no_poh_speed_test {
         check_poh_speed(&genesis_config, None);
     }
-    warn!("BWLOG: Completed PoH speed test");
 
     let BlockstoreSignals {
         mut blockstore,
@@ -1521,7 +1513,6 @@ fn load_blockstore(
         }
     }
 
-    warn!("BWLOG: Starting set_fixed_leader_schedule");
     leader_schedule_cache.set_fixed_leader_schedule(config.fixed_leader_schedule.clone());
     {
         let mut bank_forks = bank_forks.write().unwrap();
@@ -1533,7 +1524,6 @@ fn load_blockstore(
                 .set_shrink_paths(shrink_paths.clone());
         }
     }
-    warn!("BWLOG: Completed set_fixed_leader_schedule");
 
     (
         genesis_config,

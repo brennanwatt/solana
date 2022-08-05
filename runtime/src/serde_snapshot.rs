@@ -740,6 +740,7 @@ where
         &next_append_vec_id,
         &num_collisions
     )?);
+    warn!("BWLOG: measure_remap {}", measure_remap);
 
     // discard any slots with no storage entries
     // this can happen if a non-root slot was serialized
@@ -789,6 +790,7 @@ where
         })
         .unwrap();
 
+    warn!("BWLOG: accounts_db.generate_index");
     let IndexGenerationInfo {
         accounts_data_len,
         rent_paying_accounts_by_partition,
@@ -797,17 +799,20 @@ where
         verify_index,
         genesis_config,
     );
+    warn!("BWLOG: completed accounts_db.generate_index");
     accounts_db
         .accounts_index
         .rent_paying_accounts_by_partition
         .set(rent_paying_accounts_by_partition)
         .unwrap();
 
+    warn!("BWLOG: accounts_db.maybe_add_filler_accounts");
     accounts_db.maybe_add_filler_accounts(
         &genesis_config.epoch_schedule,
         &genesis_config.rent,
         snapshot_slot,
     );
+    warn!("BWLOG: completed accounts_db.maybe_add_filler_accounts");
 
     handle.join().unwrap();
     measure_notify.stop();

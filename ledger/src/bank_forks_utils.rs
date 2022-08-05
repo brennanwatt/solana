@@ -135,7 +135,6 @@ pub fn load_bank_forks(
             panic!("filler accounts specified, but not loading from snapshot");
         }
 
-        info!("Processing ledger from genesis");
         let bank_forks = blockstore_processor::process_blockstore_for_bank_0(
             genesis_config,
             blockstore,

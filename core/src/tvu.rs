@@ -296,7 +296,6 @@ impl Tvu {
             block_metadata_notifier,
             log_messages_bytes_limit,
         );
-        warn!("BWLOG: ReplayStage");
 
         let ledger_cleanup_service = tvu_config.max_ledger_shreds.map(|max_ledger_shreds| {
             LedgerCleanupService::new(
@@ -308,7 +307,6 @@ impl Tvu {
                 tvu_config.rocksdb_max_compaction_jitter,
             )
         });
-        warn!("BWLOG: LedgerCleanupService");
 
         Tvu {
             fetch_stage,

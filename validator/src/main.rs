@@ -2537,7 +2537,6 @@ pub fn main() {
         exit(1);
     }
     let full_api = matches.is_present("full_rpc_api");
-    warn!("BWLOG: starting ValidatorConfig");
     let mut validator_config = ValidatorConfig {
         require_tower: matches.is_present("require_tower"),
         tower_storage,
@@ -2904,7 +2903,6 @@ pub fn main() {
     if matches.is_present("halt_on_known_validators_accounts_hash_mismatch") {
         validator_config.halt_on_known_validators_accounts_hash_mismatch = true;
     }
-    warn!("BWLOG: completed ValidatorConfig");
 
     let public_rpc_addr = matches.value_of("public_rpc_addr").map(|addr| {
         solana_net_utils::parse_host_port(addr).unwrap_or_else(|e| {

@@ -198,7 +198,7 @@ pub fn download_file<'a, 'b>(
                 notification_count: self.notification_count,
             };
             let mut to_update_progress = false;
-            if progress_record.last_elapsed_time.as_secs() > 5 {
+            if progress_record.last_elapsed_time.as_secs() >= 10 {
                 self.last_print = Instant::now();
                 self.last_print_bytes = self.current_bytes;
                 to_update_progress = true;

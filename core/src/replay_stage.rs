@@ -400,10 +400,8 @@ impl ReplayStage {
     ) -> Self {
         let mut tower = if let Some(process_blockstore) = maybe_process_blockstore {
             let tower = process_blockstore.process_to_create_tower();
-            warn!("BWLOG: Tower state: {:?}", tower);
             tower
         } else {
-            warn!("BWLOG: creating default tower....");
             Tower::default()
         };
 
