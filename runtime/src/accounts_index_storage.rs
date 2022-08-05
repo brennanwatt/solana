@@ -5,6 +5,7 @@ use {
         in_mem_accounts_index::InMemAccountsIndex,
         waitable_condvar::WaitableCondvar,
     },
+    log::*,
     std::{
         fmt::Debug,
         sync::{
@@ -119,6 +120,7 @@ impl<T: IndexValue> AccountsIndexStorage<T> {
                 false, // cannot advance age from any of these threads
             ));
         }
+        warn!("BWLOG: background threads created");
         self.storage.set_startup(value);
         if !value {
             // transitioning from startup to !startup (ie. steady state)
@@ -143,7 +145,7 @@ impl<T: IndexValue> AccountsIndexStorage<T> {
     }
 
     fn num_threads() -> usize {
-        std::cmp::max(2, num_cpus::get() / 4)
+        std::cmp::max(2, num_cpus::get() / 2)
     }
 
     /// allocate BucketMapHolder and InMemAccountsIndex[]

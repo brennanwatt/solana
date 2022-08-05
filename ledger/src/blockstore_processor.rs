@@ -850,7 +850,7 @@ pub fn process_blockstore_from_root(
 
     let processing_time = now.elapsed();
 
-    let debug_verify = opts.accounts_db_test_hash_calculation;
+    let _debug_verify = opts.accounts_db_test_hash_calculation;
     let mut time_cap = Measure::start("capitalization");
     // We might be promptly restarted after bad capitalization was detected while creating newer snapshot.
     // In that case, we're most likely restored from the last good snapshot and replayed up to this root.

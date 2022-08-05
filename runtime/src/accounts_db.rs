@@ -2449,12 +2449,21 @@ impl AccountsDb {
         warn!("BWLOG: construct_candidate_clean_keys - retain");
         let dirty_stores_len = dirty_stores.len();
         let pubkeys = DashSet::new();
-        for (_slot, store) in dirty_stores {
+        /*for (_slot, store) in dirty_stores {
             store.accounts.account_iter().for_each(|account| {
                 pubkeys.insert(account.meta.pubkey);
             });
-        }
-        warn!("BWLOG: construct_candidate_clean_keys - insert to DashSet");
+        }*/
+        dirty_stores.par_iter().for_each(|(_slot, store)| {
+            store.accounts.account_iter().for_each(|account| {
+                pubkeys.insert(account.meta.pubkey);
+            });
+        });
+        warn!(
+            "BWLOG: construct_candidate_clean_keys - insert to DashSet {} dirty stores, {} pubkeys",
+            dirty_stores.len(),
+            pubkeys.len()
+        );
         trace!(
             "dirty_stores.len: {} pubkeys.len: {}",
             dirty_stores_len,

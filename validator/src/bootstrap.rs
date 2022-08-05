@@ -681,6 +681,8 @@ fn get_rpc_nodes(
     let mut newer_cluster_snapshot_timeout = None;
     let mut retry_reason = None;
     loop {
+        // Sleep to ensure we've had time to gossip with the cluster and get good RPC/snapshot candidates
+        sleep(Duration::from_secs(1));
         info!("\n{}", cluster_info.rpc_info_trace());
 
         let rpc_peers = get_rpc_peers(
@@ -693,7 +695,6 @@ fn get_rpc_nodes(
             bootstrap_config,
         );
         if rpc_peers.is_none() {
-            sleep(Duration::from_secs(1));
             continue;
         }
         let rpc_peers = rpc_peers.unwrap();
