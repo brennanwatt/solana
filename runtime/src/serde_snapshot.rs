@@ -723,11 +723,13 @@ where
             .unwrap_or_else(|err| panic!("Failed to create directory {}: {}", path.display(), err));
     }
 
+    warn!("BWLOG: reconstruct_historical_roots");
     reconstruct_historical_roots(
         &accounts_db,
         snapshot_historical_roots,
         snapshot_historical_roots_with_hash,
     );
+    warn!("BWLOG: completed reconstruct_historical_roots");
 
     // Remap the deserialized AppendVec paths to point to correct local paths
     let num_collisions = AtomicUsize::new(0);
@@ -757,6 +759,7 @@ where
     );
 
     // Process deserialized data, set necessary fields in self
+    warn!("BWLOG: Process deserialized data, set necessary fields in self");
     accounts_db
         .bank_hashes
         .write()
@@ -773,6 +776,7 @@ where
     accounts_db
         .write_version
         .fetch_add(snapshot_version, Ordering::Release);
+    warn!("BWLOG: completed Process deserialized data, set necessary fields in self");
 
     let mut measure_notify = Measure::start("accounts_notify");
 
@@ -807,6 +811,7 @@ where
 
     handle.join().unwrap();
     measure_notify.stop();
+    warn!("BWLOG: {}", measure_notify);
 
     datapoint_info!(
         "reconstruct_accountsdb_from_fields()",

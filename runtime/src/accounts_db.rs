@@ -4018,22 +4018,28 @@ impl AccountsDb {
         const DIRTY_STORES_CLEANING_THRESHOLD: usize = 10_000;
         const OUTER_CHUNK_SIZE: usize = 2000;
         if is_startup && self.caching_enabled {
-            warn!("BWLOG: shrink_all_slots is_startup && self.caching_enabled");
             let slots = self.all_slots_in_storage();
             let threads = num_cpus::get();
-            let inner_chunk_size = std::cmp::max(OUTER_CHUNK_SIZE / threads, 1);
+            let inner_chunk_size = std::cmp::max((OUTER_CHUNK_SIZE + threads - 1) / threads, 1);
+            warn!(
+                "BWLOG: shrink_all_slots - {} slots, {} threads",
+                slots.len(),
+                threads
+            );
             slots.chunks(OUTER_CHUNK_SIZE).for_each(|chunk| {
+                warn!("BWLOG: outer chunk");
                 chunk.par_chunks(inner_chunk_size).for_each(|slots| {
                     for slot in slots {
                         self.shrink_slot_forced(*slot);
                     }
                 });
+                warn!("BWLOG: outer chunk done");
                 if self.dirty_stores.len() > DIRTY_STORES_CLEANING_THRESHOLD {
                     self.clean_accounts(None, is_startup, last_full_snapshot_slot);
+                    warn!("BWLOG: cleaned accounts");
                 }
             });
         } else {
-            warn!("BWLOG: NOT shrink_all_slots is_startup && self.caching_enabled");
             for slot in self.all_slots_in_storage() {
                 if self.caching_enabled {
                     self.shrink_slot_forced(slot);
@@ -6901,6 +6907,7 @@ impl AccountsDb {
 
             let cache_hash_data = self.get_cache_hash_data(config);
 
+            warn!("BWLOG: num_hash_scan_passes = {}", num_hash_scan_passes);
             for pass in 0..num_hash_scan_passes {
                 let bounds = Range {
                     start: pass * bins_per_pass,
@@ -6936,8 +6943,8 @@ impl AccountsDb {
                 final_result = (hash, lamports);
             }
 
-            info!(
-                "calculate_accounts_hash_without_index: slot: {} {:?}",
+            warn!(
+                "BWLOG: calculate_accounts_hash_without_index: slot: {} {:?}",
                 storages.max_slot_inclusive(),
                 final_result
             );
