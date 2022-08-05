@@ -2458,11 +2458,19 @@ impl AccountsDb {
         );
         timings.dirty_pubkeys_count = pubkeys.len() as u64;
         dirty_store_processing_time.stop();
+        warn!(
+            "BWLOG: construct_candidate_clean_keys - {}",
+            dirty_store_processing_time
+        );
         timings.dirty_store_processing_us += dirty_store_processing_time.as_us();
 
         let mut collect_delta_keys = Measure::start("key_create");
         let delta_keys = self.remove_uncleaned_slots_and_collect_pubkeys_up_to_slot(max_slot);
         collect_delta_keys.stop();
+        warn!(
+            "BWLOG: construct_candidate_clean_keys - {}",
+            collect_delta_keys
+        );
         timings.collect_delta_keys_us += collect_delta_keys.as_us();
 
         let mut delta_insert = Measure::start("delta_insert");
@@ -2474,6 +2482,7 @@ impl AccountsDb {
             });
         });
         delta_insert.stop();
+        warn!("BWLOG: construct_candidate_clean_keys - {}", delta_insert);
         timings.delta_insert_us += delta_insert.as_us();
 
         timings.delta_key_count = pubkeys.len() as u64;
@@ -2481,6 +2490,7 @@ impl AccountsDb {
         let mut hashset_to_vec = Measure::start("flat_map");
         let mut pubkeys: Vec<Pubkey> = pubkeys.into_iter().collect();
         hashset_to_vec.stop();
+        warn!("BWLOG: construct_candidate_clean_keys - {}", hashset_to_vec);
         timings.hashset_to_vec_us += hashset_to_vec.as_us();
 
         // Check if we should purge any of the zero_lamport_accounts_to_purge_later, based on the
@@ -6773,7 +6783,7 @@ impl AccountsDb {
                 expected_capitalization,
             )
             .unwrap(); // unwrap here will never fail since check_hash = false
-        warn!("BWLOG: completed calculate_accounts_hash_helper_with_verify");
+        warn!("BWLOG: completed calculate_accounts_hash_helper_with_verify from update_accounts_hash_with_index_option - slot = {}, lamports = {}", slot, total_lamports);
         self.set_accounts_hash(slot, hash);
         (hash, total_lamports)
     }
@@ -7069,6 +7079,7 @@ impl AccountsDb {
                 },
                 None,
             )?;
+        warn!("BWLOG: completed calculate_accounts_hash_helper_with_verify from verify_bank_hash_and_lamports_new - slot = {}, lamports = {}", slot, calculated_lamports);
 
         if calculated_lamports != total_lamports {
             warn!(
@@ -8412,6 +8423,7 @@ impl AccountsDb {
                 // seems to be a good hueristic given varying # cpus for in-mem disk index
                 8
             };
+            warn!("BWLOG: generate_index using {} threads", threads);
             let chunk_size = (outer_slots_len / (std::cmp::max(1, threads.saturating_sub(1)))) + 1; // approximately 400k slots in a snapshot
             let mut index_time = Measure::start("index");
             let insertion_time_us = AtomicU64::new(0);
@@ -8506,6 +8518,7 @@ impl AccountsDb {
                 })
                 .sum();
             index_time.stop();
+            warn!("BWLOG: generate_index - {}", index_time);
 
             info!("rent_collector: {:?}", rent_collector);
             let mut min_bin_size = usize::MAX;
@@ -8601,6 +8614,7 @@ impl AccountsDb {
                 );
             }
             accounts_data_len_dedup_timer.stop();
+            warn!("BWLOG: generate_index - {}", accounts_data_len_dedup_timer);
             timings.accounts_data_len_dedup_time_us = accounts_data_len_dedup_timer.as_us();
 
             if pass == 0 {

@@ -868,7 +868,10 @@ pub fn process_blockstore_from_root(
         );
     }
     time_cap.stop();
-    warn!("BWLOG: completed calculate_and_verify_capitalization");
+    warn!(
+        "BWLOG: completed calculate_and_verify_capitalization {}",
+        time_cap
+    );
 
     datapoint_info!(
         "process_blockstore_from_root",

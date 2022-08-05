@@ -39,6 +39,7 @@ use {
             atomic::{AtomicBool, Ordering},
             Arc, Mutex, RwLock,
         },
+        thread::sleep,
         time::{Duration, Instant},
     },
 };
@@ -188,8 +189,8 @@ fn get_rpc_peers(
         return None;
     }
 
-    warn!(
-        "BWLOG: Searching for an RPC service with shred version {}{}...",
+    info!(
+        "Searching for an RPC service with shred version {}{}...",
         shred_version,
         retry_reason
             .as_ref()
@@ -222,8 +223,8 @@ fn get_rpc_peers(
         .filter(|rpc_peer| is_known_validator(&rpc_peer.id, &validator_config.known_validators))
         .count();
 
-    warn!(
-        "BWLOG: Total {} RPC nodes found. {} known, {} blacklisted ",
+    info!(
+        "Total {} RPC nodes found. {} known, {} blacklisted ",
         rpc_peers_total, rpc_known_peers, rpc_peers_blacklisted
     );
 
@@ -692,6 +693,7 @@ fn get_rpc_nodes(
             bootstrap_config,
         );
         if rpc_peers.is_none() {
+            sleep(Duration::from_secs(1));
             continue;
         }
         let rpc_peers = rpc_peers.unwrap();
