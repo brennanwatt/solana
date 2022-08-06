@@ -2501,7 +2501,7 @@ impl AccountsDb {
         timings.delta_key_count = pubkeys.len() as u64;
 
         let mut hashset_to_vec = Measure::start("flat_map");
-        let mut pubkeys: Vec<Pubkey> = pubkeys.into_iter().collect();
+        let pubkeys: Vec<Pubkey> = pubkeys.into_iter().collect();
         hashset_to_vec.stop();
         warn!("BWLOG: construct_candidate_clean_keys - {}", hashset_to_vec);
         timings.hashset_to_vec_us += hashset_to_vec.as_us();
@@ -2513,15 +2513,35 @@ impl AccountsDb {
             "if snapshots are disabled, then zero_lamport_accounts_to_purge_later should always be empty"
         );
         if let Some(last_full_snapshot_slot) = last_full_snapshot_slot {
-            self.zero_lamport_accounts_to_purge_after_full_snapshot
-                .retain(|(slot, pubkey)| {
+            /*self.zero_lamport_accounts_to_purge_after_full_snapshot
+            .retain(|(slot, pubkey)| {
+                let is_candidate_for_clean =
+                    max_slot >= *slot && last_full_snapshot_slot >= *slot;
+                if is_candidate_for_clean {
+                    pubkeys.push(*pubkey);
+                }
+                !is_candidate_for_clean
+            });*/
+
+            let x = self
+                .zero_lamport_accounts_to_purge_after_full_snapshot
+                .par_iter()
+                .filter(|x| {
+                    let (slot, pubkey) = *x.key();
                     let is_candidate_for_clean =
-                        max_slot >= *slot && last_full_snapshot_slot >= *slot;
+                        max_slot >= slot && last_full_snapshot_slot >= slot;
                     if is_candidate_for_clean {
-                        pubkeys.push(*pubkey);
+                        pubkeys.clone().push(pubkey);
                     }
                     !is_candidate_for_clean
                 });
+            self.zero_lamport_accounts_to_purge_after_full_snapshot
+                .clear();
+            x.into_par_iter().for_each(|x| {
+                let key = *x.key();
+                self.zero_lamport_accounts_to_purge_after_full_snapshot
+                    .insert(key);
+            });
         }
 
         pubkeys
