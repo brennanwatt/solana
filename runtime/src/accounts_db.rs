@@ -2432,7 +2432,8 @@ impl AccountsDb {
         max_clean_root: Option<Slot>,
         last_full_snapshot_slot: Option<Slot>,
         timings: &mut CleanKeyTimings,
-    ) -> Vec<Pubkey> {
+        pubkey_vec: &mut Vec<Pubkey>,
+    ) {
         warn!("BWLOG: construct_candidate_clean_keys - start");
         let mut dirty_store_processing_time = Measure::start("dirty_store_processing");
         let max_slot = max_clean_root.unwrap_or_else(|| self.accounts_index.max_root_inclusive());
@@ -2449,11 +2450,6 @@ impl AccountsDb {
         warn!("BWLOG: construct_candidate_clean_keys - retain");
         let dirty_stores_len = dirty_stores.len();
         let pubkeys = DashSet::new();
-        /*for (_slot, store) in dirty_stores {
-            store.accounts.account_iter().for_each(|account| {
-                pubkeys.insert(account.meta.pubkey);
-            });
-        }*/
         dirty_stores.par_iter().for_each(|(_slot, store)| {
             store.accounts.account_iter().for_each(|account| {
                 pubkeys.insert(account.meta.pubkey);
@@ -2501,7 +2497,7 @@ impl AccountsDb {
         timings.delta_key_count = pubkeys.len() as u64;
 
         let mut hashset_to_vec = Measure::start("flat_map");
-        let pubkeys: Vec<Pubkey> = pubkeys.into_iter().collect();
+        pubkey_vec.extend(pubkeys.into_iter().collect::<Vec<Pubkey>>());
         hashset_to_vec.stop();
         warn!("BWLOG: construct_candidate_clean_keys - {}", hashset_to_vec);
         timings.hashset_to_vec_us += hashset_to_vec.as_us();
@@ -2528,7 +2524,7 @@ impl AccountsDb {
                     let is_candidate_for_clean =
                         max_slot >= slot && last_full_snapshot_slot >= slot;
                     if is_candidate_for_clean {
-                        pubkeys.clone().push(pubkey);
+                        pubkey_vec.clone().push(pubkey);
                     }
                     !is_candidate_for_clean
                 })
@@ -2538,9 +2534,11 @@ impl AccountsDb {
                 });
         }
         grab_pubkeys.stop();
-        warn!("BWLOG: construct_candidate_clean_keys - {}", grab_pubkeys);
-
-        pubkeys
+        warn!(
+            "BWLOG: construct_candidate_clean_keys - {} - {} keys",
+            grab_pubkeys,
+            pubkey_vec.len()
+        );
     }
 
     // Purge zero lamport accounts and older rooted account states as garbage
@@ -2570,10 +2568,12 @@ impl AccountsDb {
 
         let mut clean_keys = Measure::start("clean_keys");
         let mut key_timings = CleanKeyTimings::default();
-        let mut pubkeys = self.construct_candidate_clean_keys(
+        let mut pubkeys: Vec<Pubkey> = vec![];
+        self.construct_candidate_clean_keys(
             max_clean_root,
             last_full_snapshot_slot,
             &mut key_timings,
+            &mut pubkeys,
         );
         clean_keys.stop();
         warn!("BWLOG: clean_accounts - {}", clean_keys);
