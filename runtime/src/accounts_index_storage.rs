@@ -120,7 +120,7 @@ impl<T: IndexValue> AccountsIndexStorage<T> {
                 false, // cannot advance age from any of these threads
             ));
         }
-        warn!("BWLOG: background threads created");
+        warn!("BWLOG: background threads startup {:?}", value);
         self.storage.set_startup(value);
         if !value {
             // transitioning from startup to !startup (ie. steady state)

@@ -2506,6 +2506,7 @@ impl AccountsDb {
         warn!("BWLOG: construct_candidate_clean_keys - {}", hashset_to_vec);
         timings.hashset_to_vec_us += hashset_to_vec.as_us();
 
+        let mut grab_pubkeys = Measure::start("grab_pubkeys");
         // Check if we should purge any of the zero_lamport_accounts_to_purge_later, based on the
         // last_full_snapshot_slot.
         assert!(
@@ -2513,18 +2514,14 @@ impl AccountsDb {
             "if snapshots are disabled, then zero_lamport_accounts_to_purge_later should always be empty"
         );
         if let Some(last_full_snapshot_slot) = last_full_snapshot_slot {
-            /*self.zero_lamport_accounts_to_purge_after_full_snapshot
-            .retain(|(slot, pubkey)| {
-                let is_candidate_for_clean =
-                    max_slot >= *slot && last_full_snapshot_slot >= *slot;
-                if is_candidate_for_clean {
-                    pubkeys.push(*pubkey);
-                }
-                !is_candidate_for_clean
-            });*/
-
-            let x = self
+            let zero_lamport_accounts_to_purge_after_full_snapshot = self
                 .zero_lamport_accounts_to_purge_after_full_snapshot
+                .clone();
+
+            self.zero_lamport_accounts_to_purge_after_full_snapshot
+                .clear();
+
+            zero_lamport_accounts_to_purge_after_full_snapshot
                 .par_iter()
                 .filter(|x| {
                     let (slot, pubkey) = *x.key();
@@ -2534,15 +2531,14 @@ impl AccountsDb {
                         pubkeys.clone().push(pubkey);
                     }
                     !is_candidate_for_clean
+                })
+                .for_each(|x| {
+                    self.zero_lamport_accounts_to_purge_after_full_snapshot
+                        .insert(*x.key());
                 });
-            self.zero_lamport_accounts_to_purge_after_full_snapshot
-                .clear();
-            x.into_par_iter().for_each(|x| {
-                let key = *x.key();
-                self.zero_lamport_accounts_to_purge_after_full_snapshot
-                    .insert(key);
-            });
         }
+        grab_pubkeys.stop();
+        warn!("BWLOG: construct_candidate_clean_keys - {}", grab_pubkeys);
 
         pubkeys
     }
