@@ -187,7 +187,7 @@ where
         total_entries += 1;
         let now = Instant::now();
         if now.duration_since(last_log_update).as_secs() >= 10 {
-            info!("unpacked {} entries so far...", total_entries);
+            warn!("BWLOG: unpacked {} entries so far...", total_entries);
             last_log_update = now;
         }
     }
@@ -296,7 +296,7 @@ pub struct ParallelSelector {
 
 impl ParallelSelector {
     pub fn select_index(&self, index: usize) -> bool {
-        index % self.divisions == self.index
+        index & (self.divisions - 1) == 0
     }
 }
 
@@ -360,44 +360,73 @@ where
     assert!(!account_paths.is_empty());
     let mut i = 0;
 
-    unpack_archive(
-        archive,
-        MAX_SNAPSHOT_ARCHIVE_UNPACKED_APPARENT_SIZE,
-        MAX_SNAPSHOT_ARCHIVE_UNPACKED_ACTUAL_SIZE,
-        MAX_SNAPSHOT_ARCHIVE_UNPACKED_COUNT,
-        |parts, kind| {
-            if is_valid_snapshot_archive_entry(parts, kind) {
-                i += 1;
-                match &parallel_selector {
-                    Some(parallel_selector) => {
-                        if !parallel_selector.select_index(i - 1) {
-                            return UnpackPath::Ignore;
-                        }
+    if let Some(parallel_selector) = parallel_selector {
+        unpack_archive(
+            archive,
+            MAX_SNAPSHOT_ARCHIVE_UNPACKED_APPARENT_SIZE,
+            MAX_SNAPSHOT_ARCHIVE_UNPACKED_ACTUAL_SIZE,
+            MAX_SNAPSHOT_ARCHIVE_UNPACKED_COUNT,
+            |parts, kind| {
+                if is_valid_snapshot_archive_entry(parts, kind) {
+                    i += 1;
+                    if !parallel_selector.select_index(i - 1) {
+                        return UnpackPath::Ignore;
                     }
-                    None => {}
-                };
-                if let ["accounts", file] = parts {
-                    // Randomly distribute the accounts files about the available `account_paths`,
-                    let path_index = thread_rng().gen_range(0, account_paths.len());
-                    match account_paths
-                        .get(path_index)
-                        .map(|path_buf| path_buf.as_path())
-                    {
-                        Some(path) => {
-                            accounts_path_processor(*file, path);
-                            UnpackPath::Valid(path)
+
+                    if let ["accounts", file] = parts {
+                        // Randomly distribute the accounts files about the available `account_paths`,
+                        let path_index = thread_rng().gen_range(0, account_paths.len());
+                        match account_paths
+                            .get(path_index)
+                            .map(|path_buf| path_buf.as_path())
+                        {
+                            Some(path) => {
+                                accounts_path_processor(*file, path);
+                                UnpackPath::Valid(path)
+                            }
+                            None => UnpackPath::Invalid,
                         }
-                        None => UnpackPath::Invalid,
+                    } else {
+                        UnpackPath::Valid(ledger_dir)
                     }
                 } else {
-                    UnpackPath::Valid(ledger_dir)
+                    UnpackPath::Invalid
                 }
-            } else {
-                UnpackPath::Invalid
-            }
-        },
-        entry_processor,
-    )
+            },
+            entry_processor,
+        )
+    } else {
+        unpack_archive(
+            archive,
+            MAX_SNAPSHOT_ARCHIVE_UNPACKED_APPARENT_SIZE,
+            MAX_SNAPSHOT_ARCHIVE_UNPACKED_ACTUAL_SIZE,
+            MAX_SNAPSHOT_ARCHIVE_UNPACKED_COUNT,
+            |parts, kind| {
+                if is_valid_snapshot_archive_entry(parts, kind) {
+                    i += 1;
+                    if let ["accounts", file] = parts {
+                        // Randomly distribute the accounts files about the available `account_paths`,
+                        let path_index = thread_rng().gen_range(0, account_paths.len());
+                        match account_paths
+                            .get(path_index)
+                            .map(|path_buf| path_buf.as_path())
+                        {
+                            Some(path) => {
+                                accounts_path_processor(*file, path);
+                                UnpackPath::Valid(path)
+                            }
+                            None => UnpackPath::Invalid,
+                        }
+                    } else {
+                        UnpackPath::Valid(ledger_dir)
+                    }
+                } else {
+                    UnpackPath::Invalid
+                }
+            },
+            entry_processor,
+        )
+    }
 }
 
 fn all_digits(v: &str) -> bool {

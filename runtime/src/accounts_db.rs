@@ -2539,6 +2539,7 @@ impl AccountsDb {
             grab_pubkeys,
             pubkey_vec.len()
         );
+        warn!("BWLOG: END OF FUNCTION1");
     }
 
     // Purge zero lamport accounts and older rooted account states as garbage
@@ -2575,6 +2576,7 @@ impl AccountsDb {
             &mut key_timings,
             &mut pubkeys,
         );
+        warn!("BWLOG: END OF FUNCTION2");
         clean_keys.stop();
         warn!("BWLOG: clean_accounts - {}", clean_keys);
 
@@ -8563,7 +8565,6 @@ impl AccountsDb {
                     len as usize
                 })
                 .sum();
-            warn!("BWLOG: generate_index - completed total items summation");
 
             let mut index_flush_us = 0;
             if pass == 0 {
@@ -8683,7 +8684,7 @@ impl AccountsDb {
         // Just estimating - 150M accounts can easily be held in memory in the accounts index on a 256G machine. 2-300M are also likely 'fine' during startup.
         // 550M was straining a 384G machine at startup.
         // This is a tunable parameter that just needs to be small enough to keep the generation threads from overwhelming RAM and oom at startup.
-        const LIMIT: usize = 10_000_000;
+        const LIMIT: usize = 50_000_000;
         while self
             .accounts_index
             .get_startup_remaining_items_to_flush_estimate()
