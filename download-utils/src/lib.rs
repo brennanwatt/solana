@@ -61,8 +61,8 @@ pub fn get_file_download_speed(url: &str) -> Result<usize, String> {
         .send()
         .map_err(|err| err.to_string())?;
 
-    const SPEED_TEST_MEASURE_START_MS: u128 = 15_000;
-    const SPEED_TEST_DURATION_MS: u128 = 20_000;
+    const SPEED_TEST_MEASURE_START_MS: u128 = 10_000;
+    const SPEED_TEST_DURATION_MS: u128 = 15_000;
     let mut buffer = vec![0_u8; 10 * 1024 * 1024];
     let mut total_bytes: usize = 0;
     let mut start_bytes: usize = 0;

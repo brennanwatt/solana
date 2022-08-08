@@ -97,6 +97,7 @@ fn unpack_archive<'a, A, C, D>(
     limit_count: u64,
     mut entry_checker: C, // checks if entry is valid
     entry_processor: D,   // processes entry after setting permissions
+    idx: usize,
 ) -> Result<()>
 where
     A: Read,
@@ -187,7 +188,7 @@ where
         total_entries += 1;
         let now = Instant::now();
         if now.duration_since(last_log_update).as_secs() >= 10 {
-            warn!("BWLOG: unpacked {} entries so far...", total_entries);
+            warn!("BWLOG: idx {} unpacked {} entries so far...", idx, total_entries);
             last_log_update = now;
         }
     }
@@ -296,7 +297,7 @@ pub struct ParallelSelector {
 
 impl ParallelSelector {
     pub fn select_index(&self, index: usize) -> bool {
-        index & (self.divisions - 1) == 0
+        index & (self.divisions - 1) == self.index
     }
 }
 
@@ -394,6 +395,7 @@ where
                 }
             },
             entry_processor,
+            parallel_selector.index,
         )
     } else {
         unpack_archive(
@@ -425,6 +427,7 @@ where
                 }
             },
             entry_processor,
+            0,
         )
     }
 }
@@ -539,6 +542,7 @@ fn unpack_genesis<A: Read>(
         MAX_GENESIS_ARCHIVE_UNPACKED_COUNT,
         |p, k| is_valid_genesis_archive_entry(unpack_dir, p, k),
         |_| {},
+        0,
     )
 }
 
