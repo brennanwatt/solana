@@ -188,7 +188,10 @@ where
         total_entries += 1;
         let now = Instant::now();
         if now.duration_since(last_log_update).as_secs() >= 10 {
-            warn!("BWLOG: idx {} unpacked {} entries so far...", idx, total_entries);
+            warn!(
+                "BWLOG: idx {} unpacked {} entries so far...",
+                idx, total_entries
+            );
             last_log_update = now;
         }
     }

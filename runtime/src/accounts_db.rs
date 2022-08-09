@@ -2924,11 +2924,7 @@ impl AccountsDb {
         datapoint_info!(
             "clean_accounts",
             ("total_us", measure_all.as_us(), i64),
-            (
-                "collect_delta_keys_us",
-                timings.collect_delta_keys_us,
-                i64
-            ),
+            ("collect_delta_keys_us", timings.collect_delta_keys_us, i64),
             (
                 "dirty_store_processing_us",
                 timings.dirty_store_processing_us,
