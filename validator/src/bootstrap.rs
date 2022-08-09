@@ -603,7 +603,10 @@ pub fn rpc_bootstrap(
                                     let their_location = Location::new(lat, lon);
                                     let distance =
                                         our_location.distance_to(&their_location).unwrap().meters();
-                                    warn!("BWLOG: {} {} - {} ({}) {}", rpc_contact_info.id, ip.ip, ip.city, ip.country, distance);
+                                    warn!(
+                                        "BWLOG: {} {} - {} ({}) {}",
+                                        rpc_contact_info.id, ip.ip, ip.city, ip.country, distance
+                                    );
                                     distance as usize
                                 }
                                 Err(error) => {

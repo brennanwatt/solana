@@ -2424,123 +2424,6 @@ impl AccountsDb {
         self.remove_uncleaned_slots_and_collect_pubkeys(uncleaned_slots)
     }
 
-    // Construct a vec of pubkeys for cleaning from:
-    //   uncleaned_pubkeys - the delta set of updated pubkeys in rooted slots from the last clean
-    //   dirty_stores - set of stores which had accounts removed or recently rooted
-    #[inline(always)]
-    fn construct_candidate_clean_keys(
-        &self,
-        max_clean_root: Option<Slot>,
-        last_full_snapshot_slot: Option<Slot>,
-        timings: &mut CleanKeyTimings,
-        pubkey_vec: &mut Vec<Pubkey>,
-    ) {
-        warn!("BWLOG: construct_candidate_clean_keys - start");
-        let mut dirty_store_processing_time = Measure::start("dirty_store_processing");
-        let max_slot = max_clean_root.unwrap_or_else(|| self.accounts_index.max_root_inclusive());
-        let mut dirty_stores = Vec::with_capacity(self.dirty_stores.len());
-        self.dirty_stores.retain(|(slot, _store_id), store| {
-            if *slot > max_slot {
-                true
-            } else {
-                dirty_stores.push((*slot, store.clone()));
-                false
-            }
-        });
-        let dirty_stores_len = dirty_stores.len();
-        let pubkeys = DashSet::new();
-        dirty_stores.par_iter().for_each(|(_slot, store)| {
-            store.accounts.account_iter().for_each(|account| {
-                pubkeys.insert(account.meta.pubkey);
-            });
-        });
-        warn!(
-            "BWLOG: construct_candidate_clean_keys - insert to DashSet {} dirty stores, {} pubkeys",
-            dirty_stores.len(),
-            pubkeys.len()
-        );
-        trace!(
-            "dirty_stores.len: {} pubkeys.len: {}",
-            dirty_stores_len,
-            pubkeys.len()
-        );
-        timings.dirty_pubkeys_count = pubkeys.len() as u64;
-        dirty_store_processing_time.stop();
-        warn!(
-            "BWLOG: construct_candidate_clean_keys - {}",
-            dirty_store_processing_time
-        );
-        timings.dirty_store_processing_us += dirty_store_processing_time.as_us();
-
-        let mut collect_delta_keys = Measure::start("key_create");
-        let delta_keys = self.remove_uncleaned_slots_and_collect_pubkeys_up_to_slot(max_slot);
-        collect_delta_keys.stop();
-        warn!(
-            "BWLOG: construct_candidate_clean_keys - {}",
-            collect_delta_keys
-        );
-        timings.collect_delta_keys_us += collect_delta_keys.as_us();
-
-        let mut delta_insert = Measure::start("delta_insert");
-        self.thread_pool_clean.install(|| {
-            delta_keys.par_iter().for_each(|keys| {
-                for key in keys {
-                    pubkeys.insert(*key);
-                }
-            });
-        });
-        delta_insert.stop();
-        warn!("BWLOG: construct_candidate_clean_keys - {}", delta_insert);
-        timings.delta_insert_us += delta_insert.as_us();
-
-        timings.delta_key_count = pubkeys.len() as u64;
-
-        let mut hashset_to_vec = Measure::start("flat_map");
-        pubkey_vec.extend(pubkeys.into_iter().collect::<Vec<Pubkey>>());
-        hashset_to_vec.stop();
-        warn!("BWLOG: construct_candidate_clean_keys - {}", hashset_to_vec);
-        timings.hashset_to_vec_us += hashset_to_vec.as_us();
-
-        let mut grab_pubkeys = Measure::start("grab_pubkeys");
-        // Check if we should purge any of the zero_lamport_accounts_to_purge_later, based on the
-        // last_full_snapshot_slot.
-        assert!(
-            last_full_snapshot_slot.is_some() || self.zero_lamport_accounts_to_purge_after_full_snapshot.is_empty(),
-            "if snapshots are disabled, then zero_lamport_accounts_to_purge_later should always be empty"
-        );
-        if let Some(last_full_snapshot_slot) = last_full_snapshot_slot {
-            let zero_lamport_accounts_to_purge_after_full_snapshot = self
-                .zero_lamport_accounts_to_purge_after_full_snapshot
-                .clone();
-
-            self.zero_lamport_accounts_to_purge_after_full_snapshot
-                .clear();
-
-            zero_lamport_accounts_to_purge_after_full_snapshot
-                .par_iter()
-                .filter(|x| {
-                    let (slot, pubkey) = *x.key();
-                    let is_candidate_for_clean =
-                        max_slot >= slot && last_full_snapshot_slot >= slot;
-                    if is_candidate_for_clean {
-                        pubkey_vec.clone().push(pubkey);
-                    }
-                    !is_candidate_for_clean
-                })
-                .for_each(|x| {
-                    self.zero_lamport_accounts_to_purge_after_full_snapshot
-                        .insert(*x.key());
-                });
-        }
-        grab_pubkeys.stop();
-        warn!(
-            "BWLOG: construct_candidate_clean_keys - {} - {} keys",
-            grab_pubkeys,
-            pubkey_vec.len()
-        );
-        warn!("BWLOG: END OF FUNCTION1");
-    }
-
     // Purge zero lamport accounts and older rooted account states as garbage
     // collection
     // Only remove those accounts where the entire rooted history of the account
@@ -2568,13 +2451,6 @@ impl AccountsDb {
 
         let mut clean_keys = Measure::start("clean_keys");
         let mut timings = CleanKeyTimings::default();
-        let mut pubkey_vec: Vec<Pubkey> = vec![];
-        /*self.construct_candidate_clean_keys(
-            max_clean_root,
-            last_full_snapshot_slot,
-            &mut timings,
-            &mut pubkey_vec,
-        );*/
 
         warn!("BWLOG: construct_candidate_clean_keys - start");
         let mut dirty_store_processing_time = Measure::start("dirty_store_processing");
@@ -2628,7 +2504,7 @@ impl AccountsDb {
         timings.delta_key_count = pubkeys.len() as u64;
 
         let mut hashset_to_vec = Measure::start("flat_map");
-        pubkey_vec.extend(pubkeys.into_iter().collect::<Vec<Pubkey>>());
+        let mut pubkey_vec: Vec<Pubkey> = pubkeys.into_iter().collect();
         hashset_to_vec.stop();
         timings.hashset_to_vec_us += hashset_to_vec.as_us();
 
@@ -2640,27 +2516,14 @@ impl AccountsDb {
             "if snapshots are disabled, then zero_lamport_accounts_to_purge_later should always be empty"
         );
         if let Some(last_full_snapshot_slot) = last_full_snapshot_slot {
-            let zero_lamport_accounts_to_purge_after_full_snapshot = self
-                .zero_lamport_accounts_to_purge_after_full_snapshot
-                .clone();
-
             self.zero_lamport_accounts_to_purge_after_full_snapshot
-                .clear();
-
-            zero_lamport_accounts_to_purge_after_full_snapshot
-                .par_iter()
-                .filter(|x| {
-                    let (slot, pubkey) = *x.key();
+                .retain(|(slot, pubkey)| {
                     let is_candidate_for_clean =
-                        max_slot >= slot && last_full_snapshot_slot >= slot;
+                        max_slot >= *slot && last_full_snapshot_slot >= *slot;
                     if is_candidate_for_clean {
-                        pubkey_vec.clone().push(pubkey);
+                        pubkey_vec.push(*pubkey);
                     }
                     !is_candidate_for_clean
-                })
-                .for_each(|x| {
-                    self.zero_lamport_accounts_to_purge_after_full_snapshot
-                        .insert(*x.key());
                 });
         }
         grab_pubkeys.stop();
