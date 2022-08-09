@@ -5,6 +5,7 @@ use {
         in_mem_accounts_index::InMemAccountsIndex,
         waitable_condvar::WaitableCondvar,
     },
+    log::*,
     solana_bucket_map::bucket_map::{BucketMap, BucketMapConfig},
     solana_measure::measure::Measure,
     solana_sdk::{
@@ -135,6 +136,7 @@ impl<T: IndexValue> BucketMapHolder<T> {
     }
 
     pub fn bucket_flushed_at_current_age(&self, can_advance_age: bool) {
+        warn!("BWLOG: bucket_flushed_at_current_age - can_advance_age = {}", can_advance_age);
         let count_buckets_flushed = 1 + self.count_buckets_flushed.fetch_add(1, Ordering::AcqRel);
         if can_advance_age {
             self.maybe_advance_age_internal(
@@ -248,7 +250,7 @@ impl<T: IndexValue> BucketMapHolder<T> {
     /// prepare for this to be dynamic if necessary
     /// For example, maybe startup has a shorter age interval.
     fn age_interval_ms(&self) -> u64 {
-        AGE_MS
+        200
     }
 
     /// return an amount of ms to sleep
@@ -341,6 +343,7 @@ impl<T: IndexValue> BucketMapHolder<T> {
                     .fetch_add(m.as_us(), Ordering::Relaxed);
                 // likely some time has elapsed. May have been waiting for age time interval to elapse.
                 if can_advance_age {
+                    warn!("BWLOG: calling maybe_advance_age from background");
                     self.maybe_advance_age();
                 }
             }

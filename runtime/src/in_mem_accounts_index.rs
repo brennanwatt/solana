@@ -8,6 +8,7 @@ use {
         bucket_map_holder_stats::BucketMapHolderStats,
         waitable_condvar::WaitableCondvar,
     },
+    log::*,
     rand::{thread_rng, Rng},
     solana_bucket_map::bucket_api::BucketApi,
     solana_measure::measure::Measure,
@@ -1072,6 +1073,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         let current_age = self.storage.current_age();
         let iterate_for_age = self.get_should_age(current_age);
         let startup = self.storage.get_startup();
+        warn!("BWLOG: flush_internal - iterate_for_age = {}, startup = {}", iterate_for_age, startup);
         if !iterate_for_age && !startup {
             // no need to age, so no need to flush this bucket
             // but, at startup we want to evict from buckets as fast as possible if any items exist

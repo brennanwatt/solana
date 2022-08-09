@@ -1498,6 +1498,215 @@ pub fn purge_old_snapshot_archives(
     }
 }
 
+#[cfg(target_os = "linux")]
+use std::{fs::File, io::BufReader};
+
+#[cfg(target_os = "linux")]
+const PROC_DISKSTATS_PATH: &str = "/proc/diskstats";
+
+#[derive(Default)]
+#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+// These stats are aggregated across all storage devices excluding internal loopbacks.
+// Fields are cumulative since boot with the exception of 'num_disks' and 'io_in_progress'
+struct DiskStats {
+    reads_completed: u64,
+    reads_merged: u64,
+    sectors_read: u64,
+    time_reading_ms: u64,
+    writes_completed: u64,
+    writes_merged: u64,
+    sectors_written: u64,
+    time_writing_ms: u64,
+    io_in_progress: u64,
+    time_io_ms: u64,
+    // weighted time multiplies time performing IO by number of commands in the queue
+    time_io_weighted_ms: u64,
+    discards_completed: u64,
+    discards_merged: u64,
+    sectors_discarded: u64,
+    time_discarding: u64,
+    flushes_completed: u64,
+    time_flushing: u64,
+    num_disks: u64,
+}
+
+#[cfg(target_os = "linux")]
+fn process_disk_stats(disk_stats: &mut Option<DiskStats>) {
+    let new_stats = read_disk_stats();
+    if let Some(old_stats) = disk_stats {
+        Self::report_disk_stats(old_stats, &new_stats);
+    }
+    *disk_stats = Some(new_stats);
+}
+
+#[cfg(not(target_os = "linux"))]
+fn process_disk_stats(_disk_stats: &mut Option<DiskStats>) {}
+
+fn report_disk_stats(old_stats: &DiskStats, new_stats: &DiskStats) {
+    datapoint_info!(
+        "disk-stats",
+        (
+            "reads_completed",
+            new_stats
+                .reads_completed
+                .saturating_sub(old_stats.reads_completed),
+            i64
+        ),
+        (
+            "reads_merged",
+            new_stats
+                .reads_merged
+                .saturating_sub(old_stats.reads_merged),
+            i64
+        ),
+        (
+            "sectors_read",
+            new_stats
+                .sectors_read
+                .saturating_sub(old_stats.sectors_read),
+            i64
+        ),
+        (
+            "time_reading_ms",
+            new_stats
+                .time_reading_ms
+                .saturating_sub(old_stats.time_reading_ms),
+            i64
+        ),
+        (
+            "writes_completed",
+            new_stats
+                .writes_completed
+                .saturating_sub(old_stats.writes_completed),
+            i64
+        ),
+        (
+            "writes_merged",
+            new_stats
+                .writes_merged
+                .saturating_sub(old_stats.writes_merged),
+            i64
+        ),
+        (
+            "sectors_written",
+            new_stats
+                .sectors_written
+                .saturating_sub(old_stats.sectors_written),
+            i64
+        ),
+        (
+            "time_writing_ms",
+            new_stats
+                .time_writing_ms
+                .saturating_sub(old_stats.time_writing_ms),
+            i64
+        ),
+        ("io_in_progress", new_stats.io_in_progress, i64),
+        (
+            "time_io_ms",
+            new_stats.time_io_ms.saturating_sub(old_stats.time_io_ms),
+            i64
+        ),
+        (
+            "time_io_weighted_ms",
+            new_stats
+                .time_io_weighted_ms
+                .saturating_sub(old_stats.time_io_weighted_ms),
+            i64
+        ),
+        (
+            "discards_completed",
+            new_stats
+                .discards_completed
+                .saturating_sub(old_stats.discards_completed),
+            i64
+        ),
+        (
+            "discards_merged",
+            new_stats
+                .discards_merged
+                .saturating_sub(old_stats.discards_merged),
+            i64
+        ),
+        (
+            "sectors_discarded",
+            new_stats
+                .sectors_discarded
+                .saturating_sub(old_stats.sectors_discarded),
+            i64
+        ),
+        (
+            "time_discarding",
+            new_stats
+                .time_discarding
+                .saturating_sub(old_stats.time_discarding),
+            i64
+        ),
+        (
+            "flushes_completed",
+            new_stats
+                .flushes_completed
+                .saturating_sub(old_stats.flushes_completed),
+            i64
+        ),
+        (
+            "time_flushing",
+            new_stats
+                .time_flushing
+                .saturating_sub(old_stats.time_flushing),
+            i64
+        ),
+        ("num_disks", new_stats.num_disks, i64),
+    )
+}
+
+#[cfg(target_os = "linux")]
+fn read_disk_stats() -> DiskStats {
+    let file_path_diskstats = PROC_DISKSTATS_PATH;
+    let file_diskstats = File::open(file_path_diskstats).unwrap();
+    let mut reader_diskstats = BufReader::new(file_diskstats);
+    parse_disk_stats(&mut reader_diskstats)
+}
+
+use std::io::BufRead;
+
+#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+fn parse_disk_stats(reader_diskstats: &mut impl BufRead) -> DiskStats {
+    let mut stats = DiskStats::default();
+    let mut num_disks = 0;
+    for line in reader_diskstats.lines() {
+        let line = line.unwrap();
+        let values: Vec<_> = line.split_ascii_whitespace().collect();
+
+        if values[2].starts_with("loop") || values[1].ne("0") {
+            // Filter out the loopback io devices.
+            // Only look at raw device (filter partitions)
+            continue;
+        }
+
+        num_disks += 1;
+        stats.reads_completed += values[3].parse::<u64>().unwrap();
+        stats.reads_merged += values[4].parse::<u64>().unwrap();
+        stats.sectors_read += values[5].parse::<u64>().unwrap();
+        stats.time_reading_ms += values[6].parse::<u64>().unwrap();
+        stats.writes_completed += values[7].parse::<u64>().unwrap();
+        stats.writes_merged += values[8].parse::<u64>().unwrap();
+        stats.sectors_written += values[9].parse::<u64>().unwrap();
+        stats.time_writing_ms += values[10].parse::<u64>().unwrap();
+        stats.io_in_progress += values[11].parse::<u64>().unwrap();
+        stats.time_io_ms += values[12].parse::<u64>().unwrap();
+        stats.time_io_weighted_ms += values[13].parse::<u64>().unwrap();
+        stats.discards_completed += values[14].parse::<u64>().unwrap();
+        stats.discards_merged += values[15].parse::<u64>().unwrap();
+        stats.sectors_discarded += values[16].parse::<u64>().unwrap();
+        stats.time_discarding += values[17].parse::<u64>().unwrap();
+        stats.flushes_completed += values[18].parse::<u64>().unwrap();
+        stats.time_flushing += values[19].parse::<u64>().unwrap();
+    }
+    stats.num_disks = num_disks;
+    stats
+}
+
 fn unpack_snapshot_local(
     shared_buffer: SharedBuffer,
     ledger_dir: &Path,
@@ -1516,6 +1725,10 @@ fn unpack_snapshot_local(
         "BWLOG: start unpack_append_vec_map with {} parallel_divisions",
         parallel_divisions
     );
+
+    let mut disk_stats = None;
+    process_disk_stats(&mut disk_stats);
+    process_disk_stats(&mut disk_stats);
     // create 'parallel_divisions' # of parallel workers, each responsible for 1/parallel_divisions of all the files to extract.
     let all_unpacked_append_vec_map = readers
         .into_par_iter()
@@ -1529,6 +1742,7 @@ fn unpack_snapshot_local(
             unpack_snapshot(&mut archive, ledger_dir, account_paths, parallel_selector)
         })
         .collect::<Vec<_>>();
+    process_disk_stats(&mut disk_stats);
     warn!("BWLOG: completed unpack_append_vec_map");
 
     let mut unpacked_append_vec_map = UnpackedAppendVecMap::new();
