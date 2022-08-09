@@ -610,7 +610,7 @@ pub fn rpc_bootstrap(
                                     distance as usize
                                 }
                                 Err(error) => {
-                                    println!("BWLOG: Error: {}", error);
+                                    warn!("BWLOG: Error: {}", error);
                                     50_000_000
                                 }
                             }
