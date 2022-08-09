@@ -136,8 +136,11 @@ impl<T: IndexValue> BucketMapHolder<T> {
     }
 
     pub fn bucket_flushed_at_current_age(&self, can_advance_age: bool) {
-        warn!("BWLOG: bucket_flushed_at_current_age - can_advance_age = {}", can_advance_age);
         let count_buckets_flushed = 1 + self.count_buckets_flushed.fetch_add(1, Ordering::AcqRel);
+        warn!(
+            "BWLOG: {} bucket_flushed_at_current_age - can_advance_age = {}",
+            count_buckets_flushed, can_advance_age
+        );
         if can_advance_age {
             self.maybe_advance_age_internal(
                 self.all_buckets_flushed_at_current_age_internal(count_buckets_flushed),
@@ -343,7 +346,6 @@ impl<T: IndexValue> BucketMapHolder<T> {
                     .fetch_add(m.as_us(), Ordering::Relaxed);
                 // likely some time has elapsed. May have been waiting for age time interval to elapse.
                 if can_advance_age {
-                    warn!("BWLOG: calling maybe_advance_age from background");
                     self.maybe_advance_age();
                 }
             }
@@ -357,6 +359,7 @@ impl<T: IndexValue> BucketMapHolder<T> {
             for _ in 0..bins {
                 if flush {
                     let index = self.next_bucket_to_flush();
+                    warn!("BWLOG: flushing bucket {}", index);
                     in_mem[index].flush(can_advance_age);
                 }
                 self.stats.report_stats(self);
