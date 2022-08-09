@@ -2427,6 +2427,7 @@ impl AccountsDb {
     // Construct a vec of pubkeys for cleaning from:
     //   uncleaned_pubkeys - the delta set of updated pubkeys in rooted slots from the last clean
     //   dirty_stores - set of stores which had accounts removed or recently rooted
+    #[inline(always)]
     fn construct_candidate_clean_keys(
         &self,
         max_clean_root: Option<Slot>,
@@ -2570,7 +2571,8 @@ impl AccountsDb {
         let mut clean_keys = Measure::start("clean_keys");
         let mut timings = CleanKeyTimings::default();
         let mut pubkey_vec: Vec<Pubkey> = vec![];
-
+        self.construct_candidate_clean_keys(max_clean_root, last_full_snapshot_slot, &mut timings, &mut pubkey_vec);
+        /*
         warn!("BWLOG: construct_candidate_clean_keys - start");
         let mut dirty_store_processing_time = Measure::start("dirty_store_processing");
         let max_slot = max_clean_root.unwrap_or_else(|| self.accounts_index.max_root_inclusive());
@@ -2676,7 +2678,7 @@ impl AccountsDb {
             grab_pubkeys,
             pubkey_vec.len()
         );
-        warn!("BWLOG: END OF FUNCTION1");
+        warn!("BWLOG: END OF FUNCTION1");*/
 
         warn!("BWLOG: END OF FUNCTION2");
         clean_keys.stop();

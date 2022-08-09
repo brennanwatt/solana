@@ -76,10 +76,10 @@ impl<T: IndexValue> BucketMapHolder<T> {
         // this should happen before the age.fetch_add
         // Otherwise, as soon as we increment the age, a thread could race us and flush before we swap this out since it detects the age has moved forward and a bucket will be eligible for flushing.
         let previous = self.count_buckets_flushed.swap(0, Ordering::AcqRel);
-        warn!("BWLOG: increment_age - previous = {}", previous);
         // fetch_add is defined to wrap.
         // That's what we want. 0..255, then back to 0.
         self.age.fetch_add(1, Ordering::Release);
+        warn!("BWLOG: increment_age = {}", self.age.load(Ordering::Relaxed));
         assert!(
             previous >= self.bins,
             "previous: {}, bins: {}",
@@ -123,6 +123,7 @@ impl<T: IndexValue> BucketMapHolder<T> {
         // when age has incremented twice, we know that we have made it through scanning all bins since we started waiting,
         //  so we are then 'idle'
         let end_age = self.current_age().wrapping_add(2);
+        warn!("BWLOG: waiting for age = {}", end_age);
         loop {
             self.wait_dirty_or_aged
                 .wait_timeout(Duration::from_millis(self.age_interval_ms()));
@@ -138,15 +139,6 @@ impl<T: IndexValue> BucketMapHolder<T> {
 
     pub fn bucket_flushed_at_current_age(&self, can_advance_age: bool) {
         let count_buckets_flushed = 1 + self.count_buckets_flushed.fetch_add(1, Ordering::AcqRel);
-
-        if count_buckets_flushed >= 8192 {
-            warn!(
-                "BWLOG: count_buckets_flushed = {}, can_advance_age = {}, age = {}",
-                count_buckets_flushed,
-                can_advance_age,
-                self.age.load(Ordering::Relaxed)
-            );
-        }
 
         if can_advance_age {
             self.maybe_advance_age_internal(
@@ -260,7 +252,7 @@ impl<T: IndexValue> BucketMapHolder<T> {
     /// prepare for this to be dynamic if necessary
     /// For example, maybe startup has a shorter age interval.
     fn age_interval_ms(&self) -> u64 {
-        200
+        AGE_MS
     }
 
     /// return an amount of ms to sleep
@@ -370,7 +362,6 @@ impl<T: IndexValue> BucketMapHolder<T> {
                 }
                 self.stats.report_stats(self);
                 if self.all_buckets_flushed_at_current_age() {
-                    warn!("BWLOG: All buckets flushed at current age");
                     break;
                 }
                 throttling_wait_ms = self.throttling_wait_ms();
