@@ -76,6 +76,7 @@ impl<T: IndexValue> BucketMapHolder<T> {
         // this should happen before the age.fetch_add
         // Otherwise, as soon as we increment the age, a thread could race us and flush before we swap this out since it detects the age has moved forward and a bucket will be eligible for flushing.
         let previous = self.count_buckets_flushed.swap(0, Ordering::AcqRel);
+        warn!("BWLOG: increment_age - previous = {}", previous);
         // fetch_add is defined to wrap.
         // That's what we want. 0..255, then back to 0.
         self.age.fetch_add(1, Ordering::Release);
@@ -137,10 +138,16 @@ impl<T: IndexValue> BucketMapHolder<T> {
 
     pub fn bucket_flushed_at_current_age(&self, can_advance_age: bool) {
         let count_buckets_flushed = 1 + self.count_buckets_flushed.fetch_add(1, Ordering::AcqRel);
-        warn!(
-            "BWLOG: {} bucket_flushed_at_current_age - can_advance_age = {}",
-            count_buckets_flushed, can_advance_age
-        );
+
+        if count_buckets_flushed >= 8192 {
+            warn!(
+                "BWLOG: count_buckets_flushed = {}, can_advance_age = {}, age = {}",
+                count_buckets_flushed,
+                can_advance_age,
+                self.age.load(Ordering::Relaxed)
+            );
+        }
+
         if can_advance_age {
             self.maybe_advance_age_internal(
                 self.all_buckets_flushed_at_current_age_internal(count_buckets_flushed),
@@ -359,11 +366,11 @@ impl<T: IndexValue> BucketMapHolder<T> {
             for _ in 0..bins {
                 if flush {
                     let index = self.next_bucket_to_flush();
-                    warn!("BWLOG: flushing bucket {}", index);
                     in_mem[index].flush(can_advance_age);
                 }
                 self.stats.report_stats(self);
                 if self.all_buckets_flushed_at_current_age() {
+                    warn!("BWLOG: All buckets flushed at current age");
                     break;
                 }
                 throttling_wait_ms = self.throttling_wait_ms();
