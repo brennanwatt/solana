@@ -1499,7 +1499,7 @@ pub fn purge_old_snapshot_archives(
 }
 
 #[cfg(target_os = "linux")]
-use std::{fs::File, io::BufReader};
+use std::io;
 
 #[cfg(target_os = "linux")]
 const PROC_DISKSTATS_PATH: &str = "/proc/diskstats";
@@ -1534,7 +1534,7 @@ struct DiskStats {
 fn process_disk_stats(disk_stats: &mut Option<DiskStats>) {
     let new_stats = read_disk_stats();
     if let Some(old_stats) = disk_stats {
-        Self::report_disk_stats(old_stats, &new_stats);
+        report_disk_stats(old_stats, &new_stats);
     }
     *disk_stats = Some(new_stats);
 }
@@ -1542,6 +1542,7 @@ fn process_disk_stats(disk_stats: &mut Option<DiskStats>) {
 #[cfg(not(target_os = "linux"))]
 fn process_disk_stats(_disk_stats: &mut Option<DiskStats>) {}
 
+#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
 fn report_disk_stats(old_stats: &DiskStats, new_stats: &DiskStats) {
     datapoint_info!(
         "disk-stats",
