@@ -338,7 +338,7 @@ pub fn fail_rpc_node(
     rpc_id: &Pubkey,
     blacklisted_rpc_nodes: &mut HashSet<Pubkey, RandomState>,
 ) {
-    warn!("BWLOG: Error with {} - {}", rpc_id, err);
+    warn!("Error with {} - {}", rpc_id, err);
     if let Some(ref known_validators) = known_validators {
         if known_validators.contains(rpc_id) {
             return;
@@ -560,7 +560,7 @@ pub fn rpc_bootstrap(
             if rpc_node_details_vec.is_empty() {
                 return;
             }
-
+            let num_rpc_nodes_start = rpc_node_details_vec.len();
             vetted_rpc_nodes = rpc_node_details_vec
                 .into_par_iter()
                 .map(|rpc_node_details| {
@@ -604,7 +604,7 @@ pub fn rpc_bootstrap(
                                     let distance =
                                         our_location.distance_to(&their_location).unwrap().meters();
                                     warn!(
-                                        "BWLOG: {} {} - {} ({}) {}",
+                                        "BWLOG: {} {} - {}, {} - {} meters away",
                                         rpc_contact_info.id, ip.ip, ip.city, ip.country, distance
                                     );
                                     distance as usize
@@ -627,6 +627,11 @@ pub fn rpc_bootstrap(
                     },
                 )
                 .collect();
+            warn!(
+                "BWLOG: taking {} nodes into speed test. {} encountered error",
+                vetted_rpc_nodes.len(),
+                num_rpc_nodes_start - vetted_rpc_nodes.len()
+            );
 
             // Sort by distance to find faster RPCs sooner.
             vetted_rpc_nodes.sort_by_key(|k| k.1);
