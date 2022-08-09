@@ -56,6 +56,8 @@ pub struct BucketMapHolder<T: IndexValue> {
     /// and writing to disk in parallel are.
     /// Note startup is an optimization and is not required for correctness.
     startup: AtomicBool,
+
+    waiting_for_quiesce: AtomicBool,
 }
 
 impl<T: IndexValue> Debug for BucketMapHolder<T> {
@@ -79,10 +81,6 @@ impl<T: IndexValue> BucketMapHolder<T> {
         // fetch_add is defined to wrap.
         // That's what we want. 0..255, then back to 0.
         self.age.fetch_add(1, Ordering::Release);
-        warn!(
-            "BWLOG: increment_age = {}",
-            self.age.load(Ordering::Relaxed)
-        );
         assert!(
             previous >= self.bins,
             "previous: {}, bins: {}",
@@ -106,6 +104,10 @@ impl<T: IndexValue> BucketMapHolder<T> {
         self.startup.load(Ordering::Relaxed)
     }
 
+    pub fn get_waiting_for_quiesce(&self) -> bool {
+        self.waiting_for_quiesce.load(Ordering::Relaxed)
+    }
+
     /// startup=true causes:
     ///      in mem to act in a way that flushes to disk asap
     /// startup=false is 'normal' operation
@@ -122,6 +124,7 @@ impl<T: IndexValue> BucketMapHolder<T> {
         if self.disk.is_none() {
             return;
         }
+        self.waiting_for_quiesce.store(true, Ordering::Relaxed);
 
         // when age has incremented twice, we know that we have made it through scanning all bins since we started waiting,
         //  so we are then 'idle'
@@ -239,6 +242,7 @@ impl<T: IndexValue> BucketMapHolder<T> {
             age_timer: AtomicInterval::default(),
             bins,
             startup: AtomicBool::default(),
+            waiting_for_quiesce: AtomicBool::new(false),
             mem_budget_mb,
             threads,
         }
@@ -320,7 +324,7 @@ impl<T: IndexValue> BucketMapHolder<T> {
         let flush = self.disk.is_some();
         let mut throttling_wait_ms = None;
         loop {
-            if !self.get_startup() {
+            if !self.get_waiting_for_quiesce() {
                 if !flush {
                     self.wait_dirty_or_aged.wait_timeout(Duration::from_millis(
                         self.stats.remaining_until_next_interval(),
@@ -372,7 +376,7 @@ impl<T: IndexValue> BucketMapHolder<T> {
                     break;
                 }
                 throttling_wait_ms = self.throttling_wait_ms();
-                if throttling_wait_ms.is_some() && !self.get_startup() {
+                if throttling_wait_ms.is_some() && !self.get_waiting_for_quiesce() {
                     break;
                 }
             }

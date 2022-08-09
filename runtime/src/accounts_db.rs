@@ -2439,7 +2439,6 @@ impl AccountsDb {
         let mut dirty_store_processing_time = Measure::start("dirty_store_processing");
         let max_slot = max_clean_root.unwrap_or_else(|| self.accounts_index.max_root_inclusive());
         let mut dirty_stores = Vec::with_capacity(self.dirty_stores.len());
-        warn!("BWLOG: construct_candidate_clean_keys - allocate");
         self.dirty_stores.retain(|(slot, _store_id), store| {
             if *slot > max_slot {
                 true
@@ -2448,7 +2447,6 @@ impl AccountsDb {
                 false
             }
         });
-        warn!("BWLOG: construct_candidate_clean_keys - retain");
         let dirty_stores_len = dirty_stores.len();
         let pubkeys = DashSet::new();
         dirty_stores.par_iter().for_each(|(_slot, store)| {
@@ -2582,7 +2580,6 @@ impl AccountsDb {
         let mut dirty_store_processing_time = Measure::start("dirty_store_processing");
         let max_slot = max_clean_root.unwrap_or_else(|| self.accounts_index.max_root_inclusive());
         let mut dirty_stores = Vec::with_capacity(self.dirty_stores.len());
-        warn!("BWLOG: construct_candidate_clean_keys - allocate");
         self.dirty_stores.retain(|(slot, _store_id), store| {
             if *slot > max_slot {
                 true
@@ -2591,7 +2588,6 @@ impl AccountsDb {
                 false
             }
         });
-        warn!("BWLOG: construct_candidate_clean_keys - retain");
         let dirty_stores_len = dirty_stores.len();
         let pubkeys = DashSet::new();
         dirty_stores.par_iter().for_each(|(_slot, store)| {
@@ -2611,19 +2607,11 @@ impl AccountsDb {
         );
         timings.dirty_pubkeys_count = pubkeys.len() as u64;
         dirty_store_processing_time.stop();
-        warn!(
-            "BWLOG: construct_candidate_clean_keys - {}",
-            dirty_store_processing_time
-        );
         timings.dirty_store_processing_us += dirty_store_processing_time.as_us();
 
         let mut collect_delta_keys = Measure::start("key_create");
         let delta_keys = self.remove_uncleaned_slots_and_collect_pubkeys_up_to_slot(max_slot);
         collect_delta_keys.stop();
-        warn!(
-            "BWLOG: construct_candidate_clean_keys - {}",
-            collect_delta_keys
-        );
         timings.collect_delta_keys_us += collect_delta_keys.as_us();
 
         let mut delta_insert = Measure::start("delta_insert");
@@ -2635,7 +2623,6 @@ impl AccountsDb {
             });
         });
         delta_insert.stop();
-        warn!("BWLOG: construct_candidate_clean_keys - {}", delta_insert);
         timings.delta_insert_us += delta_insert.as_us();
 
         timings.delta_key_count = pubkeys.len() as u64;
@@ -2643,7 +2630,6 @@ impl AccountsDb {
         let mut hashset_to_vec = Measure::start("flat_map");
         pubkey_vec.extend(pubkeys.into_iter().collect::<Vec<Pubkey>>());
         hashset_to_vec.stop();
-        warn!("BWLOG: construct_candidate_clean_keys - {}", hashset_to_vec);
         timings.hashset_to_vec_us += hashset_to_vec.as_us();
 
         let mut grab_pubkeys = Measure::start("grab_pubkeys");
@@ -2684,9 +2670,7 @@ impl AccountsDb {
             pubkey_vec.len(),
             self.zero_lamport_accounts_to_purge_after_full_snapshot.len()
         );
-        warn!("BWLOG: END OF FUNCTION1");
 
-        warn!("BWLOG: END OF FUNCTION2");
         clean_keys.stop();
         warn!("BWLOG: clean_accounts - {}", clean_keys);
 
@@ -2698,7 +2682,6 @@ impl AccountsDb {
                 .install(|| pubkey_vec.par_sort_unstable());
         }
         sort.stop();
-        warn!("BWLOG: clean_accounts - {}", sort);
 
         let total_keys_count = pubkey_vec.len();
         let mut accounts_scan = Measure::start("accounts_scan");
@@ -2807,7 +2790,6 @@ impl AccountsDb {
             }
         };
         accounts_scan.stop();
-        warn!("BWLOG: clean_accounts - {}", accounts_scan);
 
         let mut clean_old_rooted = Measure::start("clean_old_roots");
         let (purged_account_slots, removed_accounts) = self.clean_accounts_older_than_root(
@@ -2822,7 +2804,6 @@ impl AccountsDb {
             self.do_reset_uncleaned_roots_v1(&mut candidates_v1, max_clean_root);
         }
         clean_old_rooted.stop();
-        warn!("BWLOG: clean_accounts - {}", clean_old_rooted);
 
         let mut store_counts_time = Measure::start("store_counts");
 
@@ -2879,12 +2860,10 @@ impl AccountsDb {
             });
         }
         store_counts_time.stop();
-        warn!("BWLOG: clean_accounts - {}", store_counts_time);
 
         let mut calc_deps_time = Measure::start("calc_deps");
         Self::calc_delete_dependencies(&purges_zero_lamports, &mut store_counts);
         calc_deps_time.stop();
-        warn!("BWLOG: clean_accounts - {}", calc_deps_time);
 
         let mut purge_filter = Measure::start("purge_filter");
         self.filter_zero_lamport_clean_for_incremental_snapshots(
@@ -2894,7 +2873,6 @@ impl AccountsDb {
             &mut purges_zero_lamports,
         );
         purge_filter.stop();
-        warn!("BWLOG: clean_accounts - {}", purge_filter);
 
         let mut reclaims_time = Measure::start("reclaims");
         // Recalculate reclaims with new purge set
@@ -2925,7 +2903,6 @@ impl AccountsDb {
         );
 
         reclaims_time.stop();
-        warn!("BWLOG: clean_accounts - {}", reclaims_time);
         measure_all.stop();
 
         self.clean_accounts_stats.report();
@@ -3033,7 +3010,7 @@ impl AccountsDb {
             ),
             ("next_store_id", self.next_id.load(Ordering::Relaxed), i64),
         );
-        warn!("BWLOG: clean_accounts - completed");
+        warn!("BWLOG: clean_accounts - completed {}", measure_all);
     }
 
     /// Removes the accounts in the input `reclaims` from the tracked "count" of

@@ -1329,10 +1329,6 @@ impl<T: IndexValue> AccountsIndex<T> {
     }
 
     pub fn set_startup(&self, value: Startup) {
-        warn!(
-            "BWLOG: remaining items to flush = {}",
-            self.get_startup_remaining_items_to_flush_estimate()
-        );
         self.storage.set_startup(value);
     }
 

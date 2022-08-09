@@ -595,17 +595,15 @@ pub fn rpc_bootstrap(
                 .map(
                     |(download_speed, rpc_contact_info, snapshot_hash, rpc_client)| {
                         let ip = rpc_contact_info.rpc.ip();
-                        warn!("BWLOG: success talking to ip {}", ip);
                         let distance = if let Some(our_location) = our_location {
                             match executor::block_on(Locator::get(&format!("{}", ip), service)) {
                                 Ok(ip) => {
-                                    warn!("{} - {} ({})", ip.ip, ip.city, ip.country);
                                     let lat = ip.latitude.parse::<f64>().unwrap_or_default();
                                     let lon = ip.longitude.parse::<f64>().unwrap_or_default();
                                     let their_location = Location::new(lat, lon);
                                     let distance =
                                         our_location.distance_to(&their_location).unwrap().meters();
-                                    warn!("BWLOG: Distance = {}", distance);
+                                    warn!("BWLOG: {} {} - {} ({}) {}", rpc_contact_info.id, ip.ip, ip.city, ip.country, distance);
                                     distance as usize
                                 }
                                 Err(error) => {

@@ -1747,7 +1747,6 @@ fn unpack_snapshot_local(
     for h in all_unpacked_append_vec_map {
         unpacked_append_vec_map.extend(h?);
     }
-    warn!("BWLOG: completed unpack_append_vec_map results parse");
 
     Ok(unpacked_append_vec_map)
 }
