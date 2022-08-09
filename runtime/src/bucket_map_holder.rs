@@ -320,7 +320,7 @@ impl<T: IndexValue> BucketMapHolder<T> {
         let flush = self.disk.is_some();
         let mut throttling_wait_ms = None;
         loop {
-            if self.get_startup() {
+            if !self.get_startup() {
                 if !flush {
                     self.wait_dirty_or_aged.wait_timeout(Duration::from_millis(
                         self.stats.remaining_until_next_interval(),

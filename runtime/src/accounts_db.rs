@@ -2679,9 +2679,10 @@ impl AccountsDb {
         }
         grab_pubkeys.stop();
         warn!(
-            "BWLOG: construct_candidate_clean_keys - {} - {} keys",
+            "BWLOG: construct_candidate_clean_keys - {} - {} candidates for clean - {} accounts to purge",
             grab_pubkeys,
-            pubkey_vec.len()
+            pubkey_vec.len(),
+            self.zero_lamport_accounts_to_purge_after_full_snapshot.len()
         );
         warn!("BWLOG: END OF FUNCTION1");
 
