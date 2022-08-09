@@ -1499,9 +1499,6 @@ pub fn purge_old_snapshot_archives(
 }
 
 #[cfg(target_os = "linux")]
-use std::io;
-
-#[cfg(target_os = "linux")]
 const PROC_DISKSTATS_PATH: &str = "/proc/diskstats";
 
 #[derive(Default)]

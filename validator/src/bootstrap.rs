@@ -37,7 +37,7 @@ use {
         process::exit,
         sync::{
             atomic::{AtomicBool, Ordering},
-            Arc, Mutex, RwLock,
+            Arc, RwLock,
         },
         thread::sleep,
         time::{Duration, Instant},
@@ -459,6 +459,12 @@ pub fn attempt_download_genesis_and_snapshot(
     Ok(())
 }
 
+use {
+    futures::executor,
+    geoutils::Location,
+    ipgeolocate::{Locator, Service},
+};
+
 #[allow(clippy::too_many_arguments)]
 pub fn rpc_bootstrap(
     node: &Node,
@@ -501,9 +507,29 @@ pub fn rpc_bootstrap(
 
     let blacklisted_rpc_nodes = RwLock::new(HashSet::new());
     let mut gossip = None;
-    let mut vetted_rpc_nodes: Vec<(usize, ContactInfo, Option<SnapshotHash>, RpcClient)> = vec![];
+    let mut vetted_rpc_nodes: Vec<(usize, usize, ContactInfo, Option<SnapshotHash>, RpcClient)> =
+        vec![];
     let mut download_abort_count = 0;
-    let speed_test_lock = Arc::new(Mutex::new(0));
+
+    let ip = node.info.rpc.ip();
+    warn!("BWLOG: our ip is {}", ip);
+    let service = Service::IpApi;
+    let our_location = match executor::block_on(Locator::get(&format!("{}", ip), service)) {
+        Ok(ip) => {
+            warn!(
+                "BWLOG: our location: {} - {} ({})",
+                ip.ip, ip.city, ip.country
+            );
+            let lat = ip.latitude.parse::<f64>().unwrap_or_default();
+            let lon = ip.longitude.parse::<f64>().unwrap_or_default();
+            Some(Location::new(lat, lon))
+        }
+        Err(error) => {
+            warn!("BWLOG: Error: {}", error);
+            None
+        }
+    };
+
     loop {
         if gossip.is_none() {
             *start_progress.write().unwrap() = ValidatorStartProgress::SearchingForRpcService;
@@ -566,7 +592,43 @@ pub fn rpc_bootstrap(
                         }
                     },
                 )
+                .map(
+                    |(download_speed, rpc_contact_info, snapshot_hash, rpc_client)| {
+                        let ip = rpc_contact_info.rpc.ip();
+                        warn!("BWLOG: success talking to ip {}", ip);
+                        let distance = if let Some(our_location) = our_location {
+                            match executor::block_on(Locator::get(&format!("{}", ip), service)) {
+                                Ok(ip) => {
+                                    warn!("{} - {} ({})", ip.ip, ip.city, ip.country);
+                                    let lat = ip.latitude.parse::<f64>().unwrap_or_default();
+                                    let lon = ip.longitude.parse::<f64>().unwrap_or_default();
+                                    let their_location = Location::new(lat, lon);
+                                    let distance =
+                                        our_location.distance_to(&their_location).unwrap().meters();
+                                    warn!("BWLOG: Distance = {}", distance);
+                                    distance as usize
+                                }
+                                Err(error) => {
+                                    println!("BWLOG: Error: {}", error);
+                                    50_000_000
+                                }
+                            }
+                        } else {
+                            50_000_000
+                        };
+                        (
+                            download_speed,
+                            distance,
+                            rpc_contact_info,
+                            snapshot_hash,
+                            rpc_client,
+                        )
+                    },
+                )
                 .collect();
+
+            // Sort by distance to find faster RPCs sooner.
+            vetted_rpc_nodes.sort_by_key(|k| k.1);
 
             let mut super_node_found = false;
             let mut num_viable_nodes_found = 0;
@@ -575,31 +637,38 @@ pub fn rpc_bootstrap(
             vetted_rpc_nodes = vetted_rpc_nodes
                 .into_iter()
                 .take_while(|_| !*found_sufficient_nodes.read().unwrap())
-                .map(|(_, rpc_contact_info, snapshot_hash, rpc_client)| {
-                    let desired_snapshot_hash = snapshot_hash.unwrap().full;
-                    let destination_path = snapshot_utils::build_full_snapshot_archive_path(
-                        &snapshot_utils::build_snapshot_archives_remote_dir(
-                            full_snapshot_archives_dir,
-                        ),
-                        desired_snapshot_hash.0,
-                        &desired_snapshot_hash.1,
-                        ArchiveFormat::TarZstd,
-                    );
-                    let destination_path = destination_path.file_name().unwrap().to_str().unwrap();
-                    let full_snapshot_url =
-                        format!("http://{}/{}", rpc_contact_info.rpc, destination_path);
-                    let lock = speed_test_lock.lock().unwrap();
-                    let download_speed = match get_file_download_speed(&full_snapshot_url) {
-                        Ok(download_speed) => download_speed,
-                        Err(err) => {
-                            warn!("error estimating snapshot download speed: {}", err);
-                            0
-                        }
-                    };
-                    drop(lock);
-                    (download_speed, rpc_contact_info, snapshot_hash, rpc_client)
-                })
-                .filter(|(download_speed, rpc_contact_info, _, _)| {
+                .map(
+                    |(_, distance, rpc_contact_info, snapshot_hash, rpc_client)| {
+                        let desired_snapshot_hash = snapshot_hash.unwrap().full;
+                        let destination_path = snapshot_utils::build_full_snapshot_archive_path(
+                            &snapshot_utils::build_snapshot_archives_remote_dir(
+                                full_snapshot_archives_dir,
+                            ),
+                            desired_snapshot_hash.0,
+                            &desired_snapshot_hash.1,
+                            ArchiveFormat::TarZstd,
+                        );
+                        let destination_path =
+                            destination_path.file_name().unwrap().to_str().unwrap();
+                        let full_snapshot_url =
+                            format!("http://{}/{}", rpc_contact_info.rpc, destination_path);
+                        let download_speed = match get_file_download_speed(&full_snapshot_url) {
+                            Ok(download_speed) => download_speed,
+                            Err(err) => {
+                                warn!("error estimating snapshot download speed: {}", err);
+                                0
+                            }
+                        };
+                        (
+                            download_speed,
+                            distance,
+                            rpc_contact_info,
+                            snapshot_hash,
+                            rpc_client,
+                        )
+                    },
+                )
+                .filter(|(download_speed, _, rpc_contact_info, _, _)| {
                     if *download_speed > 5_000 {
                         num_viable_nodes_found += 1;
                         if *download_speed > 40_000 {
@@ -626,7 +695,7 @@ pub fn rpc_bootstrap(
             vetted_rpc_nodes.sort_by_key(|k| k.0);
         }
 
-        let (_, rpc_contact_info, snapshot_hash, rpc_client) = vetted_rpc_nodes.pop().unwrap();
+        let (_, _, rpc_contact_info, snapshot_hash, rpc_client) = vetted_rpc_nodes.pop().unwrap();
 
         match attempt_download_genesis_and_snapshot(
             &rpc_contact_info,
