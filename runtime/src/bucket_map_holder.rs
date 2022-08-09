@@ -79,7 +79,10 @@ impl<T: IndexValue> BucketMapHolder<T> {
         // fetch_add is defined to wrap.
         // That's what we want. 0..255, then back to 0.
         self.age.fetch_add(1, Ordering::Release);
-        warn!("BWLOG: increment_age = {}", self.age.load(Ordering::Relaxed));
+        warn!(
+            "BWLOG: increment_age = {}",
+            self.age.load(Ordering::Relaxed)
+        );
         assert!(
             previous >= self.bins,
             "previous: {}, bins: {}",
@@ -125,6 +128,8 @@ impl<T: IndexValue> BucketMapHolder<T> {
         let end_age = self.current_age().wrapping_add(2);
         warn!("BWLOG: waiting for age = {}", end_age);
         loop {
+            warn!("BWLOG: {} buckets flushed", self.count_buckets_flushed());
+            self.maybe_advance_age();
             self.wait_dirty_or_aged
                 .wait_timeout(Duration::from_millis(self.age_interval_ms()));
             if end_age == self.current_age() {
@@ -315,37 +320,39 @@ impl<T: IndexValue> BucketMapHolder<T> {
         let flush = self.disk.is_some();
         let mut throttling_wait_ms = None;
         loop {
-            if !flush {
-                self.wait_dirty_or_aged.wait_timeout(Duration::from_millis(
-                    self.stats.remaining_until_next_interval(),
-                ));
-            } else if self.should_thread_sleep() || throttling_wait_ms.is_some() {
-                let mut wait = std::cmp::min(
-                    self.age_timer
-                        .remaining_until_next_interval(self.age_interval_ms()),
-                    self.stats.remaining_until_next_interval(),
-                );
-                if !can_advance_age {
-                    // if this thread cannot advance age, then make sure we don't sleep 0
-                    wait = wait.max(1);
-                }
-                if let Some(throttling_wait_ms) = throttling_wait_ms {
-                    self.stats
-                        .bg_throttling_wait_us
-                        .fetch_add(throttling_wait_ms * 1000, Ordering::Relaxed);
-                    wait = std::cmp::min(throttling_wait_ms, wait);
-                }
+            if self.get_startup() {
+                if !flush {
+                    self.wait_dirty_or_aged.wait_timeout(Duration::from_millis(
+                        self.stats.remaining_until_next_interval(),
+                    ));
+                } else if self.should_thread_sleep() || throttling_wait_ms.is_some() {
+                    let mut wait = std::cmp::min(
+                        self.age_timer
+                            .remaining_until_next_interval(self.age_interval_ms()),
+                        self.stats.remaining_until_next_interval(),
+                    );
+                    if !can_advance_age {
+                        // if this thread cannot advance age, then make sure we don't sleep 0
+                        wait = wait.max(1);
+                    }
+                    if let Some(throttling_wait_ms) = throttling_wait_ms {
+                        self.stats
+                            .bg_throttling_wait_us
+                            .fetch_add(throttling_wait_ms * 1000, Ordering::Relaxed);
+                        wait = std::cmp::min(throttling_wait_ms, wait);
+                    }
 
-                let mut m = Measure::start("wait");
-                self.wait_dirty_or_aged
-                    .wait_timeout(Duration::from_millis(wait));
-                m.stop();
-                self.stats
-                    .bg_waiting_us
-                    .fetch_add(m.as_us(), Ordering::Relaxed);
-                // likely some time has elapsed. May have been waiting for age time interval to elapse.
-                if can_advance_age {
-                    self.maybe_advance_age();
+                    let mut m = Measure::start("wait");
+                    self.wait_dirty_or_aged
+                        .wait_timeout(Duration::from_millis(wait));
+                    m.stop();
+                    self.stats
+                        .bg_waiting_us
+                        .fetch_add(m.as_us(), Ordering::Relaxed);
+                    // likely some time has elapsed. May have been waiting for age time interval to elapse.
+                    if can_advance_age {
+                        self.maybe_advance_age();
+                    }
                 }
             }
             throttling_wait_ms = None;
@@ -365,7 +372,7 @@ impl<T: IndexValue> BucketMapHolder<T> {
                     break;
                 }
                 throttling_wait_ms = self.throttling_wait_ms();
-                if throttling_wait_ms.is_some() {
+                if throttling_wait_ms.is_some() && !self.get_startup() {
                     break;
                 }
             }

@@ -176,7 +176,7 @@ impl BucketMapHolderStats {
 
     pub fn report_stats<T: IndexValue>(&self, storage: &BucketMapHolder<T>) {
         let elapsed_ms = self.last_time.elapsed_ms();
-        if elapsed_ms < STATS_INTERVAL_MS {
+        if elapsed_ms < 3000 {
             return;
         }
 
@@ -215,7 +215,7 @@ impl BucketMapHolderStats {
             datapoint_info!(
                 if startup || was_startup {
                     thread_time_elapsed_ms *= 2; // more threads are allocated during startup
-                    "accounts_index_startup"
+                    "BWLOG: accounts_index_startup"
                 } else {
                     "accounts_index"
                 },
