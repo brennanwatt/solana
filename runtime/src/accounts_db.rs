@@ -2466,9 +2466,11 @@ impl AccountsDb {
         });
         let dirty_stores_len = dirty_stores.len();
         let pubkeys = DashSet::new();
-        dirty_stores.par_iter().for_each(|(_slot, store)| {
-            store.accounts.account_iter().for_each(|account| {
-                pubkeys.insert(account.meta.pubkey);
+        self.thread_pool_clean.install(|| {
+            dirty_stores.par_iter().for_each(|(_slot, store)| {
+                store.accounts.account_iter().for_each(|account| {
+                    pubkeys.insert(account.meta.pubkey);
+                });
             });
         });
         warn!(
@@ -2516,14 +2518,27 @@ impl AccountsDb {
             "if snapshots are disabled, then zero_lamport_accounts_to_purge_later should always be empty"
         );
         if let Some(last_full_snapshot_slot) = last_full_snapshot_slot {
+            let zero_lamport_accounts_to_purge_after_full_snapshot = self
+                .zero_lamport_accounts_to_purge_after_full_snapshot
+                .clone();
+
             self.zero_lamport_accounts_to_purge_after_full_snapshot
-                .retain(|(slot, pubkey)| {
+                .clear();
+
+            zero_lamport_accounts_to_purge_after_full_snapshot
+                .par_iter()
+                .filter(|x| {
+                    let (slot, pubkey) = *x.key();
                     let is_candidate_for_clean =
-                        max_slot >= *slot && last_full_snapshot_slot >= *slot;
+                        max_slot >= slot && last_full_snapshot_slot >= slot;
                     if is_candidate_for_clean {
-                        pubkey_vec.push(*pubkey);
+                        pubkey_vec.clone().push(pubkey);
                     }
                     !is_candidate_for_clean
+                })
+                .for_each(|x| {
+                    self.zero_lamport_accounts_to_purge_after_full_snapshot
+                        .insert(*x.key());
                 });
         }
         grab_pubkeys.stop();
