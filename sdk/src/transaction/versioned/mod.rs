@@ -13,7 +13,9 @@ use {
         signers::Signers,
         transaction::{Result, Transaction, TransactionError},
     },
+    borsh::{BorshDeserialize, BorshSerialize},
     serde::Serialize,
+    speedy::{Readable, Writable},
     std::cmp::Ordering,
 };
 
@@ -41,7 +43,20 @@ impl TransactionVersion {
 
 // NOTE: Serialization-related changes must be paired with the direct read at sigverify.
 /// An atomic transaction
-#[derive(Debug, PartialEq, Default, Eq, Clone, Serialize, Deserialize, AbiExample)]
+#[derive(
+    Readable,
+    Writable,
+    BorshSerialize,
+    BorshDeserialize,
+    Debug,
+    PartialEq,
+    Default,
+    Eq,
+    Clone,
+    Serialize,
+    Deserialize,
+    AbiExample,
+)]
 pub struct VersionedTransaction {
     /// List of signatures
     #[serde(with = "short_vec")]

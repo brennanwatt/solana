@@ -4,6 +4,7 @@
 //! represents an approximate amount of time since the last Entry was created.
 use {
     crate::poh::Poh,
+    borsh::{BorshDeserialize, BorshSerialize},
     crossbeam_channel::{Receiver, Sender},
     dlopen::symbor::{Container, SymBorApi, Symbol},
     dlopen_derive::SymBorApi,
@@ -32,6 +33,7 @@ use {
             TransactionVerificationMode, VersionedTransaction,
         },
     },
+    speedy::{Readable, Writable},
     std::{
         cmp,
         ffi::OsStr,
@@ -118,8 +120,19 @@ pub struct Api<'a> {
 /// hash was computed by the world's fastest processor at that time. The hash chain is both
 /// a Verifiable Delay Function (VDF) and a Proof of Work (not to be confused with Proof of
 /// Work consensus!)
-
-#[derive(Serialize, Deserialize, Debug, Default, PartialEq, Eq, Clone)]
+#[derive(
+    Readable,
+    Writable,
+    BorshSerialize,
+    BorshDeserialize,
+    Serialize,
+    Deserialize,
+    Debug,
+    Default,
+    PartialEq,
+    Eq,
+    Clone,
+)]
 pub struct Entry {
     /// The number of hashes since the previous Entry ID.
     pub num_hashes: u64,

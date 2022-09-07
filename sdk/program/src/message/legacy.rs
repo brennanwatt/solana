@@ -21,7 +21,9 @@ use {
         sanitize::{Sanitize, SanitizeError},
         short_vec, system_instruction, system_program, sysvar, wasm_bindgen,
     },
+    borsh::{BorshDeserialize, BorshSerialize},
     lazy_static::lazy_static,
+    speedy::{Readable, Writable},
     std::{convert::TryFrom, str::FromStr},
 };
 
@@ -105,7 +107,20 @@ fn compile_instructions(ixs: &[Instruction], keys: &[Pubkey]) -> Vec<CompiledIns
 // for versioned messages in the `RemainingLegacyMessage` struct.
 #[wasm_bindgen]
 #[frozen_abi(digest = "2KnLEqfLcTBQqitE22Pp8JYkaqVVbAkGbCfdeHoyxcAU")]
-#[derive(Serialize, Deserialize, Default, Debug, PartialEq, Eq, Clone, AbiExample)]
+#[derive(
+    Readable,
+    Writable,
+    BorshSerialize,
+    BorshDeserialize,
+    Serialize,
+    Deserialize,
+    Default,
+    Debug,
+    PartialEq,
+    Eq,
+    Clone,
+    AbiExample,
+)]
 #[serde(rename_all = "camelCase")]
 pub struct Message {
     /// The message header, identifying signed and read-only `account_keys`.
@@ -119,6 +134,7 @@ pub struct Message {
     pub account_keys: Vec<Pubkey>,
 
     /// The id of a recent ledger entry.
+    //#[wasm_bindgen(skip)]
     pub recent_blockhash: Hash,
 
     /// Programs that will be executed in sequence and committed in one atomic transaction if all

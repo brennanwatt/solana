@@ -15,7 +15,7 @@ use {
 pub const HASH_BYTES: usize = 32;
 /// Maximum string length of a base58 encoded hash.
 const MAX_BASE58_LEN: usize = 44;
-
+use speedy::{Context, Readable, Reader, Writable, Writer};
 /// A hash; the 32-byte output of a hashing algorithm.
 ///
 /// This struct is used most often in `solana-sdk` and related crates to contain
@@ -64,6 +64,32 @@ impl Hasher {
         // At the time of this writing, the sha2 library is stuck on an old version
         // of generic_array (0.9.0). Decouple ourselves with a clone to our version.
         Hash(<[u8; HASH_BYTES]>::try_from(self.hasher.finalize().as_slice()).unwrap())
+    }
+}
+
+use speedy::private::read_length_u32;
+impl<'a, C: Context> Readable<'a, C> for Hash {
+    #[inline]
+    fn read_from<R: Reader<'a, C>>(reader: &mut R) -> Result<Self, C::Error> {
+        let length = read_length_u32(reader)?;
+        Ok(Hash::new(&reader.read_vec(length)?))
+    }
+
+    #[inline]
+    fn minimum_bytes_needed() -> usize {
+        HASH_BYTES
+    }
+}
+
+impl<C: Context> Writable<C> for Hash {
+    #[inline]
+    fn write_to<W: ?Sized + Writer<C>>(&self, writer: &mut W) -> Result<(), C::Error> {
+        self.0.write_to(writer)
+    }
+
+    #[inline]
+    fn bytes_needed(&self) -> Result<usize, C::Error> {
+        Writable::<C>::bytes_needed(self.0.as_slice())
     }
 }
 

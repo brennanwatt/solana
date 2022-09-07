@@ -49,11 +49,14 @@ mod non_bpf_modules {
 
     pub use {account_keys::*, sanitized::*, versions::*};
 }
-
-use compiled_keys::*;
 pub use legacy::Message;
 #[cfg(not(target_os = "solana"))]
 pub use non_bpf_modules::*;
+use {
+    borsh::{BorshDeserialize, BorshSerialize},
+    compiled_keys::*,
+    speedy::{Readable, Writable},
+};
 
 /// The length of a message header in bytes.
 pub const MESSAGE_HEADER_LENGTH: usize = 3;
@@ -91,7 +94,21 @@ pub const MESSAGE_HEADER_LENGTH: usize = 3;
 /// access the same read-write accounts are processed sequentially.
 ///
 /// [PoH]: https://docs.solana.com/cluster/synchronization
-#[derive(Serialize, Deserialize, Default, Debug, PartialEq, Eq, Clone, Copy, AbiExample)]
+#[derive(
+    Readable,
+    Writable,
+    BorshSerialize,
+    BorshDeserialize,
+    Serialize,
+    Deserialize,
+    Default,
+    Debug,
+    PartialEq,
+    Eq,
+    Clone,
+    Copy,
+    AbiExample,
+)]
 #[serde(rename_all = "camelCase")]
 pub struct MessageHeader {
     /// The number of signatures required for this message to be considered

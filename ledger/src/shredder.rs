@@ -1,3 +1,9 @@
+#[cfg(feature = "sdborsh")]
+use borsh;
+#[cfg(feature = "sdpostcard")]
+use postcard::{from_bytes, to_allocvec};
+#[cfg(feature = "sdspeedy")]
+use speedy::{Readable, Writable};
 use {
     crate::shred::{
         Error, ProcessShredsStats, Shred, ShredData, ShredFlags, DATA_SHREDS_PER_FEC_BLOCK,
@@ -15,6 +21,9 @@ use {
     solana_sdk::{clock::Slot, signature::Keypair},
     std::{borrow::Borrow, fmt::Debug},
 };
+
+extern crate alloc;
+use alloc::vec::Vec;
 
 lazy_static! {
     static ref PAR_THREAD_POOL: ThreadPool = rayon::ThreadPoolBuilder::new()
@@ -82,6 +91,19 @@ impl Shredder {
         (data_shreds, coding_shreds)
     }
 
+    fn get_serialized_shreds(entries: &[Entry]) -> Vec<u8> {
+        #[cfg(feature = "sdbincode")]
+        return bincode::serialize(entries).expect("Expect to serialize all entries");
+        #[cfg(feature = "sdborsh")]
+        return borsh::to_vec(entries).expect("Expect to serialize all entries");
+        #[cfg(feature = "sdspeedy")]
+        return entries
+            .write_to_vec()
+            .expect("Expect to serialize all entries");
+        #[cfg(feature = "sdpostcard")]
+        return to_allocvec(entries).unwrap();
+    }
+
     fn entries_to_data_shreds(
         &self,
         keypair: &Keypair,
@@ -91,9 +113,10 @@ impl Shredder {
         process_stats: &mut ProcessShredsStats,
     ) -> Vec<Shred> {
         let mut serialize_time = Measure::start("shred_serialize");
-        let serialized_shreds =
-            bincode::serialize(entries).expect("Expect to serialize all entries");
+        let serialized_shreds = Self::get_serialized_shreds(entries);
+
         serialize_time.stop();
+        println!("serialize_time = {}us", serialize_time.as_us());
 
         let mut gen_data_time = Measure::start("shred_gen_data_time");
         let data_buffer_size = ShredData::capacity(/*merkle_proof_size:*/ None).unwrap();
@@ -376,6 +399,12 @@ fn get_fec_set_offsets(
 
 #[cfg(test)]
 mod tests {
+    #[cfg(feature = "sdpostcard")]
+    use crate::lazy_static::__Deref;
+    #[cfg(feature = "sdbincode")]
+    use bincode::serialized_size;
+    #[cfg(feature = "sdborsh")]
+    use borsh::BorshDeserialize;
     use {
         super::*,
         crate::{
@@ -385,7 +414,6 @@ mod tests {
                 ShredType, MAX_CODE_SHREDS_PER_SLOT,
             },
         },
-        bincode::serialized_size,
         matches::assert_matches,
         rand::{seq::SliceRandom, Rng},
         solana_sdk::{
@@ -421,7 +449,7 @@ mod tests {
         );
         let parent_slot = slot - 5;
         let shredder = Shredder::new(slot, parent_slot, 0, 0).unwrap();
-        let entries: Vec<_> = (0..5)
+        let entries: Vec<_> = (0..1000)
             .map(|_| {
                 let keypair0 = Keypair::new();
                 let keypair1 = Keypair::new();
@@ -430,11 +458,15 @@ mod tests {
                 Entry::new(&Hash::default(), 1, vec![tx0])
             })
             .collect();
-
-        let size = serialized_size(&entries).unwrap() as usize;
-        // Integer division to ensure we have enough shreds to fit all the data
-        let data_buffer_size = ShredData::capacity(/*merkle_proof_size:*/ None).unwrap();
-        let num_expected_data_shreds = (size + data_buffer_size - 1) / data_buffer_size;
+        println!(
+            "{} entries with size {}B",
+            entries.len(),
+            std::mem::size_of_val(&entries[0])
+        );
+        #[cfg(feature = "sdbincode")]
+        let num_expected_data_shreds = get_expected_num_shreds(&entries);
+        #[cfg(not(feature = "sdbincode"))]
+        let num_expected_data_shreds = get_expected_num_shreds();
         let num_expected_coding_shreds =
             get_erasure_batch_size(num_expected_data_shreds) - num_expected_data_shreds;
         let start_index = 0;
@@ -448,6 +480,11 @@ mod tests {
         );
         let next_index = data_shreds.last().unwrap().index() + 1;
         assert_eq!(next_index as usize, num_expected_data_shreds);
+        println!(
+            "{} shreds with size {}",
+            num_expected_data_shreds,
+            std::mem::size_of_val(&data_shreds[0])
+        );
 
         let mut data_shred_indexes = HashSet::new();
         let mut coding_shred_indexes = HashSet::new();
@@ -490,8 +527,57 @@ mod tests {
 
         // Test reassembly
         let deshred_payload = Shredder::deshred(&data_shreds).unwrap();
-        let deshred_entries: Vec<Entry> = bincode::deserialize(&deshred_payload).unwrap();
+        println!(
+            "Starting deserialize with deshred_payload size {}B from {} data shreds of size {}",
+            deshred_payload.len(),
+            data_shreds.len(),
+            std::mem::size_of_val(&data_shreds[0])
+        );
+        let mut deserialize_time = Measure::start("shred_deserialize");
+        let deshred_entries: Vec<Entry> = deserialize_entries(&deshred_payload);
+        deserialize_time.stop();
+        println!("deserialize_time = {}us", deserialize_time.as_us());
         assert_eq!(entries, deshred_entries);
+    }
+
+    #[cfg(feature = "sdbincode")]
+    fn get_expected_num_shreds(entries: &Vec<Entry>) -> usize {
+        let size = serialized_size(&entries).unwrap() as usize;
+        // Integer division to ensure we have enough shreds to fit all the data
+        let data_buffer_size = ShredData::capacity(/*merkle_proof_size:*/ None).unwrap();
+        (size + data_buffer_size - 1) / data_buffer_size
+    }
+
+    #[cfg(not(feature = "sdbincode"))]
+    fn get_expected_num_shreds() -> usize {
+        // These are hard coded for 1000x 64B entries
+        #[cfg(feature = "sdborsh")]
+        return 262;
+        #[cfg(feature = "sdspeedy")]
+        return 288;
+        #[cfg(feature = "sdpostcard")]
+        return 237;
+    }
+
+    fn deserialize_entries(deshred_payload: &Vec<u8>) -> Vec<Entry> {
+        #[cfg(feature = "sdbincode")]
+        return bincode::deserialize(&deshred_payload).unwrap();
+        #[cfg(feature = "sdborsh")]
+        return BorshDeserialize::try_from_slice(&deshred_payload).unwrap();
+        #[cfg(feature = "sdspeedy")]
+        {
+            let mut deshred_entries: Vec<Entry> = vec![];
+            let mut offset = 4;
+            while offset < deshred_payload.len() {
+                let (entry, length) =
+                    Entry::read_with_length_from_buffer(&deshred_payload[offset..]);
+                deshred_entries.push(entry.unwrap());
+                offset += length;
+            }
+            return deshred_entries;
+        }
+        #[cfg(feature = "sdpostcard")]
+        return from_bytes(deshred_payload.deref()).unwrap();
     }
 
     #[test]

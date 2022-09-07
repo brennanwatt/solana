@@ -25,10 +25,26 @@ use crate::{
 pub use loaded::*;
 
 mod loaded;
-
+use {
+    borsh::{BorshDeserialize, BorshSerialize},
+    speedy::{Readable, Writable},
+};
 /// Address table lookups describe an on-chain address lookup table to use
 /// for loading more readonly and writable accounts in a single tx.
-#[derive(Serialize, Deserialize, Default, Debug, PartialEq, Eq, Clone, AbiExample)]
+#[derive(
+    Readable,
+    Writable,
+    BorshSerialize,
+    BorshDeserialize,
+    Serialize,
+    Deserialize,
+    Default,
+    Debug,
+    PartialEq,
+    Eq,
+    Clone,
+    AbiExample,
+)]
 #[serde(rename_all = "camelCase")]
 pub struct MessageAddressTableLookup {
     /// Address lookup table account key
@@ -49,7 +65,20 @@ pub struct MessageAddressTableLookup {
 /// See the [`message`] module documentation for further description.
 ///
 /// [`message`]: crate::message
-#[derive(Serialize, Deserialize, Default, Debug, PartialEq, Eq, Clone, AbiExample)]
+#[derive(
+    Readable,
+    Writable,
+    BorshSerialize,
+    BorshDeserialize,
+    Serialize,
+    Deserialize,
+    Default,
+    Debug,
+    PartialEq,
+    Eq,
+    Clone,
+    AbiExample,
+)]
 #[serde(rename_all = "camelCase")]
 pub struct Message {
     /// The message header, identifying signed and read-only `account_keys`.

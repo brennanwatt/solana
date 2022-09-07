@@ -19,10 +19,25 @@ use {
 pub const SIGNATURE_BYTES: usize = 64;
 /// Maximum string length of a base58 encoded signature
 const MAX_BASE58_SIGNATURE_LEN: usize = 88;
-
+use {
+    borsh::{BorshDeserialize, BorshSerialize},
+    speedy::{Context, Readable, Reader, Writable, Writer},
+};
 #[repr(transparent)]
 #[derive(
-    Serialize, Deserialize, Clone, Copy, Default, Eq, PartialEq, Ord, PartialOrd, Hash, AbiExample,
+    BorshSerialize,
+    BorshDeserialize,
+    Serialize,
+    Deserialize,
+    Clone,
+    Copy,
+    Default,
+    Eq,
+    PartialEq,
+    Ord,
+    PartialOrd,
+    Hash,
+    AbiExample,
 )]
 pub struct Signature(GenericArray<u8, U64>);
 
@@ -50,6 +65,36 @@ impl Signature {
 
     pub fn verify(&self, pubkey_bytes: &[u8], message_bytes: &[u8]) -> bool {
         self.verify_verbose(pubkey_bytes, message_bytes).is_ok()
+    }
+
+    pub fn to_bytes(&self) -> Vec<u8> {
+        self.0.to_vec()
+    }
+}
+
+use speedy::private::read_length_u32;
+impl<'a, C: Context> Readable<'a, C> for Signature {
+    #[inline]
+    fn read_from<R: Reader<'a, C>>(reader: &mut R) -> Result<Self, C::Error> {
+        let length = read_length_u32(reader)?;
+        Ok(Signature::new(&reader.read_vec(length)?))
+    }
+
+    #[inline]
+    fn minimum_bytes_needed() -> usize {
+        64
+    }
+}
+
+impl<C: Context> Writable<C> for Signature {
+    #[inline]
+    fn write_to<W: ?Sized + Writer<C>>(&self, writer: &mut W) -> Result<(), C::Error> {
+        self.0.as_slice().write_to(writer)
+    }
+
+    #[inline]
+    fn bytes_needed(&self) -> Result<usize, C::Error> {
+        Writable::<C>::bytes_needed(self.0.as_slice())
     }
 }
 

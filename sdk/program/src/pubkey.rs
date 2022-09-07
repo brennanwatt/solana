@@ -49,7 +49,7 @@ impl From<u64> for PubkeyError {
         }
     }
 }
-
+use speedy::{private::read_length_u32, Context, Readable, Reader, Writable, Writer};
 /// The address of a [Solana account][acc].
 ///
 /// Some account addresses are [ed25519] public keys, with corresponding secret
@@ -105,6 +105,31 @@ impl From<Infallible> for ParsePubkeyError {
 impl<T> DecodeError<T> for ParsePubkeyError {
     fn type_of() -> &'static str {
         "ParsePubkeyError"
+    }
+}
+
+impl<'a, C: Context> Readable<'a, C> for Pubkey {
+    #[inline]
+    fn read_from<R: Reader<'a, C>>(reader: &mut R) -> Result<Self, C::Error> {
+        let length = read_length_u32(reader)?;
+        Ok(Pubkey::new(&reader.read_vec(length)?))
+    }
+
+    #[inline]
+    fn minimum_bytes_needed() -> usize {
+        32
+    }
+}
+
+impl<C: Context> Writable<C> for Pubkey {
+    #[inline]
+    fn write_to<W: ?Sized + Writer<C>>(&self, writer: &mut W) -> Result<(), C::Error> {
+        self.0.as_slice().write_to(writer)
+    }
+
+    #[inline]
+    fn bytes_needed(&self) -> Result<usize, C::Error> {
+        Writable::<C>::bytes_needed(self.0.as_slice())
     }
 }
 

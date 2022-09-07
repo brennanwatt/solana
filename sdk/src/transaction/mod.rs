@@ -126,6 +126,7 @@ use {
         signers::Signers,
         wasm_bindgen,
     },
+    borsh::{BorshDeserialize, BorshSerialize},
     serde::Serialize,
     solana_program::{system_instruction::SystemInstruction, system_program},
     solana_sdk::feature_set,
@@ -169,7 +170,18 @@ pub type Result<T> = result::Result<T, TransactionError>;
 /// redundantly specifying the fee-payer is not strictly required.
 #[wasm_bindgen]
 #[frozen_abi(digest = "FZtncnS1Xk8ghHfKiXE5oGiUbw2wJhmfXQuNgQR3K6Mc")]
-#[derive(Debug, PartialEq, Default, Eq, Clone, Serialize, Deserialize, AbiExample)]
+#[derive(
+    BorshSerialize,
+    BorshDeserialize,
+    Debug,
+    PartialEq,
+    Default,
+    Eq,
+    Clone,
+    Serialize,
+    Deserialize,
+    AbiExample,
+)]
 pub struct Transaction {
     /// A set of signatures of a serialized [`Message`], signed by the first
     /// keys of the `Message`'s [`account_keys`], where the number of signatures

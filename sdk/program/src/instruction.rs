@@ -16,8 +16,9 @@
 use {
     crate::{pubkey::Pubkey, sanitize::Sanitize, short_vec, wasm_bindgen},
     bincode::serialize,
-    borsh::BorshSerialize,
+    borsh::{BorshDeserialize, BorshSerialize},
     serde::Serialize,
+    speedy::{Readable, Writable},
     thiserror::Error,
 };
 
@@ -620,7 +621,19 @@ impl AccountMeta {
 /// construction of `Message`. Most users will not interact with it directly.
 ///
 /// [`Message`]: crate::message::Message
-#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone, AbiExample)]
+#[derive(
+    Readable,
+    Writable,
+    BorshSerialize,
+    BorshDeserialize,
+    Serialize,
+    Deserialize,
+    Debug,
+    PartialEq,
+    Eq,
+    Clone,
+    AbiExample,
+)]
 #[serde(rename_all = "camelCase")]
 pub struct CompiledInstruction {
     /// Index into the transaction keys array indicating the program account that executes this instruction.

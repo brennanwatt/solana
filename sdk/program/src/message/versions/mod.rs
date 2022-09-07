@@ -7,11 +7,13 @@ use {
         sanitize::{Sanitize, SanitizeError},
         short_vec,
     },
+    borsh::{BorshDeserialize, BorshSerialize},
     serde::{
         de::{self, Deserializer, SeqAccess, Visitor},
         ser::{SerializeTuple, Serializer},
         Deserialize, Serialize,
     },
+    speedy::{Readable, Writable},
     std::fmt,
 };
 
@@ -32,7 +34,18 @@ pub const MESSAGE_VERSION_PREFIX: u8 = 0x80;
 /// is bit is not set, all bytes are used to encode the legacy `Message`
 /// format.
 #[frozen_abi(digest = "G4EAiqmGgBprgf5ePYemLJcoFfx4R7rhC1Weo2FVJ7fn")]
-#[derive(Debug, PartialEq, Eq, Clone, AbiEnumVisitor, AbiExample)]
+#[derive(
+    Readable,
+    Writable,
+    BorshSerialize,
+    BorshDeserialize,
+    Debug,
+    PartialEq,
+    Eq,
+    Clone,
+    AbiEnumVisitor,
+    AbiExample,
+)]
 pub enum VersionedMessage {
     Legacy(LegacyMessage),
     V0(v0::Message),

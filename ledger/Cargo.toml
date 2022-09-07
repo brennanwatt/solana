@@ -12,6 +12,9 @@ edition = "2021"
 [dependencies]
 bincode = "1.3.3"
 bitflags = "1.3.1"
+borsh = "0.9.3"
+postcard = { version = "1.0.2", features = ["alloc"] }
+speedy = "0.8.3"
 byteorder = "1.4.3"
 chrono = { version = "0.4.22", features = ["serde"] }
 chrono-humanize = "0.2.1"
@@ -74,6 +77,12 @@ matches = "0.1.9"
 solana-account-decoder = { path = "../account-decoder", version = "=1.12.0" }
 solana-logger = { path = "../logger", version = "=1.12.0" }
 test-case = "2.1.0"
+
+[features]
+sdbincode = []
+sdborsh = []
+sdspeedy = []
+sdpostcard = []
 
 [build-dependencies]
 rustc_version = "0.4"
