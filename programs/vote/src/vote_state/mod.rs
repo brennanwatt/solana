@@ -947,6 +947,25 @@ pub fn process_vote_state_update<S: std::hash::BuildHasher>(
     feature_set: &FeatureSet,
 ) -> Result<(), InstructionError> {
     let mut vote_state = verify_and_get_vote_state(vote_account, clock, signers)?;
+
+    // VoteStateUpdate
+    let bytes_orig = bincode::serialize(&vote_state_update).unwrap().len();
+
+    // CompactVoteStateUpdate
+    let vote_state_update_compact = vote_state_update.clone().compact().unwrap();
+    let bytes_compact = bincode::serialize(&vote_state_update_compact).unwrap().len();
+
+    // serde_compact_vote_state
+    #[derive(Debug, Eq, PartialEq, Deserialize, Serialize)]
+    enum VoteInstruction {
+        #[serde(with = "serde_compact_vote_state")]
+        UpdateVoteState(VoteStateUpdate)
+    }
+    let vote = VoteInstruction::UpdateVoteState(vote_state_update.clone());
+    let bytes_new = bincode::serialize(&vote).unwrap().len();
+
+    println!("BWLOG: {} {} {}", bytes_orig, bytes_compact, bytes_new);
+
     do_process_vote_state_update(
         &mut vote_state,
         slot_hashes,
