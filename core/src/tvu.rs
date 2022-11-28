@@ -1,6 +1,8 @@
 //! The `tvu` module implements the Transaction Validation Unit, a multi-stage transaction
 //! validation pipeline in software.
 
+use solana_streamer::streamer::StakedNodes;
+
 use {
     crate::{
         broadcast_stage::RetransmitSlotsSender,
@@ -52,10 +54,15 @@ use {
         sync::{atomic::AtomicBool, Arc, RwLock},
         thread::{self, JoinHandle},
     },
+    solana_streamer::{
+        nonblocking::quic::DEFAULT_WAIT_FOR_CHUNK_TIMEOUT_MS,
+        quic::{spawn_server, StreamStats, MAX_STAKED_CONNECTIONS, MAX_UNSTAKED_CONNECTIONS},
+    },
 };
 
 pub struct Tvu {
     fetch_stage: ShredFetchStage,
+    tvu_quic_t: JoinHandle<()>,
     shred_sigverify: JoinHandle<()>,
     retransmit_stage: RetransmitStage,
     window_service: WindowService,
@@ -74,6 +81,7 @@ pub struct TvuSockets {
     pub retransmit: Vec<UdpSocket>,
     pub forwards: Vec<UdpSocket>,
     pub ancestor_hashes_requests: UdpSocket,
+    pub quic: UdpSocket,
 }
 
 #[derive(Default)]
@@ -128,6 +136,8 @@ impl Tvu {
         log_messages_bytes_limit: Option<usize>,
         connection_cache: &Arc<ConnectionCache>,
         prioritization_fee_cache: &Arc<PrioritizationFeeCache>,
+        keypair: &Keypair,
+        staked_nodes: &Arc<RwLock<StakedNodes>>,
     ) -> Result<Self, String> {
         let TvuSockets {
             repair: repair_socket,
@@ -135,6 +145,7 @@ impl Tvu {
             retransmit: retransmit_sockets,
             forwards: tvu_forward_sockets,
             ancestor_hashes_requests: ancestor_hashes_socket,
+            quic: quic_socket,
         } = sockets;
 
         let (fetch_sender, fetch_receiver) = unbounded();
@@ -148,12 +159,29 @@ impl Tvu {
             fetch_sockets,
             forward_sockets,
             repair_socket.clone(),
-            fetch_sender,
+            fetch_sender.clone(),
             tvu_config.shred_version,
             bank_forks.clone(),
             cluster_info.clone(),
             exit,
         );
+
+        pub const MAX_QUIC_CONNECTIONS_PER_PEER: usize = 8;
+        let stats = Arc::new(StreamStats::default());
+        let tvu_quic_t = spawn_server(
+            quic_socket,
+            keypair,
+            cluster_info.my_contact_info().tpu.ip(),
+            fetch_sender,
+            exit.clone(),
+            MAX_QUIC_CONNECTIONS_PER_PEER,
+            staked_nodes.clone(),
+            MAX_STAKED_CONNECTIONS,
+            MAX_UNSTAKED_CONNECTIONS,
+            stats.clone(),
+            DEFAULT_WAIT_FOR_CHUNK_TIMEOUT_MS,
+        )
+        .unwrap();
 
         let (verified_sender, verified_receiver) = unbounded();
         let (retransmit_sender, retransmit_receiver) = unbounded();
@@ -301,6 +329,7 @@ impl Tvu {
 
         Ok(Tvu {
             fetch_stage,
+            tvu_quic_t,
             shred_sigverify,
             retransmit_stage,
             window_service,
@@ -319,6 +348,7 @@ impl Tvu {
         self.window_service.join()?;
         self.cluster_slots_service.join()?;
         self.fetch_stage.join()?;
+        self.tvu_quic_t.join()?;
         self.shred_sigverify.join()?;
         if self.ledger_cleanup_service.is_some() {
             self.ledger_cleanup_service.unwrap().join()?;
@@ -412,6 +442,7 @@ pub mod tests {
                     fetch: target1.sockets.tvu,
                     forwards: target1.sockets.tvu_forwards,
                     ancestor_hashes_requests: target1.sockets.ancestor_hashes_requests,
+                    quic: target1.sockets.tvu_quic,
                 }
             },
             blockstore,
@@ -449,6 +480,8 @@ pub mod tests {
             None,
             &Arc::new(ConnectionCache::default()),
             &_ignored_prioritization_fee_cache,
+            &Keypair::new(),
+            &Arc::new(RwLock::new(StakedNodes::default())),
         )
         .expect("assume success");
         exit.store(true, Ordering::Relaxed);

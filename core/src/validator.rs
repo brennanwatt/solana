@@ -940,6 +940,7 @@ impl Validator {
             &bank_forks,
             &cluster_info,
             TvuSockets {
+                quic: node.sockets.tvu_quic,
                 repair: node.sockets.repair,
                 retransmit: node.sockets.retransmit_sockets,
                 fetch: node.sockets.tvu,
@@ -981,6 +982,8 @@ impl Validator {
             config.runtime_config.log_messages_bytes_limit,
             &connection_cache,
             &prioritization_fee_cache,
+            &identity_keypair,
+            &staked_nodes,
         )?;
 
         let tpu = Tpu::new(

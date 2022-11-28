@@ -305,7 +305,7 @@ impl BroadcastRun for BroadcastDuplicatesRun {
             .iter()
             .filter_map(|shred| {
                 let node = cluster_nodes.get_broadcast_peer(&shred.id())?;
-                if !ContactInfo::is_valid_address(&node.tvu, socket_addr_space) {
+                if !ContactInfo::is_valid_address(&node.tvu_quic, socket_addr_space) {
                     return None;
                 }
                 if self
@@ -338,14 +338,14 @@ impl BroadcastRun for BroadcastDuplicatesRun {
                             .iter()
                             .filter_map(|pubkey| {
                                 let tvu = cluster_info
-                                    .lookup_contact_info(pubkey, |contact_info| contact_info.tvu)?;
+                                    .lookup_contact_info(pubkey, |contact_info| contact_info.tvu_quic)?;
                                 Some((shred.payload(), tvu))
                             })
                             .collect(),
                     );
                 }
 
-                Some(vec![(shred.payload(), node.tvu)])
+                Some(vec![(shred.payload(), node.tvu_quic)])
             })
             .flatten()
             .collect();

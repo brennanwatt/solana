@@ -97,7 +97,7 @@ impl StakedNodesUpdaterService {
                 .into_iter()
                 .filter_map(|node| {
                     let stake = staked_nodes.get(&node.id)?;
-                    Some((node.tvu.ip(), *stake))
+                    Some((node.tvu_quic.ip(), *stake))
                 })
                 .collect();
             Self::override_stake(
@@ -130,7 +130,7 @@ impl StakedNodesUpdaterService {
                     .into_iter()
                     .find_map(|(node, _seen_time)| {
                         if node.id == *id_override {
-                            return Some(node.tvu.ip());
+                            return Some(node.tvu_quic.ip());
                         }
                         None
                     })

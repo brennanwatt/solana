@@ -23,6 +23,8 @@ pub struct ContactInfo {
     pub tvu: SocketAddr,
     /// address to forward shreds to
     pub tvu_forwards: SocketAddr,
+    /// address to connect to for replication
+    pub tvu_quic: SocketAddr,
     /// address to send repair responses to
     pub repair: SocketAddr,
     /// transactions address
@@ -75,6 +77,7 @@ impl Default for ContactInfo {
             gossip: socketaddr_any!(),
             tvu: socketaddr_any!(),
             tvu_forwards: socketaddr_any!(),
+            tvu_quic: socketaddr_any!(),
             repair: socketaddr_any!(),
             tpu: socketaddr_any!(),
             tpu_forwards: socketaddr_any!(),
@@ -95,13 +98,14 @@ impl ContactInfo {
             gossip: socketaddr!("127.0.0.1:1234"),
             tvu: socketaddr!("127.0.0.1:1235"),
             tvu_forwards: socketaddr!("127.0.0.1:1236"),
-            repair: socketaddr!("127.0.0.1:1237"),
-            tpu: socketaddr!("127.0.0.1:1238"),
-            tpu_forwards: socketaddr!("127.0.0.1:1239"),
-            tpu_vote: socketaddr!("127.0.0.1:1240"),
-            rpc: socketaddr!("127.0.0.1:1241"),
-            rpc_pubsub: socketaddr!("127.0.0.1:1242"),
-            serve_repair: socketaddr!("127.0.0.1:1243"),
+            tvu_quic: socketaddr!("127.0.0.1:1237"),
+            repair: socketaddr!("127.0.0.1:1238"),
+            tpu: socketaddr!("127.0.0.1:1239"),
+            tpu_forwards: socketaddr!("127.0.0.1:1240"),
+            tpu_vote: socketaddr!("127.0.0.1:1241"),
+            rpc: socketaddr!("127.0.0.1:1242"),
+            rpc_pubsub: socketaddr!("127.0.0.1:1243"),
+            serve_repair: socketaddr!("127.0.0.1:1244"),
             wallclock: now,
             shred_version: 0,
         }
@@ -125,6 +129,7 @@ impl ContactInfo {
             gossip: addr,
             tvu: addr,
             tvu_forwards: addr,
+            tvu_quic: addr,
             repair: addr,
             tpu: addr,
             tpu_forwards: addr,
@@ -150,16 +155,18 @@ impl ContactInfo {
         let tvu = next_port(bind_addr, 2);
         let tpu_forwards = next_port(bind_addr, 3);
         let tvu_forwards = next_port(bind_addr, 4);
-        let repair = next_port(bind_addr, 5);
+        let tvu_quic = next_port(bind_addr, 5);
+        let repair = next_port(bind_addr, 6);
         let rpc = SocketAddr::new(bind_addr.ip(), rpc_port::DEFAULT_RPC_PORT);
         let rpc_pubsub = SocketAddr::new(bind_addr.ip(), rpc_port::DEFAULT_RPC_PUBSUB_PORT);
-        let serve_repair = next_port(bind_addr, 6);
-        let tpu_vote = next_port(bind_addr, 7);
+        let serve_repair = next_port(bind_addr, 7);
+        let tpu_vote = next_port(bind_addr, 8);
         Self {
             id: *pubkey,
             gossip,
             tvu,
             tvu_forwards,
+            tvu_quic,
             repair,
             tpu,
             tpu_forwards,
@@ -261,6 +268,7 @@ mod tests {
         let ci = ContactInfo::default();
         assert!(ci.gossip.ip().is_unspecified());
         assert!(ci.tvu.ip().is_unspecified());
+        assert!(ci.tvu_quic.ip().is_unspecified());
         assert!(ci.tpu_forwards.ip().is_unspecified());
         assert!(ci.rpc.ip().is_unspecified());
         assert!(ci.rpc_pubsub.ip().is_unspecified());
@@ -273,6 +281,7 @@ mod tests {
         let ci = ContactInfo::new_multicast();
         assert!(ci.gossip.ip().is_multicast());
         assert!(ci.tvu.ip().is_multicast());
+        assert!(ci.tvu_quic.ip().is_multicast());
         assert!(ci.tpu_forwards.ip().is_multicast());
         assert!(ci.rpc.ip().is_multicast());
         assert!(ci.rpc_pubsub.ip().is_multicast());
@@ -286,6 +295,7 @@ mod tests {
         let ci = ContactInfo::new_gossip_entry_point(&addr);
         assert_eq!(ci.gossip, addr);
         assert!(ci.tvu.ip().is_unspecified());
+        assert!(ci.tvu_quic.ip().is_unspecified());
         assert!(ci.tpu_forwards.ip().is_unspecified());
         assert!(ci.rpc.ip().is_unspecified());
         assert!(ci.rpc_pubsub.ip().is_unspecified());
@@ -298,13 +308,14 @@ mod tests {
         let addr = socketaddr!("127.0.0.1:10");
         let ci = ContactInfo::new_with_socketaddr(&addr);
         assert_eq!(ci.tpu, addr);
-        assert_eq!(ci.tpu_vote.port(), 17);
+        assert_eq!(ci.tpu_vote.port(), 18);
         assert_eq!(ci.gossip.port(), 11);
         assert_eq!(ci.tvu.port(), 12);
+        assert_eq!(ci.tvu_quic.port(), 15);
         assert_eq!(ci.tpu_forwards.port(), 13);
         assert_eq!(ci.rpc.port(), rpc_port::DEFAULT_RPC_PORT);
         assert_eq!(ci.rpc_pubsub.port(), rpc_port::DEFAULT_RPC_PUBSUB_PORT);
-        assert_eq!(ci.serve_repair.port(), 16);
+        assert_eq!(ci.serve_repair.port(), 17);
     }
 
     #[test]
@@ -328,9 +339,10 @@ mod tests {
             socketaddr!(format!("127.0.0.1:{}", rpc_port::DEFAULT_RPC_PUBSUB_PORT))
         );
         assert_eq!(d1.tvu_forwards, socketaddr!("127.0.0.1:1238"));
-        assert_eq!(d1.repair, socketaddr!("127.0.0.1:1239"));
-        assert_eq!(d1.serve_repair, socketaddr!("127.0.0.1:1240"));
-        assert_eq!(d1.tpu_vote, socketaddr!("127.0.0.1:1241"));
+        assert_eq!(d1.tvu_quic, socketaddr!("127.0.0.1:1239"));
+        assert_eq!(d1.repair, socketaddr!("127.0.0.1:1240"));
+        assert_eq!(d1.serve_repair, socketaddr!("127.0.0.1:1241"));
+        assert_eq!(d1.tpu_vote, socketaddr!("127.0.0.1:1242"));
     }
 
     #[test]

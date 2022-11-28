@@ -1527,6 +1527,7 @@ pub fn main() {
         node.info.tpu_forwards = any;
         node.info.tvu = any;
         node.info.tvu_forwards = any;
+        node.info.tvu_quic = any;
         node.info.serve_repair = any;
 
         // A node in this configuration shouldn't be an entrypoint to other nodes

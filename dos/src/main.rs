@@ -429,7 +429,7 @@ fn get_target(
                 info!("{}", node.gossip);
                 target = match mode {
                     Mode::Gossip => Some((node.id, node.gossip)),
-                    Mode::Tvu => Some((node.id, node.tvu)),
+                    Mode::Tvu => Some((node.id, node.tvu_quic)),
                     Mode::TvuForwards => Some((node.id, node.tvu_forwards)),
                     Mode::Tpu => Some((node.id, node.tpu)),
                     Mode::TpuForwards => Some((node.id, node.tpu_forwards)),

@@ -136,7 +136,7 @@ fn retransmit_to(
     } else {
         peers
             .iter()
-            .map(|peer| peer.tvu)
+            .map(|peer| peer.tvu_quic)
             .filter(|addr| socket_addr_space.check(addr))
             .collect()
     };

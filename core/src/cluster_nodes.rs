@@ -143,7 +143,7 @@ impl ClusterNodes<RetransmitStage> {
             self.get_retransmit_peers(slot_leader, shred, root_bank, fanout);
         if neighbors.is_empty() {
             let peers = children.into_iter().filter_map(Node::contact_info);
-            let addrs = peers.map(|peer| peer.tvu).collect();
+            let addrs = peers.map(|peer| peer.tvu_quic).collect();
             return (root_distance, addrs);
         }
         // If the node is on the critical path (i.e. the first node in each
@@ -163,7 +163,7 @@ impl ClusterNodes<RetransmitStage> {
             .chain(
                 children
                     .iter()
-                    .filter_map(|node| Some(node.contact_info()?.tvu)),
+                    .filter_map(|node| Some(node.contact_info()?.tvu_quic)),
             );
         (root_distance, addrs.collect())
     }

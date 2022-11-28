@@ -61,10 +61,11 @@ fn bench_retransmitter(bencher: &mut Bencher) {
         let id = Pubkey::new_unique();
         let socket = UdpSocket::bind("0.0.0.0:0").unwrap();
         let mut contact_info = ContactInfo::new_localhost(&id, timestamp());
-        contact_info.tvu = socket.local_addr().unwrap();
-        contact_info.tvu.set_ip("127.0.0.1".parse().unwrap());
+        contact_info.tvu_quic = socket.local_addr().unwrap();
+        contact_info.tvu_quic.set_ip("127.0.0.1".parse().unwrap());
+        contact_info.tvu = contact_info.tvu_quic;
         contact_info.tvu_forwards = contact_info.tvu;
-        info!("local: {:?}", contact_info.tvu);
+        info!("local: {:?}", contact_info.tvu_quic);
         cluster_info.insert_info(contact_info);
         socket.set_nonblocking(true).unwrap();
         peer_sockets.push(socket);

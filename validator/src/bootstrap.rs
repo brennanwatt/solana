@@ -83,6 +83,7 @@ fn verify_reachable_ports(
         udp_sockets.extend(node.sockets.tvu.iter());
         udp_sockets.extend(node.sockets.broadcast.iter());
         udp_sockets.extend(node.sockets.retransmit_sockets.iter());
+        udp_sockets.push(&node.sockets.tvu_quic);
     }
     if ContactInfo::is_valid_address(&node.info.tvu_forwards, socket_addr_space) {
         udp_sockets.extend(node.sockets.tvu_forwards.iter());
@@ -1430,6 +1431,7 @@ mod tests {
             gossip: sock_addr,
             tvu: sock_addr,
             tvu_forwards: sock_addr,
+            tvu_quic: sock_addr,
             repair: sock_addr,
             tpu: sock_addr,
             tpu_forwards: sock_addr,

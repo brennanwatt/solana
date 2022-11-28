@@ -413,8 +413,8 @@ pub fn broadcast_shreds(
             update_peer_stats(&cluster_nodes, last_datapoint_submit);
             shreds.flat_map(move |shred| {
                 let node = cluster_nodes.get_broadcast_peer(&shred.id())?;
-                ContactInfo::is_valid_address(&node.tvu, socket_addr_space)
-                    .then(|| (shred.payload(), node.tvu))
+                ContactInfo::is_valid_address(&node.tvu_quic, socket_addr_space)
+                    .then(|| (shred.payload(), node.tvu_quic))
             })
         })
         .collect();
