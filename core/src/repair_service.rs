@@ -494,6 +494,7 @@ impl RepairService {
         if max_repairs == 0 || slot_meta.is_full() {
             vec![]
         } else if slot_meta.consumed == slot_meta.received {
+            warn!("BWLOG: generate_repairs_for_slot returned HighestShred request");
             vec![ShredRepairType::HighestShred(slot, slot_meta.received)]
         } else {
             let reqs = blockstore.find_missing_data_indexes(
@@ -502,6 +503,17 @@ impl RepairService {
                 slot_meta.consumed,
                 slot_meta.received,
                 max_repairs,
+            );
+
+            warn!("BWLOG: generate_repairs_for_slot requesting {} repairs: {:?} from slot {}. Time = {}, first shred = {}, consumed = {}, received = {}, completed = {:?}",
+                reqs.len(),
+                reqs,
+                slot,
+                solana_sdk::timing::timestamp(),
+                slot_meta.first_shred_timestamp,
+                slot_meta.consumed,
+                slot_meta.received,
+                slot_meta.completed_data_indexes,
             );
             reqs.into_iter()
                 .map(|i| ShredRepairType::Shred(slot, i))

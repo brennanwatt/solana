@@ -709,6 +709,7 @@ impl Blockstore {
             let index = &mut index_meta_entry.index;
             match erasure_meta.status(index) {
                 ErasureMetaStatus::CanRecover => {
+                    warn!("BWLOG: CanRecover {:?} {:?}", erasure_set, index);
                     Self::recover_shreds(
                         index,
                         erasure_meta,
@@ -720,9 +721,11 @@ impl Blockstore {
                     );
                 }
                 ErasureMetaStatus::DataFull => {
+                    warn!("BWLOG: DataFull {:?}", erasure_set);
                     Self::submit_metrics(slot, erasure_meta, false, "complete".into(), 0);
                 }
                 ErasureMetaStatus::StillNeed(needed) => {
+                    warn!("BWLOG: StillNeed {} {:?} {:?}", needed, erasure_set, index);
                     Self::submit_metrics(
                         slot,
                         erasure_meta,
@@ -828,6 +831,8 @@ impl Blockstore {
             };
             match shred.shred_type() {
                 ShredType::Data => {
+                    let slot = shred.slot();
+                    let shred_index = u64::from(shred.index());
                     match self.check_insert_data_shred(
                         shred,
                         &mut erasure_metas,
@@ -857,6 +862,10 @@ impl Blockstore {
                         }
                         Ok(completed_data_sets) => {
                             if is_repaired {
+                                warn!(
+                                    "BWLOG: successful repair insert for slot {}, shred {}",
+                                    slot, shred_index
+                                );
                                 metrics.num_repair += 1;
                             }
                             newly_completed_data_sets.extend(completed_data_sets);
