@@ -150,7 +150,7 @@ pub struct BlockstoreSignals {
 // ledger window
 pub struct Blockstore {
     ledger_path: PathBuf,
-    db: Arc<Database>,
+    pub db: Arc<Database>,
     meta_cf: LedgerColumn<cf::SlotMeta>,
     dead_slots_cf: LedgerColumn<cf::DeadSlots>,
     duplicate_slots_cf: LedgerColumn<cf::DuplicateSlots>,
@@ -1859,6 +1859,23 @@ impl Blockstore {
         }
 
         missing_indexes
+    }
+
+    pub fn shred_has_timed_out(&self, slot: u64, first_timestamp: u64, index: u64) -> bool {
+        if let Ok(mut db_iterator) = self
+            .db
+            .raw_iterator_cf(self.db.cf_handle::<cf::ShredData>())
+        {
+            db_iterator.seek(&<cf::ShredData>::key((slot, index)));
+            let ticks_since_first_insert =
+                DEFAULT_TICKS_PER_SECOND * (timestamp() - first_timestamp) / 1000;
+            let data = db_iterator.value().expect("couldn't read value");
+            let reference_tick = u64::from(shred::layout::get_reference_tick(data).unwrap());
+            if ticks_since_first_insert >= reference_tick + MAX_TURBINE_DELAY_IN_TICKS {
+                return true;
+            }
+        }
+        false
     }
 
     pub fn find_missing_data_indexes(

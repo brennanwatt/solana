@@ -494,8 +494,16 @@ impl RepairService {
         if max_repairs == 0 || slot_meta.is_full() {
             vec![]
         } else if slot_meta.consumed == slot_meta.received {
-            warn!("BWLOG: generate_repairs_for_slot returned HighestShred request for slot {} shred {}", slot, slot_meta.received);
-            vec![ShredRepairType::HighestShred(slot, slot_meta.received)]
+            if blockstore.shred_has_timed_out(
+                slot,
+                slot_meta.first_shred_timestamp,
+                slot_meta.received,
+            ) {
+                warn!("BWLOG: generate_repairs_for_slot returned HighestShred request for slot {} shred {}", slot, slot_meta.received);
+                vec![ShredRepairType::HighestShred(slot, slot_meta.received)]
+            } else {
+                vec![]
+            }
         } else {
             let reqs = blockstore.find_missing_data_indexes(
                 slot,
