@@ -497,7 +497,7 @@ impl RepairService {
             if blockstore.shred_has_timed_out(
                 slot,
                 slot_meta.first_shred_timestamp,
-                slot_meta.received,
+                slot_meta.received-1,
             ) {
                 warn!("BWLOG: generate_repairs_for_slot returned HighestShred request for slot {} shred {}", slot, slot_meta.received);
                 vec![ShredRepairType::HighestShred(slot, slot_meta.received)]
@@ -514,10 +514,10 @@ impl RepairService {
             );
 
             if reqs.len() > 0 {
-                warn!("BWLOG: generate_repairs_for_slot requesting {} repairs: {:?} from slot {}. {} ms since first shred, consumed = {}, received = {}, completed = {:?}",
+                warn!("BWLOG: generate_repairs_for_slot {} requesting {} repairs: {:?}. {} ms since first shred, consumed = {}, received = {}, completed = {:?}",
+                    slot,
                     reqs.len(),
                     reqs,
-                    slot,
                     solana_sdk::timing::timestamp() - slot_meta.first_shred_timestamp,
                     slot_meta.consumed,
                     slot_meta.received,
