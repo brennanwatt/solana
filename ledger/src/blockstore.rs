@@ -1867,12 +1867,19 @@ impl Blockstore {
             .raw_iterator_cf(self.db.cf_handle::<cf::ShredData>())
         {
             db_iterator.seek(&<cf::ShredData>::key((slot, index)));
-            let ticks_since_first_insert =
-                DEFAULT_TICKS_PER_SECOND * (timestamp() - first_timestamp) / 1000;
-            let data = db_iterator.value().expect("couldn't read value");
-            let reference_tick = u64::from(shred::layout::get_reference_tick(data).unwrap());
-            if ticks_since_first_insert >= reference_tick + MAX_TURBINE_DELAY_IN_TICKS {
-                return true;
+            if db_iterator.valid() {
+                let ticks_since_first_insert =
+                    DEFAULT_TICKS_PER_SECOND * (timestamp() - first_timestamp) / 1000;
+                let data = db_iterator.value().expect("couldn't read value");
+                let reference_tick = u64::from(shred::layout::get_reference_tick(data).unwrap());
+                if ticks_since_first_insert >= reference_tick + MAX_TURBINE_DELAY_IN_TICKS {
+                    return true;
+                }
+            } else {
+                warn!(
+                    "BWLOG: db_iterator invalid for slot {} index {}",
+                    slot, index
+                );
             }
         }
         false
