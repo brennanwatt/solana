@@ -725,7 +725,7 @@ impl Blockstore {
                     Self::submit_metrics(slot, erasure_meta, false, "complete".into(), 0);
                 }
                 ErasureMetaStatus::StillNeed(needed) => {
-                    warn!("BWLOG: StillNeed {} {:?} {:?}", needed, erasure_set, index);
+                    warn!("BWLOG: StillNeed {} {:?}", needed, erasure_set);
                     Self::submit_metrics(
                         slot,
                         erasure_meta,

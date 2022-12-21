@@ -505,16 +505,18 @@ impl RepairService {
                 max_repairs,
             );
 
-            warn!("BWLOG: generate_repairs_for_slot requesting {} repairs: {:?} from slot {}. Time = {}, first shred = {}, consumed = {}, received = {}, completed = {:?}",
-                reqs.len(),
-                reqs,
-                slot,
-                solana_sdk::timing::timestamp(),
-                slot_meta.first_shred_timestamp,
-                slot_meta.consumed,
-                slot_meta.received,
-                slot_meta.completed_data_indexes,
-            );
+            if reqs.len() > 0 {
+                warn!("BWLOG: generate_repairs_for_slot requesting {} repairs: {:?} from slot {}. {} ms since first shred, consumed = {}, received = {}, completed = {:?}",
+                    reqs.len(),
+                    reqs,
+                    slot,
+                    solana_sdk::timing::timestamp() - slot_meta.first_shred_timestamp,
+                    slot_meta.consumed,
+                    slot_meta.received,
+                    slot_meta.completed_data_indexes,
+                );
+            }
+
             reqs.into_iter()
                 .map(|i| ShredRepairType::Shred(slot, i))
                 .collect()
