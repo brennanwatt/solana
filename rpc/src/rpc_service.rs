@@ -527,7 +527,7 @@ impl JsonRpcService {
                 .start_http(&rpc_addr);
 
                 if let Err(e) = server {
-                    warn!(
+                    println!(
                         "JSON RPC service unavailable error: {:?}. \n\
                            Also, check that port {} is not already in use by another application",
                         e,
