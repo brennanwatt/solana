@@ -529,12 +529,16 @@ impl JsonRpcService {
                 if let Err(e) = server {
                     println!(
                         "JSON RPC service unavailable error: {:?}. \n\
-                           Also, check that port {} is not already in use by another application",
+                           Also, check that {}:{} is not already in use by another application",
                         e,
+                        rpc_addr.ip(),
                         rpc_addr.port()
                     );
+
                     close_handle_sender.send(Err(e.to_string())).unwrap();
                     return;
+                } else {
+                    println!("{:?} successfully started server at {}:{}", std::thread::current().id(), rpc_addr.ip(), rpc_addr.port())
                 }
 
                 let server = server.unwrap();
