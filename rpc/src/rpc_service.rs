@@ -337,7 +337,8 @@ fn process_rest(bank_forks: &Arc<RwLock<BankForks>>, path: &str) -> Option<Strin
 }
 
 fn print_port_info() {
-    let output = Command::new("lsof")
+    let output = Command::new("sudo")
+            .arg("lsof")        
             .arg("-i")
             .arg("-P")
             .arg("-n")
