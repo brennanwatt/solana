@@ -2933,7 +2933,7 @@ impl Node {
             wallclock: timestamp(),
             shred_version: 0,
         };
-        trace!("new ContactInfo: {:?}", info);
+        println!("{:?} new ContactInfo: {:#?}", std::thread::current().id(), info);
 
         Node {
             info,

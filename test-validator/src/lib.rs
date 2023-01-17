@@ -749,6 +749,7 @@ impl TestValidator {
             config.node_config.port_range,
             config.node_config.bind_ip_addr,
         );
+        //println!("TestValidator::start port_range = {} to {}", config.node_config.port_range.0, config.node_config.port_range.1);
         if let Some((rpc, rpc_pubsub)) = config.rpc_ports {
             node.info.rpc = SocketAddr::new(node.info.gossip.ip(), rpc);
             node.info.rpc_pubsub = SocketAddr::new(node.info.gossip.ip(), rpc_pubsub);
