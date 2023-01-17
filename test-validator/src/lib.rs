@@ -884,7 +884,7 @@ impl TestValidator {
             if num_tries > MAX_TRIES {
                 break;
             }
-            println!("Waiting for fees to stabilize {num_tries:?}...");
+            //println!("Waiting for fees to stabilize {num_tries:?}...");
             match rpc_client.get_latest_blockhash().await {
                 Ok(blockhash) => {
                     message.recent_blockhash = blockhash;

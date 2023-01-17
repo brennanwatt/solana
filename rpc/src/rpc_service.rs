@@ -1,5 +1,7 @@
 //! The `rpc_service` module implements the Solana JSON RPC service.
 
+use std::process::Command;
+
 use {
     crate::{
         cluster_tpu_info::ClusterTpuInfo,
@@ -334,6 +336,18 @@ fn process_rest(bank_forks: &Arc<RwLock<BankForks>>, path: &str) -> Option<Strin
     }
 }
 
+fn print_port_info() {
+    let output = Command::new("sh")
+            .arg("sudo lsof")
+            .arg("-i")
+            .arg("-P")
+            .arg("-n")
+            .output()
+            .expect("failed to execute process");
+    let port_info = std::str::from_utf8(&output.stdout).unwrap();
+    println!("port info:\n {}", port_info);
+}
+
 impl JsonRpcService {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
@@ -527,6 +541,7 @@ impl JsonRpcService {
                 .start_http(&rpc_addr);
 
                 if let Err(e) = server {
+                    print_port_info();
                     println!(
                         "JSON RPC service unavailable error: {:?}. \n\
                            Also, check that {}:{} is not already in use by another application",
@@ -928,5 +943,10 @@ mod tests {
             )
             .unwrap();
         assert_eq!(rm.health_check(), "behind");
+    }
+
+    #[test]
+    fn test_print_port_info() {
+        print_port_info();
     }
 }

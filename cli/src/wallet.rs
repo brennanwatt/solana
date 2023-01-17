@@ -610,10 +610,10 @@ pub fn process_airdrop(
     } else {
         config.pubkey()?
     };
-    println!(
+    /*println!(
         "Requesting airdrop of {}",
         build_balance_message(lamports, false, true),
-    );
+    );*/
 
     let pre_balance = rpc_client.get_balance(&pubkey)?;
 
