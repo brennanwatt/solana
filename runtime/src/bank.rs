@@ -1471,7 +1471,7 @@ impl Bank {
         assert_ne!(slot, parent.slot());
 
         if slot & 0xF == 0 {
-            println!("creating slot {slot} from parent {} with hash {}", parent.slot, parent.hash());
+            error!("creating slot {slot} from parent {} with hash {}", parent.slot, parent.hash());
         }
 
         let epoch_schedule = parent.epoch_schedule;
@@ -7474,7 +7474,7 @@ impl Bank {
     }
 
     fn apply_updated_hashes_per_tick(&mut self, hashes_per_tick: u64) {
-        println!(
+        error!(
             "Activating update_hashes_per_tick from {} to {} at slot {}",
             self.hashes_per_tick.unwrap(),
             hashes_per_tick,

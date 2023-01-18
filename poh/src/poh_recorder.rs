@@ -596,7 +596,7 @@ impl PohRecorder {
         }
         if self.tick_height >= working_bank.max_tick_height {
             if working_bank.bank.slot() & 0xF == 0 {
-                println!(
+                error!(
                     "poh_record: max_tick_height {} reached, clearing working_bank {}",
                     working_bank.max_tick_height,
                     working_bank.bank.slot()

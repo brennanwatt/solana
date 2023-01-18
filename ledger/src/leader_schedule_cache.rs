@@ -228,10 +228,10 @@ impl LeaderScheduleCache {
                 order.push_back(epoch);
                 Self::retain_latest(cached_schedules, order, self.max_schedules());
             }
-            println!("leader schedule for epoch {}: {:#?}", epoch, leader_schedule.get_slot_leaders());
+            error!("leader schedule for epoch {}: {:#?}", epoch, leader_schedule.get_slot_leaders());
             let x =bank.epoch_staked_nodes(epoch).unwrap();
             for (key, stake) in x.as_ref() {
-                println!("{:?} has stake {}", key, *stake);
+                error!("{:?} has stake {}", key, *stake);
             }
             leader_schedule
         })

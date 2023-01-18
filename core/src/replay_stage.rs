@@ -1584,7 +1584,7 @@ impl ReplayStage {
                 } else {
                     ""
                 };
-                println!(
+                error!(
                     "LEADER CHANGE at slot: {} leader: {}{}",
                     bank_slot, new_leader, msg
                 );
@@ -2227,7 +2227,7 @@ impl ReplayStage {
         wait_to_vote_slot: Option<Slot>,
     ) {
         if bank.slot() & 0xF == 0 {
-            println!("vote on slot {}", bank.slot());
+            error!("vote on slot {}", bank.slot());
         }
         let mut generate_time = Measure::start("generate_vote");
         let vote_tx = Self::generate_vote_tx(
