@@ -1053,7 +1053,7 @@ pub struct Bank {
 
     /// staked nodes on epoch boundaries, saved off when a bank.slot() is at
     ///   a leader schedule calculation boundary
-    epoch_stakes: HashMap<Epoch, EpochStakes>,
+    pub epoch_stakes: HashMap<Epoch, EpochStakes>,
 
     /// A boolean reflecting whether any entries were recorded into the PoH
     /// stream for the slot == self.slot
@@ -1469,6 +1469,10 @@ impl Bank {
 
         parent.freeze();
         assert_ne!(slot, parent.slot());
+
+        if slot & 0xF == 0 {
+            println!("creating slot {slot} from parent {} with hash {}", parent.slot, parent.hash());
+        }
 
         let epoch_schedule = parent.epoch_schedule;
         let epoch = epoch_schedule.get_epoch(slot);
@@ -7470,8 +7474,9 @@ impl Bank {
     }
 
     fn apply_updated_hashes_per_tick(&mut self, hashes_per_tick: u64) {
-        info!(
-            "Activating update_hashes_per_tick {} at slot {}",
+        println!(
+            "Activating update_hashes_per_tick from {} to {} at slot {}",
+            self.hashes_per_tick.unwrap(),
             hashes_per_tick,
             self.slot(),
         );

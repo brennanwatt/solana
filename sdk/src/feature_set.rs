@@ -583,7 +583,7 @@ pub mod move_serialized_len_ptr_in_cpi {
 }
 
 pub mod update_hashes_per_tick {
-    solana_sdk::declare_id!("3uFHb9oKdGfgZGJK9EHaAXN4USvnQtAFC13Fh5gGFS5B");
+    solana_sdk::declare_id!("42tBuLoqrbyJKz8GqGCs4i7zN4CD6D26tfWYUgbbMRKj");
 }
 
 lazy_static! {

@@ -1,3 +1,5 @@
+use solana_sdk::feature_set;
+
 use {
     solana_sdk::{
         account::{Account, AccountSharedData},
@@ -197,7 +199,9 @@ pub fn create_genesis_config_with_leader(
 pub fn activate_all_features(genesis_config: &mut GenesisConfig) {
     // Activate all features at genesis in development mode
     for feature_id in FeatureSet::default().inactive {
-        activate_feature(genesis_config, feature_id);
+        if feature_id != feature_set::update_hashes_per_tick::id() {
+            activate_feature(genesis_config, feature_id);
+        }
     }
 }
 

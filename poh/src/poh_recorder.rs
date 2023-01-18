@@ -595,11 +595,13 @@ impl PohRecorder {
             }
         }
         if self.tick_height >= working_bank.max_tick_height {
-            info!(
-                "poh_record: max_tick_height {} reached, clearing working_bank {}",
-                working_bank.max_tick_height,
-                working_bank.bank.slot()
-            );
+            if working_bank.bank.slot() & 0xF == 0 {
+                println!(
+                    "poh_record: max_tick_height {} reached, clearing working_bank {}",
+                    working_bank.max_tick_height,
+                    working_bank.bank.slot()
+                );
+            }
             self.start_bank = working_bank.bank.clone();
             let working_slot = self.start_slot();
             self.start_tick_height = working_slot * self.ticks_per_slot + 1;
