@@ -149,7 +149,6 @@ args+=(
   --no-os-network-limits-test
   --no-wait-for-vote-to-start-leader
   --full-rpc-api
-  --slots-per-epoch 128
 )
 default_arg --gossip-port 8001
 default_arg --log -

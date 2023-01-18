@@ -54,5 +54,6 @@ default_arg --faucet-pubkey "$SOLANA_CONFIG_DIR"/faucet.json
 default_arg --faucet-lamports 500000000000000000
 default_arg --hashes-per-tick auto
 default_arg --cluster-type development
+default_arg --slots-per-epoch 128
 
 $solana_genesis "${args[@]}"
