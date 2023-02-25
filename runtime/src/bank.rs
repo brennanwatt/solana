@@ -1954,6 +1954,7 @@ impl Bank {
             fee_structure: FeeStructure::default(),
             loaded_programs_cache: Arc::<RwLock<LoadedPrograms>>::default(),
         };
+        println!("{} middle of bank new from fields", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs());
         bank.bank_created();
 
         bank.finish_init(
@@ -7272,6 +7273,7 @@ impl Bank {
         accounts_db_skip_shrink: bool,
         last_full_snapshot_slot: Slot,
     ) -> bool {
+        println!("{} clean accounts", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs());
         let mut clean_time = Measure::start("clean");
         if !accounts_db_skip_shrink && self.slot() > 0 {
             info!("cleaning..");
@@ -7282,6 +7284,7 @@ impl Bank {
         }
         clean_time.stop();
 
+        println!("{} shrink slots", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs());
         let mut shrink_all_slots_time = Measure::start("shrink_all_slots");
         if !accounts_db_skip_shrink && self.slot() > 0 {
             info!("shrinking..");
@@ -7292,6 +7295,7 @@ impl Bank {
         }
         shrink_all_slots_time.stop();
 
+        println!("{} verify bank hash", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs());
         let (mut verify, verify_time_us) = if !self.rc.accounts.accounts_db.skip_initial_hash_calc {
             info!("verify_bank_hash..");
             let mut verify_time = Measure::start("verify_bank_hash");

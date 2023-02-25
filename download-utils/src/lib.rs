@@ -175,7 +175,7 @@ pub fn download_file<'a, 'b>(
             if self.use_progress_bar {
                 self.progress_bar.inc(n as u64);
             } else if to_update_progress {
-                info!(
+                println!(
                     "downloaded {} bytes {:.1}% {:.1} bytes/s",
                     self.current_bytes,
                     progress_record.percentage_done,

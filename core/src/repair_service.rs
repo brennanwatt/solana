@@ -296,12 +296,17 @@ impl RepairService {
                 break;
             }
 
+            
             let mut set_root_elapsed;
             let mut dump_slots_elapsed;
             let mut get_votes_elapsed;
             let mut add_votes_elapsed;
 
             let root_bank = repair_info.bank_forks.read().unwrap().root_bank();
+            let x = peers_cache.len();
+            let y = peers_cache.contains(&(root_bank.slot()+50));
+            println!("peers cache contains {x} peers and has slot 50 ahead={y}");
+
             let repairs = {
                 let new_root = root_bank.slot();
 
@@ -351,17 +356,31 @@ impl RepairService {
                 );
                 add_votes_elapsed.stop();
 
-                let repairs = repair_weight.get_best_weighted_repairs(
-                    blockstore,
-                    root_bank.epoch_stakes_map(),
-                    root_bank.epoch_schedule(),
-                    MAX_ORPHANS,
-                    MAX_REPAIR_LENGTH,
-                    MAX_UNKNOWN_LAST_INDEX_REPAIRS,
-                    MAX_CLOSEST_COMPLETION_REPAIRS,
-                    &mut repair_timing,
-                    &mut best_repairs_stats,
-                );
+                let repairs = if true || y {
+                    repair_weight.get_best_weighted_repairs(
+                        blockstore,
+                        root_bank.epoch_stakes_map(),
+                        root_bank.epoch_schedule(),
+                        MAX_ORPHANS,
+                        MAX_REPAIR_LENGTH*10,
+                        MAX_UNKNOWN_LAST_INDEX_REPAIRS*10,
+                        MAX_CLOSEST_COMPLETION_REPAIRS*10,
+                        &mut repair_timing,
+                        &mut best_repairs_stats,
+                    )
+                } else {
+                    repair_weight.get_best_weighted_repairs(
+                        blockstore,
+                        root_bank.epoch_stakes_map(),
+                        root_bank.epoch_schedule(),
+                        MAX_ORPHANS,
+                        MAX_REPAIR_LENGTH,
+                        MAX_UNKNOWN_LAST_INDEX_REPAIRS,
+                        MAX_CLOSEST_COMPLETION_REPAIRS,
+                        &mut repair_timing,
+                        &mut best_repairs_stats,
+                    )
+                };
 
                 repairs
             };

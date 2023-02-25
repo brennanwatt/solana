@@ -8834,6 +8834,7 @@ impl AccountsDb {
         verify: bool,
         genesis_config: &GenesisConfig,
     ) -> IndexGenerationInfo {
+        println!("{} generate index start", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs());
         let mut slots = self.storage.all_slots();
         #[allow(clippy::stable_sort_primitive)]
         slots.sort();
@@ -8857,6 +8858,7 @@ impl AccountsDb {
         // pass == 1 only runs if verify == true.
         // verify checks that all the expected items are in the accounts index and measures how long it takes to look them all up
         let passes = if verify { 2 } else { 1 };
+        println!("{} starting pass 1 of {passes}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs());
         for pass in 0..passes {
             if pass == 0 {
                 self.accounts_index
@@ -8870,7 +8872,7 @@ impl AccountsDb {
                 num_cpus::get()
             } else {
                 // seems to be a good hueristic given varying # cpus for in-mem disk index
-                8
+                num_cpus::get()
             };
             let chunk_size = (outer_slots_len / (std::cmp::max(1, threads.saturating_sub(1)))) + 1; // approximately 400k slots in a snapshot
             let mut index_time = Measure::start("index");
@@ -8879,6 +8881,7 @@ impl AccountsDb {
             let amount_to_top_off_rent = AtomicU64::new(0);
             let total_duplicates = AtomicU64::new(0);
             let storage_info_timings = Mutex::new(GenerateIndexTimings::default());
+            println!("{} generate index scan time", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs());
             let scan_time: u64 = slots
                 .par_chunks(chunk_size)
                 .map(|slots| {
@@ -8983,6 +8986,7 @@ impl AccountsDb {
                 .sum();
 
             let mut index_flush_us = 0;
+            println!("{} generate index time 2", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs());
             if pass == 0 {
                 // tell accounts index we are done adding the initial accounts at startup
                 let mut m = Measure::start("accounts_index_idle_us");
@@ -9029,6 +9033,7 @@ impl AccountsDb {
             let mut accounts_data_len_dedup_timer =
                 Measure::start("handle accounts data len duplicates");
             let uncleaned_roots = Mutex::new(HashSet::<Slot>::default());
+            println!("{} generate index time 3", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs());
             if pass == 0 {
                 let mut unique_pubkeys = HashSet::<Pubkey>::default();
                 self.uncleaned_pubkeys.iter().for_each(|entry| {
@@ -9063,6 +9068,7 @@ impl AccountsDb {
             accounts_data_len_dedup_timer.stop();
             timings.accounts_data_len_dedup_time_us = accounts_data_len_dedup_timer.as_us();
 
+            println!("{} generate index time 4", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs());
             if pass == 0 {
                 let uncleaned_roots = uncleaned_roots.into_inner().unwrap();
                 // Need to add these last, otherwise older updates will be cleaned
@@ -9078,6 +9084,8 @@ impl AccountsDb {
         }
 
         self.accounts_index.log_secondary_indexes();
+
+        println!("{} generate index end", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs());
 
         IndexGenerationInfo {
             accounts_data_len: accounts_data_len.load(Ordering::Relaxed),

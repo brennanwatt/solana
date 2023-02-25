@@ -140,6 +140,7 @@ pub fn load_bank_forks(
         }
 
         info!("Processing ledger from genesis");
+        println!("{} processing ledger from genesis", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs());
         let bank_forks = blockstore_processor::process_blockstore_for_bank_0(
             genesis_config,
             blockstore,
@@ -164,6 +165,7 @@ pub fn load_bank_forks(
         leader_schedule_cache.set_max_schedules(std::usize::MAX);
     }
 
+    println!("{} process hard forks", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs());
     if let Some(ref new_hard_forks) = process_options.new_hard_forks {
         let root_bank = bank_forks.read().unwrap().root_bank();
         let hard_forks = root_bank.hard_forks();

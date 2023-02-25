@@ -551,6 +551,7 @@ impl Validator {
             transaction_notifier,
             Some(poh_timing_point_sender.clone()),
         )?;
+        println!("{} loaded blockstore", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs());
 
         node.info.set_wallclock(timestamp());
         node.info.set_shred_version(compute_shred_version(
@@ -659,6 +660,7 @@ impl Validator {
         );
 
         let leader_schedule_cache = Arc::new(leader_schedule_cache);
+        println!("{} processing blockstore", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs());
         let mut process_blockstore = ProcessBlockStore::new(
             &id,
             vote_account,
@@ -885,6 +887,7 @@ impl Validator {
 
         let stats_reporter_service = StatsReporterService::new(stats_reporter_receiver, &exit);
 
+        println!("{} starting gossip service", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs());
         let gossip_service = GossipService::new(
             &cluster_info,
             Some(bank_forks.clone()),
@@ -971,6 +974,7 @@ impl Validator {
         }
 
         let (replay_vote_sender, replay_vote_receiver) = unbounded();
+        println!("{} starting TVU", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs());
         let tvu = Tvu::new(
             vote_account,
             authorized_voter_keypairs,
@@ -1067,6 +1071,7 @@ impl Validator {
         );
 
         *start_progress.write().unwrap() = ValidatorStartProgress::Running;
+        println!("{} Validator start completed", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs());
         Ok(Self {
             stats_reporter_service,
             gossip_service,
@@ -1392,7 +1397,7 @@ fn load_blockstore(
     ),
     String,
 > {
-    info!("loading ledger from {:?}...", ledger_path);
+    println!("{} loading ledger from {:?}...", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs(), ledger_path);
     *start_progress.write().unwrap() = ValidatorStartProgress::LoadingLedger;
     let genesis_config = open_genesis_config(ledger_path, config.max_genesis_archive_unpacked_size);
 
@@ -1511,6 +1516,7 @@ fn load_blockstore(
             info!("Hard forks: {:?}", hard_forks);
         }
     }
+    println!("{} set fixed leader schedule", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs());
 
     leader_schedule_cache.set_fixed_leader_schedule(config.fixed_leader_schedule.clone());
     {
@@ -1523,7 +1529,6 @@ fn load_blockstore(
                 .set_shrink_paths(shrink_paths.clone());
         }
     }
-
     Ok((
         genesis_config,
         bank_forks,

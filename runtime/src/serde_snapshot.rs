@@ -314,14 +314,16 @@ pub(crate) fn fields_from_streams<R: Read>(
 > {
     let (full_snapshot_bank_fields, full_snapshot_accounts_db_fields) =
         fields_from_stream(serde_style, snapshot_streams.full_snapshot_stream)?;
+    println!("{} full snapshot fields", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs());
     let incremental_fields = snapshot_streams
         .incremental_snapshot_stream
         .as_mut()
         .map(|stream| fields_from_stream(serde_style, stream))
         .transpose()?;
+    println!("{} incremental snapshot fields", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs());
     let (incremental_snapshot_bank_fields, incremental_snapshot_accounts_db_fields) =
         incremental_fields.unzip();
-
+    println!("{} full snapshot fields unzip", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs());
     let snapshot_accounts_db_fields = SnapshotAccountsDbFields {
         full_snapshot_accounts_db_fields,
         incremental_snapshot_accounts_db_fields,
@@ -354,6 +356,7 @@ where
     R: Read,
 {
     let (bank_fields, accounts_db_fields) = fields_from_streams(serde_style, snapshot_streams)?;
+    println!("{} got bank fields from streams", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs());
     reconstruct_bank_from_fields(
         bank_fields,
         accounts_db_fields,
@@ -576,6 +579,7 @@ where
         exit,
         bank_fields.epoch_accounts_hash,
     )?;
+    println!("{} reconstructed accounts DB from fields", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs());
 
     let bank_rc = BankRc::new(Accounts::new_empty(accounts_db), bank_fields.slot);
     let runtime_config = Arc::new(runtime_config.clone());
@@ -592,6 +596,7 @@ where
         debug_do_not_add_builtins,
         reconstructed_accounts_db_info.accounts_data_len,
     );
+    println!("{} Bank new from fields", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs());
 
     info!("rent_collector: {:?}", bank.rent_collector());
 
@@ -732,11 +737,13 @@ where
             .unwrap_or_else(|err| panic!("Failed to create directory {}: {}", path.display(), err));
     }
 
+    println!("{} reconstruct historical roots", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs());
     reconstruct_historical_roots(
         &accounts_db,
         snapshot_historical_roots,
         snapshot_historical_roots_with_hash,
     );
+    println!("{} reconstructed historical roots", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs());
 
     let StorageAndNextAppendVecId {
         storage,
@@ -760,6 +767,7 @@ where
         snapshot_slot,
         snapshot_bank_hash_info.accounts_delta_hash,
     );
+    println!("{} set accounts delta hash from snapshot", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs());
     assert!(
         old_accounts_delta_hash.is_none(),
         "There should not already be an AccountsDeltaHash at slot {snapshot_slot}: {old_accounts_delta_hash:?}",
@@ -772,11 +780,13 @@ where
     );
     let old_stats = accounts_db
         .update_bank_hash_stats_from_snapshot(snapshot_slot, snapshot_bank_hash_info.stats);
+    println!("{} updated bank hash stats from snapshot", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs());
     assert!(
         old_stats.is_none(),
         "There should not already be a BankHashStats at slot {snapshot_slot}: {old_stats:?}",
     );
     accounts_db.storage.initialize(storage);
+    println!("{} accounts DB storage init", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs());
     accounts_db
         .next_id
         .store(next_append_vec_id, Ordering::Release);
@@ -794,7 +804,7 @@ where
             accounts_db_clone.notify_account_restore_from_snapshot();
         })
         .unwrap();
-
+    println!("{} notify account restore from snapshot", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs());
     let IndexGenerationInfo {
         accounts_data_len,
         rent_paying_accounts_by_partition,
@@ -809,7 +819,9 @@ where
         .set(rent_paying_accounts_by_partition)
         .unwrap();
 
+    println!("{} maybe add filler accounts start", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs());
     accounts_db.maybe_add_filler_accounts(&genesis_config.epoch_schedule, snapshot_slot);
+    println!("{} maybe add filler accounts end", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs());
 
     handle.join().unwrap();
     measure_notify.stop();

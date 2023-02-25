@@ -773,6 +773,7 @@ fn deserialize_snapshot_data_files_capped<T: Sized>(
             &snapshot_root_paths.full_snapshot_root_file_path,
             maximum_file_size,
         )?;
+    println!("{} created full snapshot data stream w/ size {}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs(), full_snapshot_file_size);
 
     let (incremental_snapshot_file_size, mut incremental_snapshot_data_file_stream) =
         if let Some(ref incremental_snapshot_root_file_path) =
@@ -790,6 +791,7 @@ fn deserialize_snapshot_data_files_capped<T: Sized>(
         } else {
             (None, None)
         };
+    println!("{} created incremental snapshot data stream w/ size {}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs(), incremental_snapshot_file_size.unwrap_or_default());
 
     let mut snapshot_streams = SnapshotStreams {
         full_snapshot_stream: &mut full_snapshot_data_file_stream,
@@ -797,11 +799,13 @@ fn deserialize_snapshot_data_files_capped<T: Sized>(
     };
     let ret = deserializer(&mut snapshot_streams)?;
 
+    println!("{} check full snapshot data stream", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs());
     check_deserialize_file_consumed(
         full_snapshot_file_size,
         &snapshot_root_paths.full_snapshot_root_file_path,
         &mut full_snapshot_data_file_stream,
     )?;
+    println!("{} checked full snapshot data stream", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs());
 
     if let Some(ref incremental_snapshot_root_file_path) =
         snapshot_root_paths.incremental_snapshot_root_file_path
@@ -812,6 +816,7 @@ fn deserialize_snapshot_data_files_capped<T: Sized>(
             incremental_snapshot_data_file_stream.as_mut().unwrap(),
         )?;
     }
+    println!("{} checked incremental snapshot data stream", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs());
 
     Ok(ret)
 }
@@ -1170,7 +1175,7 @@ pub struct BankFromArchiveTimings {
 }
 
 // From testing, 4 seems to be a sweet spot for ranges of 60M-360M accounts and 16-64 cores. This may need to be tuned later.
-const PARALLEL_UNTAR_READERS_DEFAULT: usize = 4;
+const PARALLEL_UNTAR_READERS_DEFAULT: usize = 8;
 
 fn verify_and_unarchive_snapshots(
     bank_snapshots_dir: impl AsRef<Path>,
@@ -1186,6 +1191,7 @@ fn verify_and_unarchive_snapshots(
     let parallel_divisions = (num_cpus::get() / 4).clamp(1, PARALLEL_UNTAR_READERS_DEFAULT);
 
     let next_append_vec_id = Arc::new(AtomicU32::new(0));
+    println!("{} unarchiving full snapshot", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs());
     let unarchived_full_snapshot = unarchive_snapshot(
         &bank_snapshots_dir,
         TMP_SNAPSHOT_ARCHIVE_PREFIX,
@@ -1199,6 +1205,7 @@ fn verify_and_unarchive_snapshots(
 
     let unarchived_incremental_snapshot =
         if let Some(incremental_snapshot_archive_info) = incremental_snapshot_archive_info {
+            println!("{} unarchiving incremental snapshot", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs());
             let unarchived_incremental_snapshot = unarchive_snapshot(
                 &bank_snapshots_dir,
                 TMP_SNAPSHOT_ARCHIVE_PREFIX,
@@ -1213,7 +1220,7 @@ fn verify_and_unarchive_snapshots(
         } else {
             None
         };
-
+    println!("{} unarchived snapshots", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs());
     Ok((
         unarchived_full_snapshot,
         unarchived_incremental_snapshot,
@@ -1334,11 +1341,13 @@ pub fn bank_from_snapshot_archives(
             incremental_snapshot_archive_info.snapshot_archive_info()
         },
     );
+    println!("{} verify bank", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs());
     verify_bank_against_expected_slot_hash(
         &bank,
         snapshot_archive_info.slot,
         snapshot_archive_info.hash,
     )?;
+    println!("{} completed verify bank slot hash", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs());
 
     let mut measure_verify = Measure::start("verify");
     if !bank.verify_snapshot_bank(
@@ -1349,6 +1358,7 @@ pub fn bank_from_snapshot_archives(
     {
         panic!("Snapshot bank for slot {} failed to verify", bank.slot());
     }
+    println!("{} completed verify bank", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs());
     measure_verify.stop();
 
     let timings = BankFromArchiveTimings {
@@ -2108,6 +2118,7 @@ fn rebuild_bank_from_snapshots(
     accounts_update_notifier: Option<AccountsUpdateNotifier>,
     exit: &Arc<AtomicBool>,
 ) -> Result<Bank> {
+    println!("{} rebuild bank from snapshots", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs());
     let (full_snapshot_version, full_snapshot_root_paths) =
         verify_unpacked_snapshots_dir_and_version(
             full_snapshot_unpacked_snapshots_dir_and_version,
@@ -2137,6 +2148,7 @@ fn rebuild_bank_from_snapshots(
             .map(|root_paths| root_paths.snapshot_path()),
     };
 
+    println!("{} deserialize snapshot data files", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs());
     let bank = deserialize_snapshot_data_files(&snapshot_root_paths, |snapshot_streams| {
         Ok(
             match incremental_snapshot_version.unwrap_or(full_snapshot_version) {
@@ -2177,6 +2189,7 @@ fn rebuild_bank_from_snapshots(
             },
         )
         .join(SNAPSHOT_STATUS_CACHE_FILENAME);
+    println!("{} deserialize status cache", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs());
     let slot_deltas = deserialize_snapshot_data_file(&status_cache_path, |stream| {
         info!(
             "Rebuilding status cache from {}",
@@ -2190,10 +2203,12 @@ fn rebuild_bank_from_snapshots(
         Ok(slot_deltas)
     })?;
 
+    println!("{} verify slot deltas", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs());
     verify_slot_deltas(slot_deltas.as_slice(), &bank)?;
 
     bank.status_cache.write().unwrap().append(&slot_deltas);
 
+    println!("{} Loaded bank for slot {}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs(), bank.slot());
     info!("Loaded bank for slot: {}", bank.slot());
     Ok(bank)
 }
