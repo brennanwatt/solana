@@ -45,7 +45,8 @@ pub enum Error {
 }
 
 #[allow(clippy::large_enum_variant)]
-enum NodeId {
+#[derive(Debug)]
+pub enum NodeId {
     // TVU node obtained through gossip (staked or not).
     ContactInfo(ContactInfo),
     // Staked node with no contact-info in gossip table.
@@ -53,15 +54,15 @@ enum NodeId {
 }
 
 pub struct Node {
-    node: NodeId,
-    stake: u64,
+    pub node: NodeId,
+    pub stake: u64,
 }
 
 pub struct ClusterNodes<T> {
-    pubkey: Pubkey, // The local node itself.
+    pub pubkey: Pubkey, // The local node itself.
     // All staked nodes + other known tvu-peers + the node itself;
     // sorted by (stake, pubkey) in descending order.
-    nodes: Vec<Node>,
+    pub nodes: Vec<Node>,
     // Reverse index from nodes pubkey to their index in self.nodes.
     index: HashMap<Pubkey, /*index:*/ usize>,
     weighted_shuffle: WeightedShuffle</*stake:*/ u64>,
@@ -78,7 +79,7 @@ pub struct ClusterNodesCache<T> {
 }
 
 pub struct RetransmitPeers<'a> {
-    root_distance: usize, // distance from the root node
+    pub root_distance: usize, // distance from the root node
     neighbors: Vec<&'a Node>,
     children: Vec<&'a Node>,
     // Maps from tvu/tvu_forwards addresses to the first node
@@ -241,7 +242,7 @@ impl ClusterNodes<RetransmitStage> {
             .iter()
             .position(|node| node.pubkey() == self.pubkey)
             .unwrap();
-        if drop_redundant_turbine_path {
+        if false && drop_redundant_turbine_path {
             let root_distance = if self_index == 0 {
                 0
             } else if self_index <= fanout {
@@ -269,6 +270,7 @@ impl ClusterNodes<RetransmitStage> {
         } else {
             3 // If changed, update MAX_NUM_TURBINE_HOPS.
         };
+        //println!("root_distance: {} with fanout {} and {} nodes", root_distance, fanout, nodes.len());
         let (neighbors, children) = compute_retransmit_peers(fanout, self_index, &nodes);
         // Assert that the node itself is included in the set of neighbors, at
         // the right offset.
@@ -461,7 +463,7 @@ pub fn make_test_cluster<R: Rng>(
     ClusterInfo,
 ) {
     use solana_gossip::contact_info::ContactInfo;
-    let (unstaked_numerator, unstaked_denominator) = unstaked_ratio.unwrap_or((1, 7));
+    let (_unstaked_numerator, _unstaked_denominator) = unstaked_ratio.unwrap_or((1, 7));
     let mut nodes: Vec<_> = repeat_with(|| {
         let pubkey = solana_sdk::pubkey::new_rand();
         ContactInfo::new_localhost(&pubkey, /*wallclock:*/ timestamp())
@@ -472,18 +474,31 @@ pub fn make_test_cluster<R: Rng>(
     let keypair = Arc::new(Keypair::new());
     nodes[0].set_pubkey(keypair.pubkey());
     let this_node = nodes[0].clone();
-    let mut stakes: HashMap<Pubkey, u64> = nodes
+    let mut total_stake = 10_000_000;
+    let stakes: HashMap<Pubkey, u64> = nodes
         .iter()
-        .filter_map(|node| {
-            if rng.gen_ratio(unstaked_numerator, unstaked_denominator) {
+        .enumerate()
+        .filter_map(|(i, node)| {
+            if *node.pubkey() == keypair.pubkey() {
+                Some((*node.pubkey(), 12_500_000))
+            }
+            else if i < 1400 {
                 None // No stake for some of the nodes.
+            } else if i < 2750 {
+                total_stake += 66_000;
+                Some((*node.pubkey(), 66_000))
+            } else if i < 2990 {
+                total_stake += 66_000 + (i-2750)*10_000;
+                Some((*node.pubkey(), (66_000 + (i-2750)*10_000) as u64))
             } else {
-                Some((*node.pubkey(), rng.gen_range(0, 20)))
+                total_stake += 3_000_000;
+                Some((*node.pubkey(), 3_000_000))
             }
         })
         .collect();
+    //println!("total_stake: {}", total_stake);
     // Add some staked nodes with no contact-info.
-    stakes.extend(repeat_with(|| (Pubkey::new_unique(), rng.gen_range(0, 20))).take(100));
+    //stakes.extend(repeat_with(|| (Pubkey::new_unique(), rng.gen_range(0, 20))).take(100));
     let cluster_info = ClusterInfo::new(this_node, keypair, SocketAddrSpace::Unspecified);
     let nodes: Vec<_> = nodes
         .iter()
