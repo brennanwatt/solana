@@ -18,7 +18,7 @@ use {
     test::Bencher,
 };
 
-const NUM_SIMULATED_SHREDS: usize = 1000;
+const NUM_SIMULATED_SHREDS: usize = 10_000;
 
 fn make_cluster_nodes<R: Rng>(
     rng: &mut R,
@@ -67,16 +67,20 @@ fn get_retransmit_peers_deterministic_wrapper(b: &mut Bencher, unstaked_ratio: O
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
         let bank = Bank::new_for_benches(&genesis_config);
         let (nodes, cluster_nodes) = make_cluster_nodes(&mut rng, unstaked_ratio);
+        let mut total_stake = 0;
+        let mut my_stake = 0;
         for node in &cluster_nodes.nodes {
             match &node.node {
                 solana_core::cluster_nodes::NodeId::ContactInfo(info) => {
                     if info.id == cluster_nodes.pubkey {
-                        //println!("heaviest node {:?} has stake {}", info.id, node.stake);
+                        my_stake = node.stake;
                     }
+                    total_stake += node.stake;
                 }
                 _ => (),
             }
         }
+        println!("looking at root distance for {:?} with stake {}/{} = {:.2}%", cluster_nodes.pubkey, my_stake, total_stake, ((my_stake as f64) / (total_stake as f64))*100.0);
         let slot_leader = nodes[1..].choose(&mut rng).unwrap().id;
         let slot = rand::random::<u64>();
         get_retransmit_peers_deterministic(
