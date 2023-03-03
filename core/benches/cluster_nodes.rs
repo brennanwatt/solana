@@ -37,7 +37,7 @@ fn get_retransmit_peers_deterministic(
     num_simulated_shreds: usize,
 ) {
     let parent_offset = u16::from(slot != 0);
-    let mut distance = vec![0;3];
+    let mut distance = vec![0;4];
     for i in 0..num_simulated_shreds {
         let index = i as u32;
         let shred = Shred::new_from_data(
@@ -55,8 +55,14 @@ fn get_retransmit_peers_deterministic(
             &shred.id(),
             root_bank,
             solana_gossip::cluster_info::DATA_PLANE_FANOUT,
-        );
-        distance[retransmit_peers.unwrap().root_distance] += 1;
+        ).unwrap();
+        if retransmit_peers.neighbors[0].pubkey() == cluster_nodes.pubkey && retransmit_peers.root_distance > 0 {
+            // This is a layer 2 anchor node
+            assert_eq!(retransmit_peers.root_distance, 2);
+            distance[3] += 1;
+        } else {
+            distance[retransmit_peers.root_distance] += 1;
+        }
     }
     println!("{:?}", distance);
 }

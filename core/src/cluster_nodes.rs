@@ -80,7 +80,7 @@ pub struct ClusterNodesCache<T> {
 
 pub struct RetransmitPeers<'a> {
     pub root_distance: usize, // distance from the root node
-    neighbors: Vec<&'a Node>,
+    pub neighbors: Vec<&'a Node>,
     children: Vec<&'a Node>,
     // Maps from tvu/tvu_forwards addresses to the first node
     // in the shuffle with the same address.
@@ -90,7 +90,7 @@ pub struct RetransmitPeers<'a> {
 
 impl Node {
     #[inline]
-    fn pubkey(&self) -> Pubkey {
+    pub fn pubkey(&self) -> Pubkey {
         match &self.node {
             NodeId::Pubkey(pubkey) => *pubkey,
             NodeId::ContactInfo(node) => node.id,
@@ -270,7 +270,7 @@ impl ClusterNodes<RetransmitStage> {
         } else {
             3 // If changed, update MAX_NUM_TURBINE_HOPS.
         };
-        //println!("root_distance: {} with fanout {} and {} nodes", root_distance, fanout, nodes.len());
+        //println!("self_index = {self_index}");
         let (neighbors, children) = compute_retransmit_peers(fanout, self_index, &nodes);
         // Assert that the node itself is included in the set of neighbors, at
         // the right offset.
@@ -474,29 +474,26 @@ pub fn make_test_cluster<R: Rng>(
     let keypair = Arc::new(Keypair::new());
     nodes[0].set_pubkey(keypair.pubkey());
     let this_node = nodes[0].clone();
-    let mut total_stake = 10_000_000;
     let stakes: HashMap<Pubkey, u64> = nodes
         .iter()
         .enumerate()
         .filter_map(|(i, node)| {
             if *node.pubkey() == keypair.pubkey() {
-                Some((*node.pubkey(), 12_500_000))
+                // 12_900_000 = ~2.88% stake
+                // 4_400_000 = ~1.0% stake
+                Some((*node.pubkey(), 12_900_000))
             }
             else if i < 1400 {
                 None // No stake for some of the nodes.
             } else if i < 2750 {
-                total_stake += 66_000;
                 Some((*node.pubkey(), 66_000))
             } else if i < 2990 {
-                total_stake += 66_000 + (i-2750)*10_000;
                 Some((*node.pubkey(), (66_000 + (i-2750)*10_000) as u64))
             } else {
-                total_stake += 3_000_000;
-                Some((*node.pubkey(), 3_000_000))
+                Some((*node.pubkey(), 4_400_000))
             }
         })
         .collect();
-    //println!("total_stake: {}", total_stake);
     // Add some staked nodes with no contact-info.
     //stakes.extend(repeat_with(|| (Pubkey::new_unique(), rng.gen_range(0, 20))).take(100));
     let cluster_info = ClusterInfo::new(this_node, keypair, SocketAddrSpace::Unspecified);
