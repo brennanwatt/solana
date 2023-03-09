@@ -1452,7 +1452,9 @@ pub fn main() {
     }
 
     configure_banking_trace_dir_byte_limit(&mut validator_config, &matches);
-    validator_config.test_generating_scheduler = matches.is_present("test-generating-scheduler");
+    validator_config.test_generating_scheduler_accounts_path = matches
+        .value_of("test_generating_scheduler_accounts_path")
+        .map(|path| path.to_string());
 
     validator_config.ledger_column_options = LedgerColumnOptions {
         compression_type: match matches.value_of("rocksdb_ledger_compression") {

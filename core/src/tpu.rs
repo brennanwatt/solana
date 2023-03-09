@@ -103,7 +103,7 @@ impl Tpu {
         banking_tracer: Arc<BankingTracer>,
         tracer_thread_hdl: TracerThread,
         tpu_enable_udp: bool,
-        test_generating_scheduler: bool,
+        test_generating_scheduler_accounts_path: Option<String>,
     ) -> Self {
         let TpuSockets {
             transactions: transactions_sockets,
@@ -234,35 +234,36 @@ impl Tpu {
             cluster_confirmed_slot_sender,
         );
 
-        let banking_stage = if test_generating_scheduler {
-            BankingStage::new_test_generating_scheduler(
-                cluster_info,
-                poh_recorder,
-                non_vote_receiver,
-                tpu_vote_receiver,
-                gossip_vote_receiver,
-                BankingStage::num_threads(),
-                transaction_status_sender,
-                replay_vote_sender,
-                log_messages_bytes_limit,
-                connection_cache.clone(),
-                bank_forks.clone(),
-                crate::banking_stage::random_transfer_generator(100),
-            )
-        } else {
-            BankingStage::new(
-                cluster_info,
-                poh_recorder,
-                non_vote_receiver,
-                tpu_vote_receiver,
-                gossip_vote_receiver,
-                transaction_status_sender,
-                replay_vote_sender,
-                log_messages_bytes_limit,
-                connection_cache.clone(),
-                bank_forks.clone(),
-            )
-        };
+        let banking_stage =
+            if let Some(generator_accounts_path) = test_generating_scheduler_accounts_path {
+                BankingStage::new_test_generating_scheduler(
+                    cluster_info,
+                    poh_recorder,
+                    non_vote_receiver,
+                    tpu_vote_receiver,
+                    gossip_vote_receiver,
+                    BankingStage::num_threads(),
+                    transaction_status_sender,
+                    replay_vote_sender,
+                    log_messages_bytes_limit,
+                    connection_cache.clone(),
+                    bank_forks.clone(),
+                    crate::banking_stage::random_transfer_generator(&generator_accounts_path),
+                )
+            } else {
+                BankingStage::new(
+                    cluster_info,
+                    poh_recorder,
+                    non_vote_receiver,
+                    tpu_vote_receiver,
+                    gossip_vote_receiver,
+                    transaction_status_sender,
+                    replay_vote_sender,
+                    log_messages_bytes_limit,
+                    connection_cache.clone(),
+                    bank_forks.clone(),
+                )
+            };
 
         let broadcast_stage = broadcast_type.new_broadcast_stage(
             broadcast_sockets,
