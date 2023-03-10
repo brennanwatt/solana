@@ -8,9 +8,13 @@ use {
         decision_maker::{BufferedPacketsDecision, DecisionMaker},
         forwarder::Forwarder,
         packet_receiver::PacketReceiver,
+        test_scheduler::TransactionGenerator,
     },
     crate::{
-        banking_stage::committer::Committer,
+        banking_stage::{
+            committer::Committer, consume_banking_worker::ConsumeBankingWorker,
+            test_scheduler::TestScheduler,
+        },
         banking_trace::BankingPacketReceiver,
         latest_unprocessed_votes::{LatestUnprocessedVotes, VoteSource},
         leader_slot_banking_stage_metrics::LeaderSlotMetricsTracker,
@@ -19,7 +23,7 @@ use {
         unprocessed_packet_batches::*,
         unprocessed_transaction_storage::{ThreadType, UnprocessedTransactionStorage},
     },
-    crossbeam_channel::RecvTimeoutError,
+    crossbeam_channel::{unbounded, RecvTimeoutError},
     histogram::Histogram,
     solana_client::connection_cache::ConnectionCache,
     solana_gossip::cluster_info::ClusterInfo,
@@ -405,6 +409,150 @@ impl BankingStage {
                     ThreadType::Transactions,
                 ),
             ));
+        });
+
+        Self { bank_thread_hdls }
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn new_test_generating_scheduler(
+        cluster_info: &Arc<ClusterInfo>,
+        poh_recorder: &Arc<RwLock<PohRecorder>>,
+        non_vote_receiver: BankingPacketReceiver,
+        tpu_vote_receiver: BankingPacketReceiver,
+        gossip_vote_receiver: BankingPacketReceiver,
+        num_threads: u32,
+        transaction_status_sender: Option<TransactionStatusSender>,
+        replay_vote_sender: ReplayVoteSender,
+        log_messages_bytes_limit: Option<usize>,
+        connection_cache: Arc<ConnectionCache>,
+        bank_forks: Arc<RwLock<BankForks>>,
+        generator: TransactionGenerator,
+    ) -> Self {
+        assert!(num_threads >= MIN_TOTAL_THREADS);
+        // Single thread to generate entries from many banks.
+        // This thread talks to poh_service and broadcasts the entries once they have been recorded.
+        // Once an entry has been recorded, its blockhash is registered with the bank.
+        let data_budget = Arc::new(DataBudget::default());
+        let batch_limit =
+            TOTAL_BUFFERED_PACKETS / ((num_threads - NUM_VOTE_PROCESSING_THREADS) as usize);
+        // Keeps track of extraneous vote transactions for the vote threads
+        let latest_unprocessed_votes = Arc::new(LatestUnprocessedVotes::new());
+        let should_split_voting_threads = bank_forks
+            .read()
+            .map(|bank_forks| {
+                let bank = bank_forks.root_bank();
+                bank.feature_set
+                    .is_active(&allow_votes_to_directly_update_vote_state::id())
+            })
+            .unwrap_or(false);
+
+        let mut bank_thread_hdls = Vec::with_capacity(num_threads as usize);
+        bank_thread_hdls.push(Self::spawn_voting_thread(
+            0,
+            gossip_vote_receiver,
+            poh_recorder.clone(),
+            transaction_status_sender.clone(),
+            replay_vote_sender.clone(),
+            cluster_info.clone(),
+            bank_forks.clone(),
+            connection_cache.clone(),
+            data_budget.clone(),
+            log_messages_bytes_limit,
+            if should_split_voting_threads {
+                UnprocessedTransactionStorage::new_vote_storage(
+                    latest_unprocessed_votes.clone(),
+                    VoteSource::Gossip,
+                )
+            } else {
+                UnprocessedTransactionStorage::new_transaction_storage(
+                    UnprocessedPacketBatches::with_capacity(batch_limit),
+                    ThreadType::Voting(VoteSource::Gossip),
+                )
+            },
+        ));
+        bank_thread_hdls.push(Self::spawn_voting_thread(
+            1,
+            tpu_vote_receiver,
+            poh_recorder.clone(),
+            transaction_status_sender.clone(),
+            replay_vote_sender.clone(),
+            cluster_info.clone(),
+            bank_forks.clone(),
+            connection_cache.clone(),
+            data_budget.clone(),
+            log_messages_bytes_limit,
+            if should_split_voting_threads {
+                UnprocessedTransactionStorage::new_vote_storage(
+                    latest_unprocessed_votes,
+                    VoteSource::Tpu,
+                )
+            } else {
+                UnprocessedTransactionStorage::new_transaction_storage(
+                    UnprocessedPacketBatches::with_capacity(batch_limit),
+                    ThreadType::Voting(VoteSource::Tpu),
+                )
+            },
+        ));
+
+        (0..num_threads.saturating_sub(2)).for_each(|id| {
+            bank_thread_hdls.push(Self::spawn_transaction_thread(
+                id,
+                non_vote_receiver.clone(),
+                poh_recorder.clone(),
+                transaction_status_sender.clone(),
+                replay_vote_sender.clone(),
+                cluster_info.clone(),
+                bank_forks.clone(),
+                connection_cache.clone(),
+                data_budget.clone(),
+                log_messages_bytes_limit,
+                UnprocessedTransactionStorage::new_transaction_storage(
+                    UnprocessedPacketBatches::with_capacity(batch_limit),
+                    ThreadType::Transactions,
+                ),
+            ));
+        });
+
+        // scheduler thread
+        let (scheduled_sender, scheduled_receiver) = unbounded();
+        let (finished_sender, finished_receiver) = unbounded();
+        let scheduler = TestScheduler::new(
+            DecisionMaker::new(cluster_info.id(), poh_recorder.clone()),
+            non_vote_receiver,
+            scheduled_sender,
+            finished_receiver,
+            generator,
+        );
+        bank_thread_hdls.push(
+            Builder::new()
+                .name("solBanknSched".to_string())
+                .spawn(move || scheduler.run())
+                .unwrap(),
+        );
+        (0..num_threads.saturating_sub(2)).for_each(|id| {
+            let committer = Committer::new(
+                transaction_status_sender.clone(),
+                replay_vote_sender.clone(),
+            );
+            let consumer = Consumer::new(
+                committer,
+                poh_recorder.read().unwrap().recorder(),
+                QosService::new(id),
+                log_messages_bytes_limit,
+                None,
+            );
+            let worker = ConsumeBankingWorker::new(
+                scheduled_receiver.clone(),
+                finished_sender.clone(),
+                consumer,
+            );
+            bank_thread_hdls.push(
+                Builder::new()
+                    .name(format!("solBanknStgTx{id:02}"))
+                    .spawn(move || worker.run())
+                    .unwrap(),
+            );
         });
 
         Self { bank_thread_hdls }
