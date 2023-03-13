@@ -47,17 +47,22 @@ impl TestScheduler {
 
     pub fn run(mut self) {
         let mut slot_metrics_tracker = LeaderSlotMetricsTracker::new(0);
+        let mut rng = rand::thread_rng();
         loop {
             let (_action, decision) = self
                 .decision_maker
                 .make_consume_or_forward_decision(&mut slot_metrics_tracker);
             if let BufferedPacketsDecision::Consume(bank_start) = &decision {
-                let transactions = (self.transaction_generator)(&bank_start.working_bank);
-                let scheduled_work = ScheduledWork {
-                    decision: decision.clone(),
-                    transactions,
-                };
-                self.sender.send(scheduled_work).unwrap();
+                // Create 100 batches of transactions for consumer threads
+                for _ in 0..100 {
+                    let transactions =
+                        (self.transaction_generator)(&mut rng, &bank_start.working_bank);
+                    let scheduled_work = ScheduledWork {
+                        decision: decision.clone(),
+                        transactions,
+                    };
+                    self.sender.send(scheduled_work).unwrap();
+                }
             }
         }
     }

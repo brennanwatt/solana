@@ -2,11 +2,12 @@
 //!
 
 use {
-    rand::seq::SliceRandom,
+    rand::{rngs::ThreadRng, seq::SliceRandom},
     serde::Deserialize,
     solana_runtime::bank::Bank,
     solana_sdk::{
-        pubkey::Pubkey,
+        clock::MAX_PROCESSING_AGE,
+        hash::Hash,
         signature::Keypair,
         signer::Signer,
         transaction::{SanitizedTransaction, SanitizedVersionedTransaction, VersionedTransaction},
@@ -14,11 +15,12 @@ use {
     std::path::Path,
 };
 
-pub type TransactionGenerator = Box<dyn Send + FnMut(&Bank) -> Vec<SanitizedTransaction>>;
+pub type TransactionGenerator =
+    Box<dyn Send + FnMut(&mut ThreadRng, &Bank) -> Vec<SanitizedTransaction>>;
 
 struct AccountsFile {
     payers: Vec<Keypair>,
-    allocated_accounts: Vec<Keypair>,
+    _allocated_accounts: Vec<Keypair>,
 }
 
 impl From<AccountsFileRaw> for AccountsFile {
@@ -32,7 +34,7 @@ impl From<AccountsFileRaw> for AccountsFile {
 
         Self {
             payers,
-            allocated_accounts,
+            _allocated_accounts: allocated_accounts,
         }
     }
 }
@@ -40,26 +42,21 @@ impl From<AccountsFileRaw> for AccountsFile {
 #[derive(Deserialize)]
 struct AccountsFileRaw {
     payers: Vec<KeypairRaw>,
+    #[serde(rename = "allocatedAccounts")]
     allocated_accounts: Vec<KeypairRaw>,
 }
 
 #[derive(Deserialize)]
 struct KeypairRaw {
-    pub pubkey: String,
+    #[serde(rename = "publicKey")]
+    pub _pubkey: String,
+    #[serde(rename = "secretKey")]
     pub secret_key: Vec<u8>,
 }
 
 impl From<KeypairRaw> for Keypair {
     fn from(raw: KeypairRaw) -> Self {
-        let pubkey: Pubkey = raw.pubkey.parse().unwrap();
-        let secret_key = raw.secret_key;
-        let bytes = pubkey
-            .as_ref()
-            .iter()
-            .chain(secret_key.iter())
-            .cloned()
-            .collect::<Vec<_>>();
-        Self::from_bytes(&bytes).unwrap()
+        Self::from_bytes(&raw.secret_key).unwrap()
     }
 }
 
@@ -70,19 +67,20 @@ pub fn random_transfer_generator(accounts_path: impl AsRef<Path>) -> Transaction
         .unwrap()
         .into();
 
-    Box::new(move |bank: &Bank| {
+    let mut blockhash_buffer = BlockhashCircleBuffer::default();
+    Box::new(move |rng: &mut ThreadRng, bank: &Bank| {
+        const BATCH_SIZE: usize = 64;
+
         let mut transactions = vec![];
-        for _ in 0..64 {
-            let from = accounts.payers.choose(&mut rand::thread_rng()).unwrap();
-            let to = accounts
-                .allocated_accounts
-                .choose(&mut rand::thread_rng())
-                .unwrap();
+        blockhash_buffer.check_and_push(bank.last_blockhash());
+
+        let mut accounts = accounts.payers.choose_multiple(rng, 2 * BATCH_SIZE);
+        for _ in 0..BATCH_SIZE {
             let transaction = solana_sdk::system_transaction::transfer(
-                from,
-                &to.pubkey(),
+                accounts.next().unwrap(),
+                &accounts.next().unwrap().pubkey(),
                 1,
-                bank.last_blockhash(),
+                *blockhash_buffer.buffer.choose(rng).unwrap(),
             );
 
             let message_hash = transaction.message().hash();
@@ -96,4 +94,27 @@ pub fn random_transfer_generator(accounts_path: impl AsRef<Path>) -> Transaction
         }
         transactions
     })
+}
+
+#[derive(Default)]
+struct BlockhashCircleBuffer {
+    buffer: Vec<Hash>,
+    curr: usize,
+    prev: usize,
+}
+
+impl BlockhashCircleBuffer {
+    #[inline]
+    fn check_and_push(&mut self, hash: Hash) {
+        if self.buffer.len() < MAX_PROCESSING_AGE {
+            self.buffer.push(hash);
+            return;
+        }
+
+        if hash != self.buffer[self.prev] {
+            self.buffer[self.curr] = hash;
+            self.prev = self.curr;
+            self.curr = (self.curr + 1) % MAX_PROCESSING_AGE;
+        }
+    }
 }

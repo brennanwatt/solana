@@ -182,6 +182,9 @@ while [[ -n $1 ]]; do
     elif [[ $1 == --skip-require-tower ]]; then
       maybeRequireTower=false
       shift
+    elif [[ $1 == --test-generating-scheduler-accounts-path ]]; then
+      args+=("$1" "$2")
+      shift 2
     elif [[ $1 = -h ]]; then
       usage "$@"
     else
@@ -320,7 +323,7 @@ setup_validator_accounts() {
       ) || return $?
     fi
 
-    echo "Creating validator vote account"
+    echo "Creating validator vote account $vote_account"
     wallet create-vote-account "$vote_account" "$identity" "$authorized_withdrawer" || return $?
   fi
   echo "Validator vote account configured"

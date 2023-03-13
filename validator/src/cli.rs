@@ -1333,7 +1333,14 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                        up to the default or specified total bytes in the \
                        ledger")
         )
-        .arg(Arg::with_name("test_generating_scheduler_accounts_file").takes_value(true).hidden(true))
+        .arg(
+            Arg::with_name("test_generating_scheduler_accounts_path")
+                .long("test-generating-scheduler-accounts-path")
+                .takes_value(true)
+                .value_name("PATH")
+                .hidden(false)
+                .help("generate transactions in banking stage instead of using network traffic")
+        )
         .args(&get_deprecated_arguments())
         .after_help("The default subcommand is run")
         .subcommand(
