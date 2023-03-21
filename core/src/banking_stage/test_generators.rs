@@ -15,6 +15,13 @@ use {
     std::{path::Path, sync::Arc},
 };
 
+// Some transactions are expensive and can take a long time to process. Sending
+// smaller batches helps ensure more transactions get included in the block.
+const TX_BATCH_SIZE_SMALL: usize = 2;
+// Inexpensive transaction benefit from being batched together to amortize the
+// cost of sending and processing.
+const TX_BATCH_SIZE_LARGE: usize = 64;
+
 pub type TransactionGenerator =
     Box<dyn Send + FnMut(&mut ThreadRng, &Bank) -> Vec<SanitizedTransaction>>;
 
@@ -82,6 +89,26 @@ fn get_accounts(
     }
 }
 
+pub fn get_generator_functions(
+    test_generator_info: &crate::validator::TestGenerator,
+) -> Vec<TransactionGenerator> {
+    let generator_functions: Vec<TransactionGenerator> = vec![
+        random_transfer_generator(
+            &test_generator_info.test_generating_scheduler_accounts_path,
+            test_generator_info.starting_keypairs.clone(),
+        ),
+        generator_allocate_random_large(
+            &test_generator_info.test_generating_scheduler_accounts_path,
+            test_generator_info.starting_keypairs.clone(),
+        ),
+        generator_allocate_random_small(
+            &test_generator_info.test_generating_scheduler_accounts_path,
+            test_generator_info.starting_keypairs.clone(),
+        ),
+    ];
+    generator_functions
+}
+
 /// Generates transfers between a set of accounts.
 pub fn random_transfer_generator(
     accounts_path: impl AsRef<Path>,
@@ -90,12 +117,11 @@ pub fn random_transfer_generator(
     let accounts = get_accounts(accounts_path, starting_keypairs);
     let mut blockhash_buffer = BlockhashCircleBuffer::default();
     Box::new(move |rng: &mut ThreadRng, bank: &Bank| {
-        const BATCH_SIZE: usize = 64;
         let mut transactions = vec![];
         blockhash_buffer.check_and_push(bank.last_blockhash());
 
-        let mut accounts = accounts.choose_multiple(rng, BATCH_SIZE * 2);
-        for _ in 0..BATCH_SIZE {
+        let mut accounts = accounts.choose_multiple(rng, TX_BATCH_SIZE_LARGE * 2);
+        for _ in 0..TX_BATCH_SIZE_LARGE {
             let transaction = solana_sdk::system_transaction::transfer(
                 accounts.next().unwrap(),
                 &accounts.next().unwrap().pubkey(),
@@ -117,20 +143,53 @@ pub fn random_transfer_generator(
 }
 
 /// Allocates random large accounts.
-pub fn random_allocate_generator(
+pub fn generator_allocate_random_large(
     accounts_path: impl AsRef<Path>,
     starting_keypairs: Arc<Vec<Keypair>>,
 ) -> TransactionGenerator {
     let accounts = get_accounts(accounts_path, starting_keypairs);
     let mut blockhash_buffer = BlockhashCircleBuffer::default();
     Box::new(move |rng: &mut ThreadRng, bank: &Bank| {
-        const BATCH_SIZE: usize = 64;
-        const ACCOUNT_SIZE: u64 = 100 * 1024;
+        const ACCOUNT_SIZE: u64 = solana_sdk::system_instruction::MAX_PERMITTED_DATA_LENGTH;
         let mut transactions = vec![];
         blockhash_buffer.check_and_push(bank.last_blockhash());
 
-        let mut accounts = accounts.choose_multiple(rng, BATCH_SIZE * 2);
-        for _ in 0..BATCH_SIZE {
+        let mut accounts = accounts.choose_multiple(rng, TX_BATCH_SIZE_SMALL);
+        for _ in 0..TX_BATCH_SIZE_SMALL {
+            let transaction = solana_sdk::system_transaction::allocate(
+                accounts.next().unwrap(),
+                &Keypair::new(),
+                *blockhash_buffer.buffer.choose(rng).unwrap(),
+                ACCOUNT_SIZE,
+            );
+
+            let message_hash = transaction.message().hash();
+            let versioned_tx: VersionedTransaction = transaction.into();
+            let sanitized_versioned_tx: SanitizedVersionedTransaction =
+                versioned_tx.try_into().unwrap();
+            let sanitized_tx =
+                SanitizedTransaction::try_new(sanitized_versioned_tx, message_hash, false, bank)
+                    .unwrap();
+            transactions.push(sanitized_tx);
+        }
+        transactions
+    })
+}
+
+/// Allocates random small accounts.
+pub fn generator_allocate_random_small(
+    accounts_path: impl AsRef<Path>,
+    starting_keypairs: Arc<Vec<Keypair>>,
+) -> TransactionGenerator {
+    let accounts = get_accounts(accounts_path, starting_keypairs);
+    let mut blockhash_buffer = BlockhashCircleBuffer::default();
+    Box::new(move |rng: &mut ThreadRng, bank: &Bank| {
+        const ACCOUNT_SIZE: u64 = 1;
+        let mut transactions = vec![];
+        blockhash_buffer.check_and_push(bank.last_blockhash());
+
+        let mut accounts = accounts.choose_multiple(rng, TX_BATCH_SIZE_LARGE);
+        for _ in 0..TX_BATCH_SIZE_LARGE {
             let transaction = solana_sdk::system_transaction::allocate(
                 accounts.next().unwrap(),
                 &Keypair::new(),

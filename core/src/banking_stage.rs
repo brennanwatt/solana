@@ -21,6 +21,7 @@ use {
         tracer_packet_stats::TracerPacketStats,
         unprocessed_packet_batches::*,
         unprocessed_transaction_storage::{ThreadType, UnprocessedTransactionStorage},
+        validator::TestGenerator,
     },
     crossbeam_channel::{unbounded, RecvTimeoutError},
     histogram::Histogram,
@@ -430,7 +431,7 @@ impl BankingStage {
         log_messages_bytes_limit: Option<usize>,
         connection_cache: Arc<ConnectionCache>,
         bank_forks: Arc<RwLock<BankForks>>,
-        generator: TransactionGenerator,
+        test_generator_info: TestGenerator,
     ) -> Self {
         assert!(num_threads >= MIN_TOTAL_THREADS);
         // Single thread to generate entries from many banks.
@@ -525,7 +526,7 @@ impl BankingStage {
             non_vote_receiver,
             scheduled_sender,
             finished_receiver,
-            generator,
+            get_generator_functions(&test_generator_info),
         );
         bank_thread_hdls.push(
             Builder::new()

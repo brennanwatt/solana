@@ -491,7 +491,7 @@ fn test_mainnet_beta_cluster_type_generator() {
         .map(|k| {
             (
                 k.pubkey(),
-                AccountSharedData::new(1_000_000, 0, &system_program::id()),
+                AccountSharedData::new(100_000_000, 0, &system_program::id()),
             )
         })
         .collect();

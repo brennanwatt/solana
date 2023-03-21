@@ -249,10 +249,7 @@ impl Tpu {
                 log_messages_bytes_limit,
                 connection_cache.clone(),
                 bank_forks.clone(),
-                crate::banking_stage::random_transfer_generator(
-                    &test_generator_info.test_generating_scheduler_accounts_path,
-                    test_generator_info.starting_keypairs,
-                ),
+                test_generator_info,
             )
         } else {
             BankingStage::new(

@@ -26,7 +26,7 @@ pub struct TestScheduler {
     /// From BankingStageWorker
     _receiver: Receiver<FinishedWork>,
     /// Transaction batch generator
-    transaction_generator: TransactionGenerator,
+    transaction_generator: Vec<TransactionGenerator>,
 }
 
 impl TestScheduler {
@@ -35,7 +35,7 @@ impl TestScheduler {
         dummy_receiver: BankingPacketReceiver,
         sender: Sender<ScheduledWork>,
         receiver: Receiver<FinishedWork>,
-        transaction_generator: TransactionGenerator,
+        transaction_generator: Vec<TransactionGenerator>,
     ) -> Self {
         Self {
             decision_maker,
@@ -49,6 +49,9 @@ impl TestScheduler {
     pub fn run(mut self, exit: &Arc<AtomicBool>) {
         let mut slot_metrics_tracker = LeaderSlotMetricsTracker::new(0);
         let mut rng = rand::thread_rng();
+        let num_generators = self.transaction_generator.len();
+        let mut bank_slot = 0;
+        let mut generator_idx = 0;
         loop {
             if exit.load(std::sync::atomic::Ordering::Relaxed) {
                 debug!("TestScheduler exiting");
@@ -58,10 +61,19 @@ impl TestScheduler {
                 .decision_maker
                 .make_consume_or_forward_decision(&mut slot_metrics_tracker);
             if let BufferedPacketsDecision::Consume(bank_start) = &decision {
-                // Create 100 batches of transactions for consumer threads
+                // Create batches of transactions for consumer threads
+                if bank_start.working_bank.slot() != bank_slot {
+                    bank_slot = bank_start.working_bank.slot();
+                    generator_idx = (generator_idx + 1) % num_generators;
+                    trace!(
+                        "Generating transactions for slot {bank_slot} w/ generator {generator_idx}"
+                    );
+                }
                 for _ in 0..100 {
-                    let transactions =
-                        (self.transaction_generator)(&mut rng, &bank_start.working_bank);
+                    let transactions = (self.transaction_generator[generator_idx])(
+                        &mut rng,
+                        &bank_start.working_bank,
+                    );
                     let scheduled_work = ScheduledWork {
                         decision: decision.clone(),
                         transactions,
