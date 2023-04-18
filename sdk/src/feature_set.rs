@@ -568,6 +568,10 @@ pub mod add_publisher_stake_caps_to_the_accumulator {
     solana_sdk::declare_id!("J5u6Vrgj7de8zLcjQVhuRAPzEzfDamrxAQMz3q6HSmi1");
 }
 
+pub mod clean_up_delegation_errors {
+    solana_sdk::declare_id!("Bj2jmUsM2iRhfdLLDSTkhM5UQRQvQHm57HSmPibPtEyu");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -830,6 +834,8 @@ lazy_static! {
 
        // Slot: 152588256
        (redo_move_accumulator_to_end_of_block::id(), "redo accumulator end of block change"),
+
+       (clean_up_delegation_errors::id(), "Return InsufficientDelegation instead of InsufficientFunds or InsufficientStake where applicable #31206"),
    ]
    .iter()
    .cloned()
