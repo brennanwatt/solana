@@ -540,6 +540,10 @@ pub mod move_serialized_len_ptr_in_cpi {
     solana_sdk::declare_id!("47yqd5yWv395TfqcBbgNUxr765Ycb3FdP42D27pCeGME");
 }
 
+pub mod disable_builtin_loader_ownership_chains {
+    solana_sdk::declare_id!("4UDcAfQ6EcA6bdcadkeHpkarkhZGJ7Bpq7wTAiRMjkoi");
+}
+
 pub mod enable_request_heap_frame_ix {
     solana_sdk::declare_id!("Hr1nUA9b7NJ6eChS26o7Vi8gYYDDwWD3YeBfzJkTbU86");
 }
@@ -701,6 +705,7 @@ lazy_static! {
         (drop_merkle_shreds::id(), "drop merkle shreds #29711"),
         (keep_merkle_shreds::id(), "keep merkle shreds #29711"),
         (move_serialized_len_ptr_in_cpi::id(), "cpi ignore serialized_len_ptr #29592"),
+        (disable_builtin_loader_ownership_chains::id(), "disable builtin loader ownership chains #29956"),
         (enable_request_heap_frame_ix::id(), "Enable transaction to request heap frame using compute budget instruction #30076"),
         (enable_accumulator_sysvar::id(), "enable accumulator sysvar #<GH_ISSUE_NUMBER>"),
         (move_accumulator_to_end_of_block::id(), "move accumulator to end of block #<GH_ISSUE_NUMBER>"),
