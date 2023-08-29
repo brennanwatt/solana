@@ -576,6 +576,10 @@ pub mod clean_up_delegation_errors {
     solana_sdk::declare_id!("Bj2jmUsM2iRhfdLLDSTkhM5UQRQvQHm57HSmPibPtEyu");
 }
 
+pub mod revise_turbine_epoch_stakes {
+    solana_sdk::declare_id!("BTWmtJC8U5ZLMbBUUA1k6As62sYjPEjAiNAT55xYGdJU");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -712,7 +716,9 @@ lazy_static! {
         (zero_wormhole_message_timestamps::id(), "use zeroed timestamps in wormhole messages"),
         (undo_move_accumulator_to_end_of_block::id(), "undo accumulator end of block change"),
         (redo_move_accumulator_to_end_of_block::id(), "redo accumulator end of block change"),
-        (add_publisher_stake_caps_to_the_accumulator::id(), "add publisher stake caps to the accumulator")
+        (add_publisher_stake_caps_to_the_accumulator::id(), "add publisher stake caps to the accumulator"),
+        (clean_up_delegation_errors::id(), "Return InsufficientDelegation instead of InsufficientFunds or InsufficientStake where applicable #31206"),
+        (revise_turbine_epoch_stakes::id(), "revise turbine epoch stakes"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
@@ -841,6 +847,7 @@ lazy_static! {
        (redo_move_accumulator_to_end_of_block::id(), "redo accumulator end of block change"),
 
        (clean_up_delegation_errors::id(), "Return InsufficientDelegation instead of InsufficientFunds or InsufficientStake where applicable #31206"),
+       (revise_turbine_epoch_stakes::id(), "revise turbine epoch stakes"),
    ]
    .iter()
    .cloned()
