@@ -580,6 +580,10 @@ pub mod revise_turbine_epoch_stakes {
     solana_sdk::declare_id!("BTWmtJC8U5ZLMbBUUA1k6As62sYjPEjAiNAT55xYGdJU");
 }
 
+pub mod better_error_codes_for_tx_lamport_check {
+    solana_sdk::declare_id!("Ffswd3egL3tccB6Rv3XY6oqfdzn913vUcjCSnpvCKpfx");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -719,6 +723,7 @@ lazy_static! {
         (add_publisher_stake_caps_to_the_accumulator::id(), "add publisher stake caps to the accumulator"),
         (clean_up_delegation_errors::id(), "Return InsufficientDelegation instead of InsufficientFunds or InsufficientStake where applicable #31206"),
         (revise_turbine_epoch_stakes::id(), "revise turbine epoch stakes"),
+        (better_error_codes_for_tx_lamport_check::id(), "better error codes for tx lamport check #33353"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
