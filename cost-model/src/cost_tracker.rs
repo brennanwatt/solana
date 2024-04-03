@@ -5,6 +5,7 @@
 //!
 use {
     crate::{block_cost_limits::*, transaction_cost::TransactionCost},
+    log::error,
     solana_metrics::datapoint_info,
     solana_sdk::{
         clock::Slot, pubkey::Pubkey, saturating_add_assign, transaction::TransactionError,
@@ -65,6 +66,8 @@ pub struct CostTracker {
     /// the tracker, but are still waiting for an update with actual usage or
     /// removal if the transaction does not end up getting committed.
     in_flight_transaction_count: usize,
+    committed_transactions_actual_cost: histogram::Histogram,
+    committed_transactions_estimated_cost: histogram::Histogram,
 }
 
 impl Default for CostTracker {
@@ -88,6 +91,8 @@ impl Default for CostTracker {
             secp256k1_instruction_signature_count: 0,
             ed25519_instruction_signature_count: 0,
             in_flight_transaction_count: 0,
+            committed_transactions_actual_cost: histogram::Histogram::default(),
+            committed_transactions_estimated_cost: histogram::Histogram::default(),
         }
     }
 }
@@ -134,6 +139,24 @@ impl CostTracker {
         actual_execution_units: u64,
     ) {
         let estimated_execution_units = estimated_tx_cost.programs_execution_cost();
+        if let Err(e) = self
+            .committed_transactions_actual_cost
+            .increment(actual_execution_units)
+        {
+            error!(
+                "Failed to increment committed_transactions_actual_cost: {:?}",
+                e
+            );
+        }
+        if let Err(e) = self
+            .committed_transactions_estimated_cost
+            .increment(actual_execution_units)
+        {
+            error!(
+                "Failed to increment committed_transactions_estimated_cost: {:?}",
+                e
+            );
+        }
         match actual_execution_units.cmp(&estimated_execution_units) {
             Ordering::Equal => (),
             Ordering::Greater => {
@@ -199,6 +222,60 @@ impl CostTracker {
             (
                 "inflight_transaction_count",
                 self.in_flight_transaction_count,
+                i64
+            ),
+            (
+                "committed_transactions_actual_cost_min",
+                self.committed_transactions_actual_cost
+                    .minimum()
+                    .unwrap_or(0),
+                i64
+            ),
+            (
+                "committed_transactions_actual_cost_mean",
+                self.committed_transactions_actual_cost.mean().unwrap_or(0),
+                i64
+            ),
+            (
+                "committed_transactions_actual_cost_90p",
+                self.committed_transactions_actual_cost
+                    .percentile(90.0)
+                    .unwrap_or(0),
+                i64
+            ),
+            (
+                "committed_transactions_actual_cost_max",
+                self.committed_transactions_actual_cost
+                    .maximum()
+                    .unwrap_or(0),
+                i64
+            ),
+            (
+                "committed_transactions_estimated_cost_min",
+                self.committed_transactions_estimated_cost
+                    .minimum()
+                    .unwrap_or(0),
+                i64
+            ),
+            (
+                "committed_transactions_estimated_cost_mean",
+                self.committed_transactions_estimated_cost
+                    .mean()
+                    .unwrap_or(0),
+                i64
+            ),
+            (
+                "committed_transactions_estimated_cost_90p",
+                self.committed_transactions_estimated_cost
+                    .percentile(90.0)
+                    .unwrap_or(0),
+                i64
+            ),
+            (
+                "committed_transactions_estimated_cost_max",
+                self.committed_transactions_estimated_cost
+                    .maximum()
+                    .unwrap_or(0),
                 i64
             ),
         );
