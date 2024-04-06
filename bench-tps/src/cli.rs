@@ -80,6 +80,7 @@ pub struct Config {
     pub commitment_config: CommitmentConfig,
     pub block_data_file: Option<String>,
     pub transaction_data_file: Option<String>,
+    pub pinned_tpu_address: Option<String>,
 }
 
 impl Eq for Config {}
@@ -115,6 +116,7 @@ impl Default for Config {
             commitment_config: CommitmentConfig::confirmed(),
             block_data_file: None,
             transaction_data_file: None,
+            pinned_tpu_address: None,
         }
     }
 }
@@ -164,24 +166,18 @@ pub fn build_args<'a>(version: &'_ str) -> App<'a, '_> {
                 .long("rpc-addr")
                 .value_name("HOST:PORT")
                 .takes_value(true)
-                .conflicts_with("rpc_client")
-                .requires("tpu_addr")
                 .hidden(hidden_unless_forced())
-                .help("Specify custom rpc_addr to create thin_client. \
-                    Note: ThinClient is deprecated. Argument will not be used. \
-                    Use tpc_client or rpc_client instead"),
+                .help("This is deprecated and should be deleted."),
         )
+        // Note, it is unnecessary to specify conflicts_with("rpc_client/tpu_client") because
+        // high_tps_client already specifies these conflicts.
         .arg(
-            Arg::with_name("tpu_addr")
-                .long("tpu-addr")
+            Arg::with_name("pinned_tpu_address")
+                .long("pinned-tpu-address")
                 .value_name("HOST:PORT")
-                .conflicts_with("rpc_client")
                 .takes_value(true)
-                .requires("rpc_addr")
-                .hidden(hidden_unless_forced())
-                .help("Specify custom tpu_addr to create thin_client. \
-                    Note: ThinClient is deprecated. Argument will not be used. \
-                    Use tpc_client or rpc_client instead"),
+                .requires("high_tps_client")
+                .help("Specify custom tpu_addr to send all transaction to particular endpoint."),
         )
         .arg(
             Arg::with_name("entrypoint")
@@ -344,6 +340,7 @@ pub fn build_args<'a>(version: &'_ str) -> App<'a, '_> {
             Arg::with_name("high_tps_client")
                 .long("use-high-tps-client")
                 .conflicts_with("rpc_client")
+                .conflicts_with("tpu_client")
                 .takes_value(false)
                 .help("Submit transactions with a HighTpsClient")
         )
@@ -474,6 +471,10 @@ pub fn parse_args(matches: &ArgMatches) -> Result<Config, &'static str> {
         &config.json_rpc_url,
     );
     args.websocket_url = websocket_url;
+
+    if let Some(tpu_addr) = matches.value_of("pinned_tpu_address") {
+        args.pinned_tpu_address = Some(tpu_addr.to_string());
+    }
 
     let (_, id_path) = ConfigInput::compute_keypair_path_setting(
         matches.value_of("identity").unwrap_or(""),
