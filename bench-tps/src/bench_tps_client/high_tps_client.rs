@@ -70,8 +70,10 @@ impl HighTpsClient {
         let leader_tpu_service = tokio::task::block_in_place(|| {
             rpc_client.runtime().block_on(create_leader_tpu_service)
         })?;
-        // TODO(klykov): for the sake of this PR, just stop service if use pinned address
-        exit.store(true, Ordering::Relaxed);
+        if config.pinned_tpu_address.is_some() {
+            // TODO(klykov): for the sake of this PR, just stop service if use pinned address
+            exit.store(true, Ordering::Relaxed);
+        }
 
         Ok(Self {
             leader_tpu_service,
