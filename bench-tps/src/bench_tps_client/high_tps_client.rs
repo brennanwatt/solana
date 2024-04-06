@@ -22,16 +22,20 @@ use {
         transaction::Transaction,
     },
     solana_transaction_status::UiConfirmedBlock,
-    std::sync::{
-        atomic::{AtomicBool, Ordering},
-        Arc,
+    std::{
+        net::SocketAddr,
+        sync::{
+            atomic::{AtomicBool, Ordering},
+            Arc,
+        },
     },
 };
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub struct HighTpsClientConfig {
     pub send_batch_size: usize,
     pub fanout_slots: u64,
+    pub pinned_tpu_address: Option<SocketAddr>,
 }
 
 type ConnectionCache = BackendConnectionCache<QuicPool, QuicConnectionManager, QuicConfig>;
@@ -66,6 +70,9 @@ impl HighTpsClient {
         let leader_tpu_service = tokio::task::block_in_place(|| {
             rpc_client.runtime().block_on(create_leader_tpu_service)
         })?;
+        // TODO(klykov): for the sake of this PR, just stop service if use pinned address
+        exit.store(true, Ordering::Relaxed);
+
         Ok(Self {
             leader_tpu_service,
             exit,
@@ -90,13 +97,21 @@ impl BenchTpsClient for HighTpsClient {
             .collect::<Vec<_>>();
         let mut rng = rand::thread_rng();
         let cc_index: usize = rng.gen_range(0..self.connection_caches.len());
-        for c in wire_transactions.chunks(self.config.send_batch_size) {
-            let tpu_addresses = self
-                .leader_tpu_service
-                .leader_tpu_sockets(self.config.fanout_slots);
-            for tpu_address in &tpu_addresses {
-                let conn = self.connection_caches[cc_index].get_connection(tpu_address);
+        // TODO(klykov): rewrite this more elegantly later
+        if let Some(pinned_tpu_address) = self.config.pinned_tpu_address {
+            for c in wire_transactions.chunks(self.config.send_batch_size) {
+                let conn = self.connection_caches[cc_index].get_connection(&pinned_tpu_address);
                 let _ = conn.send_data_batch_async(c.to_vec());
+            }
+        } else {
+            for c in wire_transactions.chunks(self.config.send_batch_size) {
+                let tpu_addresses = self
+                    .leader_tpu_service
+                    .leader_tpu_sockets(self.config.fanout_slots);
+                for tpu_address in &tpu_addresses {
+                    let conn = self.connection_caches[cc_index].get_connection(tpu_address);
+                    let _ = conn.send_data_batch_async(c.to_vec());
+                }
             }
         }
         Ok(())

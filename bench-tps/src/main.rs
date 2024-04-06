@@ -28,6 +28,7 @@ use {
         fs::File,
         io::prelude::*,
         net::IpAddr,
+        net::ToSocketAddrs,
         path::Path,
         process::exit,
         sync::{Arc, RwLock},
@@ -134,6 +135,7 @@ fn create_client(
     websocket_url: &str,
     connection_caches: Vec<ConnectionCache>,
     commitment_config: CommitmentConfig,
+    pinned_tpu_address: Option<&str>,
 ) -> Arc<dyn BenchTpsClient + Send + Sync> {
     match external_client_type {
         ExternalClientType::RpcClient => Arc::new(RpcClient::new_with_commitment(
@@ -193,6 +195,8 @@ fn create_client(
                     HighTpsClientConfig {
                         fanout_slots: 1,
                         send_batch_size: 64,
+                        pinned_tpu_address: pinned_tpu_address
+                            .and_then(|s| s.to_socket_addrs().ok()?.next()),
                     },
                     caches,
                 )
@@ -239,6 +243,7 @@ fn main() {
         bind_address,
         client_node_ids,
         commitment_config,
+        pinned_tpu_address,
         ..
     } = &cli_config;
 
@@ -289,6 +294,7 @@ fn main() {
         websocket_url,
         connection_caches,
         *commitment_config,
+        pinned_tpu_address.as_deref(),
     );
     if let Some(instruction_padding_config) = instruction_padding_config {
         info!(
