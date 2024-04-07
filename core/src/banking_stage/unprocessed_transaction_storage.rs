@@ -627,11 +627,6 @@ impl ThreadLocalUnprocessedPackets {
                             packets_to_process,
                             &mut total_tracer_packets_in_buffer,
                         );
-                    
-                    warn!("#BW: forwarded_packets: {:?}, packets_to_forward: {:?}, tracers: {}",
-                        forwarded_packets.len(),
-                        packets_to_forward.len(),
-                        total_tracer_packets_in_buffer);
 
                     [
                         forwarded_packets,
@@ -782,9 +777,6 @@ impl ThreadLocalUnprocessedPackets {
 
         let filtered_count = packets_to_process.len().saturating_sub(transactions.len());
         saturating_add_assign!(*total_dropped_packets, filtered_count);
-        if filtered_count > 0 {
-            warn!("#BW: filtered out {} packets", filtered_count);
-        }
 
         (transactions, transaction_to_packet_indexes)
     }
@@ -804,9 +796,6 @@ impl ThreadLocalUnprocessedPackets {
 
         let filtered_count = transactions.len().saturating_sub(results.len());
         saturating_add_assign!(*total_dropped_packets, filtered_count);
-        if filtered_count > 0 {
-            warn!("#BW: filtered out {} invalid transactions", filtered_count);
-        }
 
         results
             .iter()

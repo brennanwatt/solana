@@ -75,7 +75,6 @@ impl Forwarder {
                 current_bank,
                 &mut forward_packet_batches_by_accounts,
             );
-        warn!("#BW: handle_forwarding - {forward_option:?} unprocessed tx packet batches {} with results {:?}", unprocessed_transaction_storage.len(), filter_forwarding_result);
         slot_metrics_tracker.increment_transactions_from_packets_us(
             filter_forwarding_result.total_packet_conversion_us,
         );
