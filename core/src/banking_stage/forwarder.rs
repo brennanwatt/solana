@@ -59,6 +59,7 @@ impl Forwarder {
         banking_stage_stats: &BankingStageStats,
         tracer_packet_stats: &mut TracerPacketStats,
     ) {
+        warn!("#BW: handle_forwarding - unprocessed tx packet batches {}", unprocessed_transaction_storage.len());
         let forward_option = unprocessed_transaction_storage.forward_option();
 
         // get current root bank from bank_forks, use it to sanitize transaction and
