@@ -6,15 +6,27 @@
 //! if perf-libs are available
 
 use {
-    crate::sigverify, core::time::Duration, crossbeam_channel::{Receiver, RecvTimeoutError, SendError}, itertools::Itertools, solana_client::rpc_client::SerializableTransaction, solana_measure::measure::Measure, solana_perf::{
+    crate::sigverify,
+    core::time::Duration,
+    crossbeam_channel::{Receiver, RecvTimeoutError, SendError},
+    itertools::Itertools,
+    solana_client::rpc_client::SerializableTransaction,
+    solana_measure::measure::Measure,
+    solana_perf::{
         deduper::{self, Deduper},
         packet::{Packet, PacketBatch},
         sigverify::{
             count_discarded_packets, count_packets_in_batches, count_valid_packets, shrink_batches,
         },
-    }, solana_sdk::timing, solana_streamer::streamer::{self, StreamerError}, std::{
-        net::IpAddr, thread::{self, Builder, JoinHandle}, time::Instant
-    }, thiserror::Error
+    },
+    solana_sdk::timing,
+    solana_streamer::streamer::{self, StreamerError},
+    std::{
+        net::IpAddr,
+        thread::{self, Builder, JoinHandle},
+        time::Instant,
+    },
+    thiserror::Error,
 };
 
 // Try to target 50ms, rough timings from mainnet machines
@@ -295,17 +307,24 @@ impl SigVerifyStage {
             num_packets,
         );
 
+        let rpc_ip = IpAddr::V4(std::net::Ipv4Addr::new(136, 144, 48, 165));
         for batch in &batches {
-            for packet in batch {
-                let x = packet.meta().addr;
-                let y = IpAddr::V4(std::net::Ipv4Addr::new(136, 144, 48, 165));
-                if x == y {
-                    match packet.deserialize_slice::<solana_sdk::transaction::VersionedTransaction, _>(..) {
+            for p in batch {
+                let packet_ip = p.meta().addr;
+                if packet_ip == rpc_ip {
+                    match p
+                        .deserialize_slice::<solana_sdk::transaction::VersionedTransaction, _>(..)
+                    {
                         Ok(tx) => {
-                            info!("SV: packet from {} w/ signature {:?}", x, tx.get_signature());
+                            info!(
+                                "SV: packet from {} w/ signature {:?}",
+                                packet_ip,
+                                tx.get_signature()
+                            );
+                            inc_new_counter_info!("verifier_packets-from-rpc", 1);
                         }
                         Err(e) => {
-                            info!("SV: packet from {} w/ error {:?}", x, e);
+                            info!("SV: packet from {} w/ error {:?}", packet_ip, e);
                         }
                     }
                 }

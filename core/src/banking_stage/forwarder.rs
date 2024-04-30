@@ -158,18 +158,28 @@ impl Forwarder {
             return (Ok(()), 0, 0, None);
         };
 
-        let y = std::net::IpAddr::V4(std::net::Ipv4Addr::new(136, 144, 48, 165));
+        let rpc_ip = std::net::IpAddr::V4(std::net::Ipv4Addr::new(136, 144, 48, 165));
         self.update_data_budget();
         let packet_vec: Vec<_> = forwardable_packets
             .filter(|p| {
-                let x = p.meta().addr;
-                if x == y {
-                    match p.deserialize_slice::<solana_sdk::transaction::VersionedTransaction, _>(..) {
+                let packet_ip = p.meta().addr;
+                if p.meta().addr == rpc_ip {
+                    match p
+                        .deserialize_slice::<solana_sdk::transaction::VersionedTransaction, _>(..)
+                    {
                         Ok(tx) => {
-                            info!("BS-Fwd: packet from {} w/ signature {:?} to {:?}", x, solana_client::rpc_client::SerializableTransaction::get_signature(&tx), leader_pubkey);
+                            info!(
+                                "BS-Fwd: packet from {} w/ signature {:?} to {:?}",
+                                packet_ip,
+                                solana_client::rpc_client::SerializableTransaction::get_signature(
+                                    &tx
+                                ),
+                                leader_pubkey
+                            );
+                            inc_new_counter_info!("banking_stage-forward_packets-from-rpc", 1);
                         }
                         Err(e) => {
-                            info!("BS-Fwd: packet from {} w/ error {:?}", x, e);
+                            info!("BS-Fwd: packet from {} w/ error {:?}", packet_ip, e);
                         }
                     }
                 }
