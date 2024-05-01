@@ -317,14 +317,15 @@ impl SigVerifyStage {
                     {
                         Ok(tx) => {
                             info!(
-                                "SV: packet from {} w/ signature {:?}",
+                                "SV1: packet from {} w/ signature {:?} and discard: {:?}",
                                 packet_ip,
-                                tx.get_signature()
+                                tx.get_signature(),
+                                p.meta().discard()
                             );
                             inc_new_counter_info!("verifier_packets-from-rpc", 1);
                         }
                         Err(e) => {
-                            info!("SV: packet from {} w/ error {:?}", packet_ip, e);
+                            info!("SV1: packet from {} w/ error {:?}", packet_ip, e);
                         }
                     }
                 }
@@ -354,6 +355,29 @@ impl SigVerifyStage {
             },
         ) as usize;
         dedup_time.stop();
+        for batch in &batches {
+            for p in batch {
+                let packet_ip = p.meta().addr;
+                if packet_ip == rpc_ip {
+                    match p
+                        .deserialize_slice::<solana_sdk::transaction::VersionedTransaction, _>(..)
+                    {
+                        Ok(tx) => {
+                            info!(
+                                "SV2: packet from {} w/ signature {:?} and discard: {:?}",
+                                packet_ip,
+                                tx.get_signature(),
+                                p.meta().discard()
+                            );
+                            inc_new_counter_info!("verifier_packets-from-rpc", 1);
+                        }
+                        Err(e) => {
+                            info!("SV2: packet from {} w/ error {:?}", packet_ip, e);
+                        }
+                    }
+                }
+            }
+        }
         let num_unique = non_discarded_packets.saturating_sub(discard_or_dedup_fail);
 
         let mut discard_time = Measure::start("sigverify_discard_time");
@@ -381,6 +405,29 @@ impl SigVerifyStage {
             |valid_packet| verifier.process_passed_sigverify_packet(valid_packet),
         );
         verify_time.stop();
+        for batch in &batches {
+            for p in batch {
+                let packet_ip = p.meta().addr;
+                if packet_ip == rpc_ip {
+                    match p
+                        .deserialize_slice::<solana_sdk::transaction::VersionedTransaction, _>(..)
+                    {
+                        Ok(tx) => {
+                            info!(
+                                "SV3: packet from {} w/ signature {:?} and discard: {:?}",
+                                packet_ip,
+                                tx.get_signature(),
+                                p.meta().discard()
+                            );
+                            inc_new_counter_info!("verifier_packets-from-rpc", 1);
+                        }
+                        Err(e) => {
+                            info!("SV3: packet from {} w/ error {:?}", packet_ip, e);
+                        }
+                    }
+                }
+            }
+        }
 
         // Post-shrink packet batches if many packets are discarded from sigverify
         let (post_shrink_time_us, post_shrink_total) = Self::maybe_shrink_batches(&mut batches);

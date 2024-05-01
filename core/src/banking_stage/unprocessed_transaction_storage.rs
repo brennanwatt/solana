@@ -16,6 +16,7 @@ use {
     },
     itertools::Itertools,
     min_max_heap::MinMaxHeap,
+    solana_client::rpc_client::SerializableTransaction,
     solana_measure::measure,
     solana_runtime::bank::Bank,
     solana_sdk::{
@@ -781,17 +782,40 @@ impl ThreadLocalUnprocessedPackets {
     ) -> Vec<usize> {
         let mut added_packets_count: usize = 0;
         let mut accepted_packet_indexes = Vec::with_capacity(transaction_to_packet_indexes.len());
+        let rpc_ip = std::net::IpAddr::V4(std::net::Ipv4Addr::new(136, 144, 48, 165));
         for forwardable_transaction_index in forwardable_transaction_indexes {
             let sanitized_transaction = &transactions[*forwardable_transaction_index];
             let forwardable_packet_index =
                 transaction_to_packet_indexes[*forwardable_transaction_index];
             let immutable_deserialized_packet =
                 packets_to_process[forwardable_packet_index].clone();
+            let p = immutable_deserialized_packet.original_packet();
+            let packet_ip = p.meta().addr;
+            if packet_ip == rpc_ip {
+                match p.deserialize_slice::<solana_sdk::transaction::VersionedTransaction, _>(..) {
+                    Ok(tx) => {
+                        info!(
+                            "BS-Fwd2: packet from {} w/ signature {:?} and discard: {:?}",
+                            packet_ip,
+                            tx.get_signature(),
+                            p.meta().discard()
+                        );
+                        inc_new_counter_info!("verifier_packets-from-rpc", 1);
+                    }
+                    Err(e) => {
+                        info!("BS-Fwd2: packet from {} w/ error {:?}", packet_ip, e);
+                    }
+                }
+            }
             if !forward_buffer.try_add_packet(
                 sanitized_transaction,
                 immutable_deserialized_packet,
                 feature_set,
             ) {
+                info!(
+                    "BS-Fwd3: Failed to add {}",
+                    sanitized_transaction.signature()
+                );
                 break;
             }
             accepted_packet_indexes.push(forwardable_packet_index);
@@ -912,6 +936,7 @@ impl ThreadLocalUnprocessedPackets {
         Vec<Arc<ImmutableDeserializedPacket>>,
         Vec<bool>,
     ) {
+        let rpc_ip = std::net::IpAddr::V4(std::net::Ipv4Addr::new(136, 144, 48, 165));
         let mut forwarded_packets: Vec<Arc<ImmutableDeserializedPacket>> = vec![];
         let (forwardable_packets, is_tracer_packet) = packets_to_forward
             .into_iter()
@@ -929,6 +954,27 @@ impl ThreadLocalUnprocessedPackets {
                 {
                     Some((immutable_deserialized_packet, is_tracer_packet))
                 } else {
+                    let p = immutable_deserialized_packet.original_packet();
+                    let packet_ip = p.meta().addr;
+                    if packet_ip == rpc_ip {
+                        match p
+                            .deserialize_slice::<solana_sdk::transaction::VersionedTransaction, _>(
+                                ..,
+                            ) {
+                            Ok(tx) => {
+                                info!(
+                                    "BS-Fwd1: packet from {} w/ signature {:?} and discard: {:?}",
+                                    packet_ip,
+                                    tx.get_signature(),
+                                    p.meta().discard()
+                                );
+                                inc_new_counter_info!("verifier_packets-from-rpc", 1);
+                            }
+                            Err(e) => {
+                                info!("BS-Fwd1: packet from {} w/ error {:?}", packet_ip, e);
+                            }
+                        }
+                    }
                     forwarded_packets.push(immutable_deserialized_packet);
                     None
                 }

@@ -7,6 +7,7 @@ use {
         sigverify::SigverifyTracerPacketStats,
     },
     crossbeam_channel::RecvTimeoutError,
+    solana_client::rpc_client::SerializableTransaction,
     solana_perf::packet::PacketBatch,
     solana_runtime::bank_forks::BankForks,
     std::{
@@ -80,8 +81,32 @@ impl PacketDeserializer {
         let mut deserialized_packets = Vec::with_capacity(packet_count);
         let mut aggregated_tracer_packet_stats_option = None::<SigverifyTracerPacketStats>;
 
+        let rpc_ip = std::net::IpAddr::V4(std::net::Ipv4Addr::new(136, 144, 48, 165));
+
         for banking_batch in banking_batches {
             for packet_batch in &banking_batch.0 {
+                for p in packet_batch {
+                    let packet_ip = p.meta().addr;
+                    if packet_ip == rpc_ip {
+                        match p
+                            .deserialize_slice::<solana_sdk::transaction::VersionedTransaction, _>(
+                                ..,
+                            ) {
+                            Ok(tx) => {
+                                info!(
+                                    "BS-Deser1: packet from {} w/ signature {:?} and discard: {:?}",
+                                    packet_ip,
+                                    tx.get_signature(),
+                                    p.meta().discard()
+                                );
+                                inc_new_counter_info!("verifier_packets-from-rpc", 1);
+                            }
+                            Err(e) => {
+                                info!("BS-Deser1: packet from {} w/ error {:?}", packet_ip, e);
+                            }
+                        }
+                    }
+                }
                 let packet_indexes = Self::generate_packet_indexes(packet_batch);
 
                 passed_sigverify_count += packet_indexes.len();
@@ -93,6 +118,30 @@ impl PacketDeserializer {
                     round_compute_unit_price_enabled,
                     packet_filter,
                 ));
+
+                for dp in &deserialized_packets {
+                    let p = dp.original_packet();
+                    let packet_ip = p.meta().addr;
+                    if packet_ip == rpc_ip {
+                        match p
+                            .deserialize_slice::<solana_sdk::transaction::VersionedTransaction, _>(
+                                ..,
+                            ) {
+                            Ok(tx) => {
+                                info!(
+                                    "BS-Deser2: packet from {} w/ signature {:?} and discard: {:?}",
+                                    packet_ip,
+                                    tx.get_signature(),
+                                    p.meta().discard()
+                                );
+                                inc_new_counter_info!("verifier_packets-from-rpc", 1);
+                            }
+                            Err(e) => {
+                                info!("BS-Deser2: packet from {} w/ error {:?}", packet_ip, e);
+                            }
+                        }
+                    }
+                }
             }
 
             if let Some(tracer_packet_stats) = &banking_batch.1 {
