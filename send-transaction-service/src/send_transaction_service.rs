@@ -583,7 +583,7 @@ impl SendTransactionService {
         let wire_transactions = transactions
             .iter()
             .map(|(_, transaction_info)| {
-                debug!(
+                info!(
                     "Sending transacation {} to (address, slot): {:?}",
                     transaction_info.signature, addresses,
                 );
@@ -770,6 +770,8 @@ impl SendTransactionService {
                 tpu_address, err
             );
             stats.send_failure_count.fetch_add(1, Ordering::Relaxed);
+        } else {
+            inc_new_counter_info!("rpc-sts_sent-transactions", wire_transactions.len());
         }
 
         measure.stop();
