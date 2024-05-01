@@ -169,7 +169,7 @@ impl Forwarder {
                     {
                         Ok(tx) => {
                             info!(
-                                "BS-Fwd: packet from {} w/ signature {:?} to {:?}",
+                                "BS-Fwd6: packet from {} w/ signature {:?} to {:?}",
                                 packet_ip,
                                 solana_client::rpc_client::SerializableTransaction::get_signature(
                                     &tx
@@ -179,7 +179,7 @@ impl Forwarder {
                             inc_new_counter_info!("banking_stage-forward_packets-from-rpc", 1);
                         }
                         Err(e) => {
-                            info!("BS-Fwd: packet from {} w/ error {:?}", packet_ip, e);
+                            info!("BS-Fwd6: packet from {} w/ error {:?}", packet_ip, e);
                         }
                     }
                 }

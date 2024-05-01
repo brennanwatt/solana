@@ -1,13 +1,9 @@
 use {
-    super::immutable_deserialized_packet::{DeserializedPacketError, ImmutableDeserializedPacket},
-    min_max_heap::MinMaxHeap,
-    solana_perf::packet::Packet,
-    solana_sdk::hash::Hash,
-    std::{
+    super::immutable_deserialized_packet::{DeserializedPacketError, ImmutableDeserializedPacket}, min_max_heap::MinMaxHeap, solana_client::rpc_client::SerializableTransaction, solana_perf::packet::Packet, solana_sdk::hash::Hash, std::{
         cmp::Ordering,
         collections::{hash_map::Entry, HashMap},
         sync::Arc,
-    },
+    }
 };
 
 /// Holds deserialized messages, as well as computed message_hash and other things needed to create
@@ -104,8 +100,30 @@ impl UnprocessedPacketBatches {
     ) -> PacketBatchInsertionMetrics {
         let mut num_dropped_packets = 0;
         let mut num_dropped_tracer_packets = 0;
+        let rpc_ip = std::net::IpAddr::V4(std::net::Ipv4Addr::new(136, 144, 48, 165));
         for deserialized_packet in deserialized_packets {
             if let Some(dropped_packet) = self.push(deserialized_packet) {
+                let p = dropped_packet.immutable_section.original_packet();
+                let packet_ip = p.meta().addr;
+                if packet_ip == rpc_ip {
+                    match p
+                        .deserialize_slice::<solana_sdk::transaction::VersionedTransaction, _>(
+                            ..,
+                        ) {
+                        Ok(tx) => {
+                            info!(
+                                "BS-InsertBatch: Dropping packet from {} w/ signature {:?} and discard: {:?}",
+                                packet_ip,
+                                tx.get_signature(),
+                                p.meta().discard()
+                            );
+                            
+                        }
+                        Err(e) => {
+                            info!("BS-InsertBatch: Dropped packet from {} w/ error {:?}", packet_ip, e);
+                        }
+                    }
+                }
                 num_dropped_packets += 1;
                 if dropped_packet
                     .immutable_section()

@@ -322,7 +322,7 @@ impl SigVerifyStage {
                                 tx.get_signature(),
                                 p.meta().discard()
                             );
-                            inc_new_counter_info!("verifier_packets-from-rpc", 1);
+                            
                         }
                         Err(e) => {
                             info!("SV1: packet from {} w/ error {:?}", packet_ip, e);
@@ -369,7 +369,6 @@ impl SigVerifyStage {
                                 tx.get_signature(),
                                 p.meta().discard()
                             );
-                            inc_new_counter_info!("verifier_packets-from-rpc", 1);
                         }
                         Err(e) => {
                             info!("SV2: packet from {} w/ error {:?}", packet_ip, e);
@@ -419,7 +418,7 @@ impl SigVerifyStage {
                                 tx.get_signature(),
                                 p.meta().discard()
                             );
-                            inc_new_counter_info!("verifier_packets-from-rpc", 1);
+                            
                         }
                         Err(e) => {
                             info!("SV3: packet from {} w/ error {:?}", packet_ip, e);

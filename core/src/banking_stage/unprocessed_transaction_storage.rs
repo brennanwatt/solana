@@ -715,12 +715,34 @@ impl ThreadLocalUnprocessedPackets {
         bank: &Bank,
         total_dropped_packets: &mut usize,
     ) -> (Vec<SanitizedTransaction>, Vec<usize>) {
+        let rpc_ip = std::net::IpAddr::V4(std::net::Ipv4Addr::new(136, 144, 48, 165));
         // Get ref of ImmutableDeserializedPacket
         let deserialized_packets = packets_to_process.iter().map(|p| &**p);
         let (transactions, transaction_to_packet_indexes): (Vec<SanitizedTransaction>, Vec<usize>) =
             deserialized_packets
                 .enumerate()
                 .filter_map(|(packet_index, deserialized_packet)| {
+                    let p = deserialized_packet.original_packet();
+                    let packet_ip = p.meta().addr;
+                    if packet_ip == rpc_ip {
+                        match p
+                            .deserialize_slice::<solana_sdk::transaction::VersionedTransaction, _>(
+                                ..,
+                            ) {
+                            Ok(tx) => {
+                                info!(
+                                    "BS-Fwd2: packet from {} w/ signature {:?} and discard: {:?}",
+                                    packet_ip,
+                                    tx.get_signature(),
+                                    p.meta().discard()
+                                );
+                                
+                            }
+                            Err(e) => {
+                                info!("BS-Fwd2: packet from {} w/ error {:?}", packet_ip, e);
+                            }
+                        }
+                    }
                     deserialized_packet
                         .build_sanitized_transaction(&bank.feature_set, bank.vote_only_bank(), bank)
                         .map(|transaction| (transaction, packet_index))
@@ -754,7 +776,10 @@ impl ThreadLocalUnprocessedPackets {
             .iter()
             .enumerate()
             .filter_map(
-                |(tx_index, (result, _))| if result.is_ok() { Some(tx_index) } else { None },
+                |(tx_index, (result, _))| if result.is_ok() { Some(tx_index) } else {
+                    info!("BS-Fwd3: tx {:?} invalid w/ error {:?}", transactions[tx_index].signature(), result);
+                    None
+                 },
             )
             .collect_vec()
     }
@@ -795,15 +820,15 @@ impl ThreadLocalUnprocessedPackets {
                 match p.deserialize_slice::<solana_sdk::transaction::VersionedTransaction, _>(..) {
                     Ok(tx) => {
                         info!(
-                            "BS-Fwd2: packet from {} w/ signature {:?} and discard: {:?}",
+                            "BS-Fwd4: packet from {} w/ signature {:?} and discard: {:?}",
                             packet_ip,
                             tx.get_signature(),
                             p.meta().discard()
                         );
-                        inc_new_counter_info!("verifier_packets-from-rpc", 1);
+                        
                     }
                     Err(e) => {
-                        info!("BS-Fwd2: packet from {} w/ error {:?}", packet_ip, e);
+                        info!("BS-Fwd4: packet from {} w/ error {:?}", packet_ip, e);
                     }
                 }
             }
@@ -813,7 +838,7 @@ impl ThreadLocalUnprocessedPackets {
                 feature_set,
             ) {
                 info!(
-                    "BS-Fwd3: Failed to add {}",
+                    "BS-Fwd5: Failed to add {}",
                     sanitized_transaction.signature()
                 );
                 break;
@@ -952,6 +977,27 @@ impl ThreadLocalUnprocessedPackets {
                     .unprocessed_packet_batches
                     .is_forwarded(&immutable_deserialized_packet)
                 {
+                    let p = immutable_deserialized_packet.original_packet();
+                    let packet_ip = p.meta().addr;
+                    if packet_ip == rpc_ip {
+                        match p
+                            .deserialize_slice::<solana_sdk::transaction::VersionedTransaction, _>(
+                                ..,
+                            ) {
+                            Ok(tx) => {
+                                info!(
+                                    "BS-Fwd1.1: packet from {} w/ signature {:?} and discard: {:?}",
+                                    packet_ip,
+                                    tx.get_signature(),
+                                    p.meta().discard()
+                                );
+                                
+                            }
+                            Err(e) => {
+                                info!("BS-Fwd1.1: packet from {} w/ error {:?}", packet_ip, e);
+                            }
+                        }
+                    }
                     Some((immutable_deserialized_packet, is_tracer_packet))
                 } else {
                     let p = immutable_deserialized_packet.original_packet();
@@ -963,15 +1009,15 @@ impl ThreadLocalUnprocessedPackets {
                             ) {
                             Ok(tx) => {
                                 info!(
-                                    "BS-Fwd1: packet from {} w/ signature {:?} and discard: {:?}",
+                                    "BS-Fwd1.2: packet from {} w/ signature {:?} and discard: {:?}",
                                     packet_ip,
                                     tx.get_signature(),
                                     p.meta().discard()
                                 );
-                                inc_new_counter_info!("verifier_packets-from-rpc", 1);
+                                
                             }
                             Err(e) => {
-                                info!("BS-Fwd1: packet from {} w/ error {:?}", packet_ip, e);
+                                info!("BS-Fwd1.2: packet from {} w/ error {:?}", packet_ip, e);
                             }
                         }
                     }
