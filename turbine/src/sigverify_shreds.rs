@@ -113,8 +113,9 @@ fn run_shred_sigverify<const K: usize>(
     stats.num_iters += 1;
     stats.num_batches += packets.len();
     stats.num_packets += packets.iter().map(PacketBatch::len).sum::<usize>();
-    stats.num_discards_pre += count_discards(&packets);
-    stats.num_duplicates += thread_pool.install(|| {
+    let num_discards_pre = count_discards(&packets);
+    stats.num_discards_pre += num_discards_pre;
+    let num_duplicates = thread_pool.install(|| {
         packets
             .par_iter_mut()
             .flatten()
@@ -128,6 +129,7 @@ fn run_shred_sigverify<const K: usize>(
             .map(|packet| packet.meta_mut().set_discard(true))
             .count()
     });
+    stats.num_duplicates += num_duplicates;
     verify_packets(
         thread_pool,
         &keypair.pubkey(),
@@ -137,7 +139,8 @@ fn run_shred_sigverify<const K: usize>(
         &mut packets,
         cache,
     );
-    stats.num_discards_post += count_discards(&packets);
+    let num_discards_post = count_discards(&packets) - num_duplicates - num_discards_pre;
+    stats.num_discards_post += num_discards_post;
     // Resign shreds Merkle root as the retransmitter node.
     let resign_start = Instant::now();
     thread_pool.install(|| {
@@ -376,5 +379,64 @@ mod tests {
         );
         assert!(!batches[0][0].meta().discard());
         assert!(batches[0][1].meta().discard());
+    }
+
+    fn run_shred_sigverify_for_test(
+        shred_fetch_receiver: &Receiver<PacketBatch>,
+        stats: &mut ShredSigVerifyStats,
+    ) {
+        let _ = run_shred_sigverify(
+            &ThreadPoolBuilder::new().num_threads(1).build().unwrap(),
+            &Keypair::new(),
+            &BankForks::new_rw_arc(Bank::default_for_tests()),
+            &LeaderScheduleCache::default(),
+            &RecyclerCache::warmed(),
+            &Deduper::<2, [u8]>::new(&mut rand::thread_rng(), 1),
+            shred_fetch_receiver,
+            &crossbeam_channel::unbounded().0,
+            &crossbeam_channel::unbounded().0,
+            &RwLock::new(LruCache::new(1)),
+            stats,
+        );
+    }
+
+    #[test]
+    fn test_run_shred_sigverify_stats() {
+        // Prepare stats struct that will be checked for accuracy.
+        let mut stats = ShredSigVerifyStats::new(Instant::now());
+
+        // Prepare channel for sending shreds.
+        let (shred_fetch_sender, shred_fetch_receiver) = crossbeam_channel::unbounded();
+
+        // Setup packet batch with single, previously discarded packet.
+        let mut packet = Packet::default();
+        packet.meta_mut().set_discard(true);
+        let packet_batch = PacketBatch::new(vec![packet]);
+
+        // Send packet batch into the channel.
+        shred_fetch_sender.send(packet_batch).unwrap();
+
+        // Handle verification of this packet.
+        run_shred_sigverify_for_test(&shred_fetch_receiver, &mut stats);
+
+        // Ensure discard stats incremented as expected.
+        assert!(stats.num_discards_pre == 1);
+        assert!(stats.num_duplicates == 0);
+        assert!(stats.num_discards_post == 0);
+
+        // Setup packet batch with single invalid packet.
+        let packet = Packet::default();
+        let packet_batch = PacketBatch::new(vec![packet]);
+
+        // Send packet batch into the channel.
+        shred_fetch_sender.send(packet_batch).unwrap();
+
+        // Handle verification of this packet.
+        run_shred_sigverify_for_test(&shred_fetch_receiver, &mut stats);
+
+        // Ensure discard stats incremented as expected.
+        assert!(stats.num_discards_pre == 1);
+        assert!(stats.num_duplicates == 0);
+        assert!(stats.num_discards_post == 1);
     }
 }
