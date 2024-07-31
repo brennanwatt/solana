@@ -2043,7 +2043,7 @@ impl ReplayStage {
         assert!(!poh_recorder.read().unwrap().has_bank());
 
         let (poh_slot, parent_slot) =
-            match poh_recorder.read().unwrap().reached_leader_slot(my_pubkey) {
+            match poh_recorder.write().unwrap().reached_leader_slot(my_pubkey) {
                 PohLeaderStatus::Reached {
                     poh_slot,
                     parent_slot,

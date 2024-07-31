@@ -552,7 +552,7 @@ impl PohRecorder {
     /// Returns if the leader slot has been reached along with the current poh
     /// slot and the parent slot (could be a few slots ago if any previous
     /// leaders needed to be skipped).
-    pub fn reached_leader_slot(&self, my_pubkey: &Pubkey) -> PohLeaderStatus {
+    pub fn reached_leader_slot(&mut self, my_pubkey: &Pubkey) -> PohLeaderStatus {
         trace!(
             "tick_height {}, start_tick_height {}, leader_first_tick_height_including_grace_ticks {:?}, grace_ticks {}, has_bank {}",
             self.tick_height,
@@ -562,8 +562,6 @@ impl PohRecorder {
             self.has_bank()
         );
 
-        let next_tick_height = self.tick_height + 1;
-        let next_poh_slot = self.slot_for_tick_height(next_tick_height);
         let Some(leader_first_tick_height_including_grace_ticks) =
             self.leader_first_tick_height_including_grace_ticks
         else {
@@ -576,8 +574,23 @@ impl PohRecorder {
             return PohLeaderStatus::NotReached;
         }
 
-        assert!(next_tick_height >= self.start_tick_height);
-        let poh_slot = next_poh_slot;
+        assert!(self.tick_height + 1 >= self.start_tick_height);
+
+        // Roll back PoH to the target slot if we've ticked ahead.
+        let target_tick_height = leader_first_tick_height_including_grace_ticks
+            .saturating_sub(1)
+            .saturating_sub(self.grace_ticks);
+        let num_ticks_late = self.tick_height.saturating_sub(target_tick_height) as usize;
+        let ticks_in_tick_cache = self.tick_cache.len();
+        if ticks_in_tick_cache > num_ticks_late {
+            self.tick_cache
+                .truncate(ticks_in_tick_cache - num_ticks_late);
+        } else {
+            self.tick_cache.clear();
+        }
+        self.tick_height = target_tick_height;
+
+        let poh_slot = self.slot_for_tick_height(self.tick_height);
         let parent_slot = self.start_slot();
         PohLeaderStatus::Reached {
             poh_slot,
