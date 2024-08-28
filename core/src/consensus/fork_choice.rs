@@ -64,12 +64,20 @@ pub trait ForkChoice {
     ) -> Vec<Self::ForkChoiceKey>;
 }
 
+/*The idea here is that if we are waiting to switch due to FailedSwitchThreshold, reset_bank will be on the same fork as our last_voted_slot.
+We can then use the bank to figure out if our last vote has landed.
+
+This can be None if we have not voted before, or the fork from last_voted_slot is undergoing dump and repair due to duplicate consensus.
+For these cases we don't expect to be stuck long enough for super refresh to be needed so no reason to check the conditions. */
+
 fn last_vote_able_to_land(
     reset_bank: Option<&Bank>,
     progress: &ProgressMap,
     tower: &Tower,
 ) -> bool {
     let Some(heaviest_bank_on_same_voted_fork) = reset_bank else {
+        // No reset bank means we are in the middle of dump & repair. Last vote
+        // landing is irrelevant.
         return true;
     };
 
@@ -84,16 +92,19 @@ fn last_vote_able_to_land(
         return true;
     };
 
-    // Last vote did not land. Now let's check if it's able to land.
+    // Check if our last vote is able to land in order to determine if we should
+    // super refresh to vote at the tip. If any of the following are true, we
+    // don't need to super refresh:
+    // 1. Last vote has landed
     my_latest_landed_vote_slot >= last_voted_slot
-        // If we are already voting at the tip, there is nothing we can do.
-        || last_voted_slot >= heaviest_bank_on_same_voted_fork.slot()
-        // Last vote outside slot hashes of the tip of fork
-        || heaviest_bank_on_same_voted_fork
-            .is_in_slot_hashes_history(&last_voted_slot)
+    // 2. Already voting at the tip
+            || last_voted_slot >= heaviest_bank_on_same_voted_fork.slot()
+    // 3. Last vote is withink slot hashes, regular refresh is enough
+            || heaviest_bank_on_same_voted_fork
+        .is_in_slot_hashes_history(&last_voted_slot)
 }
 
-fn select_forks_failed_switch_threshold(
+fn recheck_fork_decision_failed_switch_threshold(
     reset_bank: Option<&Bank>,
     progress: &ProgressMap,
     tower: &Tower,
@@ -106,8 +117,7 @@ fn select_forks_failed_switch_threshold(
     if !last_vote_able_to_land(reset_bank, progress, tower) {
         // If we reach here, these assumptions are true:
         // 1. We can't switch because of threshold
-        // 2. Our last vote was on a non-duplicate/confirmed slot
-        // 3. Our last vote is now outside slot hashes history of the tip of fork
+        // 2. Our last vote is now outside slot hashes history of the tip of fork
         // So, there was no hope of this last vote ever landing again.
 
         // In this case, we do want to obey threshold, yet try to register our vote on
@@ -117,9 +127,8 @@ fn select_forks_failed_switch_threshold(
         return SwitchForkDecision::SameFork;
     }
 
-    // If we can't switch and our last vote was on a non-duplicate/confirmed slot, then
-    // reset to the the next votable bank on the same fork as our last vote,
-    // but don't vote.
+    // If we can't switch, then reset to the the next votable bank on the same
+    // fork as our last vote, but don't vote.
 
     // We don't just reset to the heaviest fork when switch threshold fails because
     // a situation like this can occur:
@@ -158,6 +167,116 @@ fn select_forks_failed_switch_threshold(
     switch_fork_decision
 }
 
+fn select_candidates_failed_switch<'a>(
+    heaviest_bank: &'a Arc<Bank>,
+    heaviest_bank_on_same_voted_fork: Option<&'a Arc<Bank>>,
+    progress: &'a ProgressMap,
+    tower: &Tower,
+    failure_reasons: &mut Vec<HeaviestForkFailures>,
+    switch_proof_stake: u64,
+    total_stake: u64,
+    initial_switch_fork_decision: SwitchForkDecision,
+) -> CandidateVoteAndResetBanks<'a> {
+    // If our last vote is unable to land (even through normal refresh), then we
+    // temporarily "super" refresh our vote to the tip of our last voted fork.
+    let final_switch_fork_decision = recheck_fork_decision_failed_switch_threshold(
+        heaviest_bank_on_same_voted_fork.map(|bank| bank.as_ref()),
+        progress,
+        tower,
+        heaviest_bank.slot(),
+        failure_reasons,
+        switch_proof_stake,
+        total_stake,
+        initial_switch_fork_decision,
+    );
+    let candidate_vote_bank = if final_switch_fork_decision.can_vote() {
+        // We need to "super" refresh our vote to the tip of our last voted fork
+        // because our last vote is unable to land. This is inferred by
+        // initially determining we can't vote but then determining we can vote
+        // on the same fork.
+        heaviest_bank_on_same_voted_fork
+    } else {
+        // Just return the original vote candidate (the heaviest bank) for
+        // logging purposes. We can't actually vote on it, but this will allow
+        // us to check if there are any additional voting failures besides the
+        // switch threshold.
+        Some(heaviest_bank)
+    };
+    CandidateVoteAndResetBanks {
+        candidate_vote_bank,
+        reset_bank: heaviest_bank_on_same_voted_fork,
+        switch_fork_decision: final_switch_fork_decision,
+    }
+}
+
+fn select_candidates_failed_switch_duplicate_rollback<'a>(
+    heaviest_bank: &'a Arc<Bank>,
+    latest_duplicate_ancestor: Slot,
+    failure_reasons: &mut Vec<HeaviestForkFailures>,
+    initial_switch_fork_decision: SwitchForkDecision,
+) -> CandidateVoteAndResetBanks<'a> {
+    // If we can't switch and our last vote was on an unconfirmed, duplicate
+    // slot, then we need to reset to the heaviest bank, even if the heaviest
+    // bank is not a descendant of the last vote.
+    //
+    // Usually for switch threshold failures, we reset to the heaviest
+    // descendant of the last vote, but in this case, the last vote was on a
+    // duplicate branch.
+    //
+    // We reset to the heaviest bank because in the case of *unconfirmed*
+    // duplicate slots, somebody needs to generate an alternative branch to
+    // escape a situation like a 50-50 split where both partitions have voted on
+    // different versions of the same duplicate slot.
+    //
+    // Unlike the situation described in `Figure 1` above, this is safe. To see
+    // why, imagine the same situation described in Figure 1 above occurs, but
+    // slot 2 is a duplicate block. There are now a few cases:
+    //
+    // Note first that DUPLICATE_THRESHOLD + SWITCH_FORK_THRESHOLD +
+    // DUPLICATE_LIVENESS_THRESHOLD = 1;
+    //
+    // 1) > DUPLICATE_THRESHOLD of the network voted on some version of slot 2.
+    // Because duplicate slots can be confirmed by gossip, unlike the situation
+    // described in `Figure 1`, we don't need those votes to land in a
+    // descendant to confirm slot 2. Once slot 2 is confirmed by gossip votes,
+    // that fork is added back to the fork choice set and falls back into normal
+    // fork choice, which is covered by the `FailedSwitchThreshold` case above
+    // (everyone will resume building on their last voted fork, slot 4, since
+    // slot 8 doesn't have enough stake for switch threshold)
+    //
+    // 2) <= DUPLICATE_THRESHOLD of the network voted on some version of slot 2,
+    // > SWITCH_FORK_THRESHOLD of the network voted on slot 8. Then everybody
+    // abandons the duplicate fork from fork choice and builds on slot 8's fork.
+    // They can also vote on slot 8's fork because it has sufficient weight to
+    // pass the switching threshold.
+    //
+    // 3) <= DUPLICATE_THRESHOLD of the network voted on some version of slot 2,
+    // <= SWITCH_FORK_THRESHOLD of the network voted on slot 8. This means more
+    // than DUPLICATE_LIVENESS_THRESHOLD of the network is gone, so we cannot
+    // guarantee progress anyways.
+    //
+    // Note: the heaviest fork is never descended from a known unconfirmed
+    // duplicate slot because the fork choice rule ensures that (marks it as an
+    // invalid candidate). Thus, it's safe to use as the reset bank.
+    let reset_bank = Some(heaviest_bank);
+    info!(
+        "Waiting to switch vote to {}, resetting to slot {:?} for now, latest duplicate ancestor: {:?}",
+        heaviest_bank.slot(),
+        reset_bank.as_ref().map(|b| b.slot()),
+        latest_duplicate_ancestor,
+    );
+    failure_reasons.push(HeaviestForkFailures::FailedSwitchThreshold(
+        heaviest_bank.slot(),
+        0, // In this case we never actually performed the switch check, 0 for now
+        0,
+    ));
+    CandidateVoteAndResetBanks {
+        candidate_vote_bank: None,
+        reset_bank,
+        switch_fork_decision: initial_switch_fork_decision,
+    }
+}
+
 fn select_candidate_vote_and_reset_banks<'a>(
     heaviest_bank: &'a Arc<Bank>,
     heaviest_bank_on_same_voted_fork: Option<&'a Arc<Bank>>,
@@ -168,54 +287,32 @@ fn select_candidate_vote_and_reset_banks<'a>(
 ) -> CandidateVoteAndResetBanks<'a> {
     match initial_switch_fork_decision {
         SwitchForkDecision::FailedSwitchThreshold(switch_proof_stake, total_stake) => {
-            // Even though we think we want to switch to a new, heavier fork, we
-            // actually want to continue voting on our current fork if our last
-            // vote was unable land.
-            let final_switch_fork_decision = select_forks_failed_switch_threshold(
-                heaviest_bank_on_same_voted_fork.map(|bank| bank.as_ref()),
+            select_candidates_failed_switch(
+                heaviest_bank,
+                heaviest_bank_on_same_voted_fork,
                 progress,
                 tower,
-                heaviest_bank.slot(),
                 failure_reasons,
                 switch_proof_stake,
                 total_stake,
                 initial_switch_fork_decision,
-            );
-            let candidate_vote_bank = if final_switch_fork_decision.can_vote() {
-                heaviest_bank_on_same_voted_fork
-            } else {
-                Some(heaviest_bank)
-            };
-            CandidateVoteAndResetBanks {
-                candidate_vote_bank,
-                reset_bank: heaviest_bank_on_same_voted_fork,
-                switch_fork_decision: final_switch_fork_decision,
-            }
+            )
         }
         SwitchForkDecision::FailedSwitchDuplicateRollback(latest_duplicate_ancestor) => {
-            let reset_bank = Some(heaviest_bank);
-            info!(
-                "Waiting to switch vote to {}, resetting to slot {:?} for now, latest duplicate ancestor: {:?}",
-                heaviest_bank.slot(),
-                reset_bank.as_ref().map(|b| b.slot()),
+            select_candidates_failed_switch_duplicate_rollback(
+                heaviest_bank,
                 latest_duplicate_ancestor,
-            );
-            failure_reasons.push(HeaviestForkFailures::FailedSwitchThreshold(
-                heaviest_bank.slot(),
-                0, // In this case we never actually performed the switch check, 0 for now
-                0,
-            ));
+                failure_reasons,
+                initial_switch_fork_decision,
+            )
+        }
+        SwitchForkDecision::SameFork | SwitchForkDecision::SwitchProof(_) => {
             CandidateVoteAndResetBanks {
-                candidate_vote_bank: None,
-                reset_bank,
+                candidate_vote_bank: Some(heaviest_bank),
+                reset_bank: Some(heaviest_bank),
                 switch_fork_decision: initial_switch_fork_decision,
             }
         }
-        _ => CandidateVoteAndResetBanks {
-            candidate_vote_bank: Some(heaviest_bank),
-            reset_bank: Some(heaviest_bank),
-            switch_fork_decision: initial_switch_fork_decision,
-        },
     }
 }
 
