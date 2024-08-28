@@ -64,12 +64,6 @@ pub trait ForkChoice {
     ) -> Vec<Self::ForkChoiceKey>;
 }
 
-/*The idea here is that if we are waiting to switch due to FailedSwitchThreshold, reset_bank will be on the same fork as our last_voted_slot.
-We can then use the bank to figure out if our last vote has landed.
-
-This can be None if we have not voted before, or the fork from last_voted_slot is undergoing dump and repair due to duplicate consensus.
-For these cases we don't expect to be stuck long enough for super refresh to be needed so no reason to check the conditions. */
-
 fn last_vote_able_to_land(
     reset_bank: Option<&Bank>,
     progress: &ProgressMap,
@@ -89,6 +83,8 @@ fn last_vote_able_to_land(
     let Some(my_latest_landed_vote_slot) =
         progress.my_latest_landed_vote(heaviest_bank_on_same_voted_fork.slot())
     else {
+        // We've either never landed a vote or fork has been pruned or is in the
+        // middle of dump & repair. Either way, no need to super refresh.
         return true;
     };
 
