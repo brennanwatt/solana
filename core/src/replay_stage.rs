@@ -3606,12 +3606,13 @@ impl ReplayStage {
         slot: Slot,
         ancestors: &HashMap<u64, HashSet<u64>>,
     ) {
+        let threshold_decision = tower.check_vote_stake_thresholds2(slot, progress);
+
         let stats = progress
             .get_fork_stats_mut(slot)
             .expect("All frozen banks must exist in the Progress map");
 
-        stats.vote_threshold =
-            tower.check_vote_stake_thresholds(slot, &stats.voted_stakes, stats.total_stake);
+        stats.vote_threshold = threshold_decision;
         stats.is_locked_out = tower.is_locked_out(
             slot,
             ancestors
