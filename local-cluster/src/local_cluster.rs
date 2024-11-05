@@ -39,8 +39,7 @@ use {
         signature::{Keypair, Signature, Signer},
         signers::Signers,
         stake::{
-            instruction as stake_instruction,
-            state::{Authorized, Lockup},
+            self, instruction as stake_instruction, state::{Authorized, Lockup}
         },
         system_transaction,
         transaction::Transaction,

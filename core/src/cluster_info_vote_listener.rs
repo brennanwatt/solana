@@ -44,7 +44,7 @@ use {
     },
     std::{
         cmp::max,
-        collections::HashMap,
+        collections::{HashMap, HashSet},
         iter::repeat,
         sync::{
             atomic::{AtomicBool, Ordering},
@@ -264,6 +264,14 @@ impl ClusterInfoVoteListener {
             inc_new_counter_debug!("cluster_info_vote_listener-recv_count", votes.len());
             if !votes.is_empty() {
                 let (vote_txs, packets) = Self::verify_votes(votes, root_bank_cache);
+                let mut vote_slots = HashSet::new();
+                for vote_tx in &vote_txs {
+                    let (_, vote, ..) = vote_parser::parse_vote_transaction(vote_tx).unwrap();
+                    vote_slots.extend(vote.slots());
+                }
+                if !vote_slots.is_empty() {
+                    println!("{:?} observed votes for {:?}", cluster_info.id(), vote_slots);
+                }
                 verified_vote_transactions_sender.send(vote_txs)?;
                 verified_packets_sender.send(BankingPacketBatch::new((packets, None)))?;
             }

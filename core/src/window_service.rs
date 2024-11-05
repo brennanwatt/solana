@@ -525,7 +525,10 @@ impl WindowService {
                         }
                     }
 
-                    if last_print.elapsed().as_secs() > 2 {
+                    if last_print.elapsed().as_secs() > 0 {
+                        if ws_metrics.num_shreds_received > 0 {
+                            println!("{:?} received {} repairs, {} shreds", blockstore.pubkey, ws_metrics.num_repairs, ws_metrics.num_shreds_received);
+                        }
                         metrics.report_metrics("blockstore-insert-shreds");
                         metrics = BlockstoreInsertionMetrics::default();
                         ws_metrics.report_metrics("recv-window-insert-shreds");

@@ -104,6 +104,7 @@ impl VotingService {
             VoteOp::PushVote {
                 tx, tower_slots, ..
             } => {
+                println!("{:?} voting for {:?}", cluster_info.id(), tower_slots.last().unwrap());
                 cluster_info.push_vote(&tower_slots, tx);
             }
             VoteOp::RefreshVote {

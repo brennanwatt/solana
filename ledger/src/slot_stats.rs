@@ -2,7 +2,7 @@ use {
     crate::blockstore_meta::SlotMeta,
     bitflags::bitflags,
     lru::LruCache,
-    solana_sdk::clock::Slot,
+    solana_sdk::{clock::Slot, pubkey::Pubkey},
     std::{
         collections::HashMap,
         sync::{Mutex, MutexGuard},
@@ -96,6 +96,7 @@ impl SlotsStats {
         fec_set_index: u32,
         source: ShredSource,
         slot_meta: Option<&SlotMeta>,
+        pubkey: Pubkey,
     ) {
         let mut slot_full_reporting_info = None;
         let mut stats = self.stats.lock().unwrap();
@@ -129,6 +130,7 @@ impl SlotsStats {
                 .last_index
                 .and_then(|ix| i64::try_from(ix).ok())
                 .unwrap_or(-1);
+            println!("{:?} slot {slot} full. Repaired {num_repaired}/{}", pubkey, last_index+1);
             datapoint_info!(
                 "shred_insert_is_full",
                 ("slot", slot, i64),

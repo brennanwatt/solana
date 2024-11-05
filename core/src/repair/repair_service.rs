@@ -500,7 +500,7 @@ impl RepairService {
                 batch_send_repairs_elapsed.as_us(),
             );
 
-            if last_stats.elapsed().as_secs() > 2 {
+            if last_stats.elapsed().as_secs() > 0 {
                 let repair_total = repair_stats.shred.count
                     + repair_stats.highest_shred.count
                     + repair_stats.orphan.count;
@@ -515,6 +515,12 @@ impl RepairService {
                     })
                     .collect();
                 info!("repair_stats: {:?}", slot_to_count);
+                let mut sorted_slots_repaired = slot_to_count.iter().map(|(slot, _count)| *slot).collect::<Vec<_>>();
+                sorted_slots_repaired.sort();
+                if !sorted_slots_repaired.is_empty() {
+                    println!("{:?} repaired: {:?}", blockstore.pubkey, sorted_slots_repaired);
+                }
+
                 if repair_total > 0 {
                     let nonzero_num = |x| if x == 0 { None } else { Some(x) };
                     datapoint_info!(

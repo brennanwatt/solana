@@ -4473,6 +4473,7 @@ impl RpcClient {
                 }
             }
             run += 1;
+            std::thread::sleep(Duration::from_millis(100));
         }
     }
 

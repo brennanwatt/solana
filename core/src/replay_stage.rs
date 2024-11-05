@@ -966,6 +966,12 @@ impl ReplayStage {
 
                 let mut heaviest_fork_failures_time = Measure::start("heaviest_fork_failures_time");
                 if tower.is_recent(heaviest_bank.slot()) && !heaviest_fork_failures.is_empty() {
+                    println!(
+                        "{:?} Couldn't vote on heaviest fork: {:?}, heaviest_fork_failures: {:?}",
+                        my_pubkey,
+                        heaviest_bank.slot(),
+                        heaviest_fork_failures
+                    );
                     Self::log_heaviest_fork_failures(
                         &heaviest_fork_failures,
                         &bank_forks,

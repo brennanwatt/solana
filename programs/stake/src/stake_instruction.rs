@@ -78,6 +78,7 @@ declare_process_instruction!(Entrypoint, DEFAULT_COMPUTE_UNITS, |invoke_context|
     let stake_instruction: StakeInstruction = limited_deserialize(data)?;
     if epoch_rewards_active && !matches!(stake_instruction, StakeInstruction::GetMinimumDelegation)
     {
+        println!("stake program error because epoch rewards are active");
         return Err(StakeError::EpochRewardsActive.into());
     }
     match stake_instruction {

@@ -537,6 +537,7 @@ impl Validator {
         admin_rpc_service_post_init: Arc<RwLock<Option<AdminRpcRequestMetadataPostInit>>>,
     ) -> Result<Self> {
         let start_time = Instant::now();
+        println!("{:?} Starting validator", identity_keypair.pubkey());
 
         // Initialize the global rayon pool first to ensure the value in config
         // is honored. Otherwise, some code accessing the global pool could
@@ -585,7 +586,6 @@ impl Validator {
             } else {
                 None
             };
-
         if config.voting_disabled {
             warn!("voting disabled");
             authorized_voter_keypairs.write().unwrap().clear();
@@ -709,7 +709,7 @@ impl Validator {
 
         let (
             bank_forks,
-            blockstore,
+            mut blockstore,
             original_blockstore_root,
             ledger_signal_receiver,
             leader_schedule_cache,
@@ -740,6 +740,7 @@ impl Validator {
             Some(poh_timing_point_sender.clone()),
         )
         .map_err(ValidatorError::Other)?;
+        Arc::get_mut(&mut blockstore).unwrap().pubkey = identity_keypair.pubkey();
 
         if !config.no_poh_speed_test {
             check_poh_speed(&bank_forks.read().unwrap().root_bank(), None)?;
@@ -785,6 +786,7 @@ impl Validator {
         node.info.set_shred_version(shred_version);
         node.info.set_wallclock(timestamp());
         Self::print_node_info(&node);
+        println!("{:?} started validator with {:?}", node.info.pubkey, node.sockets);
 
         let mut cluster_info = ClusterInfo::new(
             node.info.clone(),

@@ -68,7 +68,7 @@ pub enum Error {
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 pub struct ContactInfo {
-    pubkey: Pubkey,
+    pub pubkey: Pubkey,
     #[serde(with = "serde_varint")]
     wallclock: u64,
     // When the node instance was first created.

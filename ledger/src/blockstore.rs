@@ -264,6 +264,7 @@ pub struct Blockstore {
     pub lowest_cleanup_slot: RwLock<Slot>,
     pub slots_stats: SlotsStats,
     rpc_api_metrics: BlockstoreRpcApiMetrics,
+    pub pubkey: Pubkey,
 }
 
 pub struct IndexMetaWorkingSetEntry {
@@ -417,6 +418,7 @@ impl Blockstore {
             lowest_cleanup_slot: RwLock::<Slot>::default(),
             slots_stats: SlotsStats::default(),
             rpc_api_metrics: BlockstoreRpcApiMetrics::default(),
+            pubkey: Pubkey::default(),
         };
         blockstore.cleanup_old_entries()?;
         blockstore.update_highest_primary_index_slot()?;
@@ -1504,7 +1506,7 @@ impl Blockstore {
         }
 
         self.slots_stats
-            .record_shred(shred.slot(), shred.fec_set_index(), shred_source, None);
+            .record_shred(shred.slot(), shred.fec_set_index(), shred_source, None, self.pubkey);
 
         // insert coding shred into rocks
         let result = self
@@ -2226,6 +2228,7 @@ impl Blockstore {
             shred.fec_set_index(),
             shred_source,
             Some(slot_meta),
+            self.pubkey,
         );
 
         // slot is full, send slot full timing to poh_timing_report service.
