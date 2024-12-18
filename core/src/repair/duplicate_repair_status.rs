@@ -10,7 +10,7 @@ use {
 
 // Number of validators to sample for the ancestor repair
 // We use static to enable tests from having to spin up 21 validators
-static ANCESTOR_HASH_REPAIR_SAMPLE_SIZE: AtomicUsize = AtomicUsize::new(21);
+static ANCESTOR_HASH_REPAIR_SAMPLE_SIZE: AtomicUsize = AtomicUsize::new(2);
 
 pub fn get_ancestor_hash_repair_sample_size() -> usize {
     ANCESTOR_HASH_REPAIR_SAMPLE_SIZE.load(Ordering::Relaxed)
