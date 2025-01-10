@@ -67,7 +67,11 @@ impl Default for Version {
             major: env!("CARGO_PKG_VERSION_MAJOR").parse().unwrap(),
             minor: env!("CARGO_PKG_VERSION_MINOR").parse().unwrap(),
             patch: env!("CARGO_PKG_VERSION_PATCH").parse().unwrap(),
-            commit: compute_commit(option_env!("CI_COMMIT")),
+            commit: if cfg!(debug_assertions) {
+                Some(0)
+            } else {
+                compute_commit(option_env!("CI_COMMIT"))
+            },
             feature_set,
         }
     }
@@ -89,6 +93,7 @@ impl fmt::Debug for Version {
             self.patch,
             match self.commit {
                 None => "devbuild".to_string(),
+                Some(commit) if commit == 0 => "dbgbuild".to_string(),
                 Some(commit) => format!("{:08x}", commit),
             },
             self.feature_set,
