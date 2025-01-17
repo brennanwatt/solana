@@ -331,7 +331,7 @@ pub mod test {
             &blockstore,
             &mut slot_meta_cache,
             &mut repairs,
-            4,
+            5,
             &mut outstanding_repairs,
         );
         let expected_repairs = [1, 7, 8, 3, 5]
