@@ -4,8 +4,8 @@ use {
         repair::{repair_service::RepairService, serve_repair::ShredRepairType},
     },
     solana_ledger::{blockstore::Blockstore, blockstore_meta::SlotMeta},
-    solana_sdk::{clock::Slot, hash::Hash, timing::timestamp},
-    std::collections::{hash_map::Entry, HashMap, HashSet},
+    solana_sdk::{clock::Slot, hash::Hash},
+    std::collections::{HashMap, HashSet},
 };
 
 struct GenericTraversal<'a> {

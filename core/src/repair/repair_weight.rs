@@ -3,7 +3,7 @@ use {
         consensus::{heaviest_subtree_fork_choice::HeaviestSubtreeForkChoice, tree_diff::TreeDiff},
         repair::{
             repair_generic_traversal::{get_closest_completion, get_unknown_last_index},
-            repair_service::{BestRepairsStats, RepairService, RepairTiming},
+            repair_service::{RepairMetrics, RepairService},
             repair_weighted_traversal,
             serve_repair::ShredRepairType,
         },
@@ -19,10 +19,9 @@ use {
         epoch_schedule::{Epoch, EpochSchedule},
         hash::Hash,
         pubkey::Pubkey,
-        timing::timestamp,
     },
     std::{
-        collections::{hash_map::Entry, HashMap, HashSet, VecDeque},
+        collections::{HashMap, HashSet, VecDeque},
         iter,
     },
 };
