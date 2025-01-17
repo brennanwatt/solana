@@ -712,12 +712,12 @@ impl RepairService {
                 }
             }
 
-            let repair_request = ShredRepairType::HighestShred(slot, slot_meta.received);
-            if let Entry::Vacant(entry) = outstanding_repairs.entry(repair_request) {
-                entry.insert(timestamp());
-                vec![repair_request]
-            } else {
-                vec![]
+            match RepairService::request_repair_if_needed(
+                outstanding_repairs,
+                ShredRepairType::HighestShred(slot, slot_meta.received),
+            ) {
+                Some(repair_request) => vec![repair_request],
+                None => vec![],
             }
         } else {
             blockstore
@@ -731,13 +731,10 @@ impl RepairService {
                 )
                 .into_iter()
                 .filter_map(|i| {
-                    let repair_request = ShredRepairType::Shred(slot, i);
-                    if let Entry::Vacant(entry) = outstanding_repairs.entry(repair_request) {
-                        entry.insert(timestamp());
-                        Some(repair_request)
-                    } else {
-                        None
-                    }
+                    RepairService::request_repair_if_needed(
+                        outstanding_repairs,
+                        ShredRepairType::Shred(slot, i),
+                    )
                 })
                 .collect()
         }
@@ -931,6 +928,18 @@ impl RepairService {
             Err(SendPktsError::IoError(err, _num_failed)) => {
                 error!("batch_send failed to send packet - error = {:?}", err);
             }
+        }
+    }
+
+    pub fn request_repair_if_needed(
+        outstanding_repairs: &mut HashMap<ShredRepairType, u64>,
+        repair_request: ShredRepairType,
+    ) -> Option<ShredRepairType> {
+        if let Entry::Vacant(entry) = outstanding_repairs.entry(repair_request) {
+            entry.insert(timestamp());
+            Some(repair_request)
+        } else {
+            None
         }
     }
 

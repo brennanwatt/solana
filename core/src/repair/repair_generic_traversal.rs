@@ -4,8 +4,8 @@ use {
         repair::{repair_service::RepairService, serve_repair::ShredRepairType},
     },
     solana_ledger::{blockstore::Blockstore, blockstore_meta::SlotMeta},
-    solana_sdk::{clock::Slot, hash::Hash, timing::timestamp},
-    std::collections::{hash_map::Entry, HashMap, HashSet},
+    solana_sdk::{clock::Slot, hash::Hash},
+    std::collections::{HashMap, HashSet},
 };
 
 struct GenericTraversal<'a> {
@@ -76,13 +76,10 @@ pub fn get_unknown_last_index(
     unknown_last
         .iter()
         .filter_map(|(slot, received, _)| {
-            let repair_request = ShredRepairType::HighestShred(*slot, *received);
-            if let Entry::Vacant(entry) = outstanding_repairs.entry(repair_request) {
-                entry.insert(timestamp());
-                Some(repair_request)
-            } else {
-                None
-            }
+            RepairService::request_repair_if_needed(
+                outstanding_repairs,
+                ShredRepairType::HighestShred(*slot, *received),
+            )
         })
         .take(limit)
         .collect()
@@ -245,6 +242,17 @@ pub mod test {
                 .collect::<Vec<_>>()
         );
         assert_eq!(outstanding_requests.len(), repairs.len());
+
+        // Ensure redundant repairs are not generated.
+        let repairs = get_unknown_last_index(
+            &heaviest_subtree_fork_choice,
+            &blockstore,
+            &mut slot_meta_cache,
+            &mut processed_slots,
+            10,
+            &mut outstanding_requests,
+        );
+        assert_eq!(repairs, []);
     }
 
     #[test]
@@ -292,6 +300,31 @@ pub mod test {
         );
         assert_eq!(repairs, [ShredRepairType::Shred(1, 30)]);
         assert_eq!(outstanding_requests.len(), repairs.len());
+
+        let (repairs, _) = get_closest_completion(
+            &heaviest_subtree_fork_choice,
+            &blockstore,
+            0, // root_slot
+            &mut slot_meta_cache,
+            &mut processed_slots,
+            4,
+            &mut outstanding_requests,
+        );
+        assert_eq!(repairs.len(), 4);
+        assert_eq!(outstanding_requests.len(), 5);
+
+        // Ensure redundant repairs are not generated.
+        let (repairs, _) = get_closest_completion(
+            &heaviest_subtree_fork_choice,
+            &blockstore,
+            0, // root_slot
+            &mut slot_meta_cache,
+            &mut processed_slots,
+            1,
+            &mut outstanding_requests,
+        );
+        assert_eq!(repairs.len(), 0);
+        assert_eq!(outstanding_requests.len(), 5);
     }
 
     fn add_tree_with_missing_shreds(

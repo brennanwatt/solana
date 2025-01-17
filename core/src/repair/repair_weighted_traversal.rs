@@ -331,16 +331,26 @@ pub mod test {
             &blockstore,
             &mut slot_meta_cache,
             &mut repairs,
-            4,
+            5,
             &mut outstanding_repairs,
         );
-        assert_eq!(
-            repairs,
-            [1, 7, 8, 3]
-                .iter()
-                .map(|slot| ShredRepairType::HighestShred(*slot, last_shred))
-                .collect::<Vec<_>>()
+        let expected_repairs = [1, 7, 8, 3, 5]
+            .iter()
+            .map(|slot| ShredRepairType::HighestShred(*slot, last_shred))
+            .collect::<Vec<_>>();
+        assert_eq!(repairs, expected_repairs);
+        assert_eq!(repairs.len(), outstanding_repairs.len());
+
+        // Ensure redundant repairs are not generated.
+        get_best_repair_shreds(
+            &heaviest_subtree_fork_choice,
+            &blockstore,
+            &mut slot_meta_cache,
+            &mut repairs,
+            1,
+            &mut outstanding_repairs,
         );
+        assert_eq!(repairs, expected_repairs);
         assert_eq!(repairs.len(), outstanding_repairs.len());
     }
 

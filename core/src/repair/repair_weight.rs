@@ -3,7 +3,7 @@ use {
         consensus::{heaviest_subtree_fork_choice::HeaviestSubtreeForkChoice, tree_diff::TreeDiff},
         repair::{
             repair_generic_traversal::{get_closest_completion, get_unknown_last_index},
-            repair_service::{BestRepairsStats, RepairTiming},
+            repair_service::{BestRepairsStats, RepairService, RepairTiming},
             repair_weighted_traversal,
             serve_repair::ShredRepairType,
         },
@@ -19,10 +19,9 @@ use {
         epoch_schedule::{Epoch, EpochSchedule},
         hash::Hash,
         pubkey::Pubkey,
-        timing::timestamp,
     },
     std::{
-        collections::{hash_map::Entry, HashMap, HashSet, VecDeque},
+        collections::{HashMap, HashSet, VecDeque},
         iter,
     },
 };
@@ -570,9 +569,10 @@ impl RepairWeight {
                 );
                 if let Some(new_orphan_root) = new_orphan_root {
                     if new_orphan_root != self.root {
-                        let repair_request = ShredRepairType::Orphan(new_orphan_root);
-                        if let Entry::Vacant(entry) = outstanding_repairs.entry(repair_request) {
-                            entry.insert(timestamp());
+                        if let Some(repair_request) = RepairService::request_repair_if_needed(
+                            outstanding_repairs,
+                            ShredRepairType::Orphan(new_orphan_root),
+                        ) {
                             repairs.push(repair_request);
                             processed_slots.insert(new_orphan_root);
                             new_best_orphan_requests += 1;
@@ -588,10 +588,10 @@ impl RepairWeight {
             if new_best_orphan_requests >= max_new_orphans {
                 break;
             }
-
-            let repair_request = ShredRepairType::Orphan(new_orphan);
-            if let Entry::Vacant(entry) = outstanding_repairs.entry(repair_request) {
-                entry.insert(timestamp());
+            if let Some(repair_request) = RepairService::request_repair_if_needed(
+                outstanding_repairs,
+                ShredRepairType::Orphan(new_orphan),
+            ) {
                 repairs.push(repair_request);
                 processed_slots.insert(new_orphan);
                 new_best_orphan_requests += 1;
@@ -1574,6 +1574,19 @@ mod test {
         assert_eq!(outstanding_repairs.len(), repairs.len());
         assert_eq!(repairs[0].slot(), 8);
         assert_eq!(repairs[1].slot(), 20);
+
+        // Ensure redundant repairs are not generated.
+        repair_weight.get_best_orphans(
+            &blockstore,
+            &mut processed_slots,
+            &mut repairs,
+            bank.epoch_stakes_map(),
+            bank.epoch_schedule(),
+            2,
+            &mut outstanding_repairs,
+        );
+        assert_eq!(repairs.len(), 2);
+        assert_eq!(outstanding_repairs.len(), repairs.len());
 
         // If one orphan gets heavier, should pick that one
         repairs = vec![];
