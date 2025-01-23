@@ -52,8 +52,8 @@ const MAX_TX_QUEUE_AGE: u64 = (MAX_PROCESSING_AGE as f64 * DEFAULT_S_PER_SLOT) a
 // It also sets transaction's compute-unit to TRANSFER_TRANSACTION_COMPUTE_UNIT. Therefore the
 // max additional cost is:
 // `TRANSFER_TRANSACTION_COMPUTE_UNIT * MAX_COMPUTE_UNIT_PRICE * COMPUTE_UNIT_PRICE_MULTIPLIER / 1_000_000`
-const MAX_RANDOM_COMPUTE_UNIT_PRICE: u64 = 50;
-const COMPUTE_UNIT_PRICE_MULTIPLIER: u64 = 1_000;
+const MAX_RANDOM_COMPUTE_UNIT_PRICE: u64 = 100_000;
+const COMPUTE_UNIT_PRICE_MULTIPLIER: u64 = 1;
 const TRANSFER_TRANSACTION_COMPUTE_UNIT: u32 = 600; // 1 transfer is plus 3 compute_budget ixs
 const PADDED_TRANSFER_COMPUTE_UNIT: u32 = 3_000; // padding program execution requires consumes this amount
 
@@ -587,7 +587,7 @@ fn generate_system_txs(
         let compute_unit_prices = match compute_unit_price {
             ComputeUnitPrice::Random => {
                 let mut rng = rand::thread_rng();
-                let range = Uniform::from(0..MAX_RANDOM_COMPUTE_UNIT_PRICE);
+                let range = Uniform::from(1_000..MAX_RANDOM_COMPUTE_UNIT_PRICE);
                 (0..pairs.len())
                     .map(|_| {
                         range
