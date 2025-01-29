@@ -3102,7 +3102,7 @@ pub fn main() {
 
     let identity_keypair = Arc::new(identity_keypair);
 
-    let should_check_duplicate_instance = true;
+    let should_check_duplicate_instance = false;
     if !cluster_entrypoints.is_empty() {
         bootstrap::rpc_bootstrap(
             &node,
