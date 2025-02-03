@@ -86,14 +86,44 @@ impl VotingService {
         } else {
             crate::banking_stage::next_leader_tpu(cluster_info, poh_recorder)
         };
-        let _ = cluster_info.send_transaction(
-            vote_op.tx(),
-            pubkey_and_target_address.map(|(_pubkey, target_addr)| target_addr),
-        );
 
         match vote_op {
             VoteOp::PushVote {
-                tx, tower_slots, ..
+                tx: _, ref tower_slots, ..
+            } => {
+                match tower_slots.last() {
+                    Some(slot) => {
+                        if slot % 128 != 0 && (slot-1) %128 != 0 {
+                            // Skip voting for this to simulate sending to leader building on other fork.
+                            let _ = cluster_info.send_transaction(
+                                vote_op.tx(),
+                                pubkey_and_target_address.map(|(_pubkey, target_addr)| target_addr),
+                            );
+                        }
+                    }
+                    None => {
+                        let _ = cluster_info.send_transaction(
+                            vote_op.tx(),
+                            pubkey_and_target_address.map(|(_pubkey, target_addr)| target_addr),
+                        );
+                    }
+
+                }
+            }
+            VoteOp::RefreshVote {
+                tx: _,
+                last_voted_slot: _,
+            } => {
+                let _ = cluster_info.send_transaction(
+                    vote_op.tx(),
+                    pubkey_and_target_address.map(|(_pubkey, target_addr)| target_addr),
+                );
+            }
+        }
+
+        match vote_op {
+            VoteOp::PushVote {
+                tx, ref tower_slots, ..
             } => {
                 cluster_info.push_vote(&tower_slots, tx);
             }
