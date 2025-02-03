@@ -1707,19 +1707,6 @@ impl ReplayStage {
                 return;
             }
 
-            if poh_slot % 128 == 0 {
-                // Sleep before leader slot to try and induce partition
-                use rand::Rng;
-                let mut rng = rand::thread_rng();
-                let sleep_time_ms = rng.gen_range(800, 2401);
-                datapoint_info!(
-                    "leader_slot_start_delay",
-                    ("slot", poh_slot, i64),
-                    ("delay_time_ms", sleep_time_ms, i64),
-                );
-                std::thread::sleep(Duration::from_millis(sleep_time_ms));
-            }
-
             datapoint_info!(
                 "replay_stage-new_leader",
                 ("slot", poh_slot, i64),

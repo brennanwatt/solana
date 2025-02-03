@@ -342,6 +342,7 @@ impl PohService {
         let poh = poh_recorder.read().unwrap().poh.clone();
         let mut timing = PohTiming::new();
         let mut next_record = None;
+        let mut already_slept = false;
         loop {
             let should_tick = Self::record_or_hash(
                 &mut next_record,
@@ -354,6 +355,30 @@ impl PohService {
             );
             if should_tick {
                 // Lock PohRecorder only for the final hash. record_or_hash will lock PohRecorder for record calls but not for hashing.
+                {
+                    let poh_recorder_r = poh_recorder.read().unwrap();
+                    if poh_recorder_r.has_bank() && poh_recorder_r.tick_height() % ticks_per_slot == 32
+                    {
+                        if !already_slept {
+                            let slot = poh_recorder_r.bank().unwrap().slot();
+                            if slot % 128 == 0 {
+                                // Sleep during leader slot to try and induce partition
+                                use rand::Rng;
+                                let mut rng = rand::thread_rng();
+                                let sleep_time_ms = rng.gen_range(1300, 2301);
+                                datapoint_info!(
+                                    "leader_slot_delay",
+                                    ("slot", slot, i64),
+                                    ("delay_time_ms", sleep_time_ms, i64),
+                                );
+                                std::thread::sleep(Duration::from_millis(sleep_time_ms));
+                                already_slept = true;
+                            }
+                        }
+                    } else {
+                        already_slept = false;
+                    }
+                }
                 {
                     let mut lock_time = Measure::start("lock");
                     let mut poh_recorder_l = poh_recorder.write().unwrap();
