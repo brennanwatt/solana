@@ -335,10 +335,11 @@ fn retransmit_shred(
         && shred_type == ShredType::Data
     {
         // Delay sending the last shreds to try to partition cluster
-        let addrs2 = addrs.split_off(4);
+        let split_index = 4.min(addrs.len());
+        let addrs2 = addrs.split_off(split_index);
 
         // Send to part of cluster
-        let num_nodes1 = match multi_target_send(socket, shred, &addrs) {
+        let mut num_nodes1 = match multi_target_send(socket, shred, &addrs) {
             Ok(()) => addrs.len(),
             Err(SendPktsError::IoError(ioerr, num_failed)) => {
                 stats
@@ -354,28 +355,31 @@ fn retransmit_shred(
             }
         };
 
-        // Randomized delay
-        let sleep_time_ms = rand::thread_rng().gen_range(10, 30);
-        std::thread::sleep(Duration::from_millis(sleep_time_ms));
+        if !addrs2.is_empty() {
+            // Randomized delay
+            let sleep_time_ms = rand::thread_rng().gen_range(10, 30);
+            std::thread::sleep(Duration::from_millis(sleep_time_ms));
 
-        // Send to rest of cluster
-        let num_nodes2 = match multi_target_send(socket, shred, &addrs2) {
-            Ok(()) => addrs2.len(),
-            Err(SendPktsError::IoError(ioerr, num_failed)) => {
-                stats
-                    .num_addrs_failed
-                    .fetch_add(num_failed, Ordering::Relaxed);
-                error!(
-                    "retransmit_to multi_target_send error: {:?}, {}/{} packets failed",
-                    ioerr,
-                    num_failed,
-                    addrs2.len(),
-                );
-                addrs2.len() - num_failed
-            }
-        };
+            // Send to rest of cluster
+            let num_nodes2 = match multi_target_send(socket, shred, &addrs2) {
+                Ok(()) => addrs2.len(),
+                Err(SendPktsError::IoError(ioerr, num_failed)) => {
+                    stats
+                        .num_addrs_failed
+                        .fetch_add(num_failed, Ordering::Relaxed);
+                    error!(
+                        "retransmit_to multi_target_send error: {:?}, {}/{} packets failed",
+                        ioerr,
+                        num_failed,
+                        addrs2.len(),
+                    );
+                    addrs2.len() - num_failed
+                }
+            };
+            num_nodes1 += num_nodes2;
+        }
 
-        num_nodes1 + num_nodes2
+        num_nodes1
     } else {
         match multi_target_send(socket, shred, &addrs) {
             Ok(()) => addrs.len(),
