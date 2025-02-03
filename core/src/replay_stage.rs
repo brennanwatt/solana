@@ -30,6 +30,7 @@ use {
     },
     crossbeam_channel::{Receiver, RecvTimeoutError, Sender},
     lazy_static::lazy_static,
+    rand::Rng,
     rayon::{prelude::*, ThreadPool},
     solana_client::rpc_response::SlotUpdate,
     solana_entry::entry::VerifyRecyclers,
@@ -2570,6 +2571,12 @@ impl ReplayStage {
 
             assert_eq!(bank_slot, bank.slot());
             if bank.is_complete() {
+                if bank_slot % 128 == 0 {
+                    // Delay processing replay completion so that the leader
+                    // building the fork is less likely to abort
+                    let sleep_time_ms = rand::thread_rng().gen_range(10, 30);
+                    std::thread::sleep(Duration::from_millis(sleep_time_ms));
+                }
                 let mut bank_complete_time = Measure::start("bank_complete_time");
                 let bank_progress = progress
                     .get_mut(&bank.slot())

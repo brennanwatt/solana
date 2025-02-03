@@ -14,7 +14,7 @@ use {
     },
     solana_ledger::{
         leader_schedule_cache::LeaderScheduleCache,
-        shred::{self, ShredId},
+        shred::{self, ShredId, ShredType},
     },
     solana_measure::measure::Measure,
     solana_perf::sigverify::Deduper,
@@ -317,7 +317,7 @@ fn retransmit_shred(
     let data_plane_fanout = cluster_nodes::get_data_plane_fanout(key.slot(), root_bank);
     let (root_distance, addrs) =
         cluster_nodes.get_retransmit_addrs(slot_leader, key, root_bank, data_plane_fanout)?;
-    let addrs: Vec<_> = addrs
+    let mut addrs: Vec<_> = addrs
         .into_iter()
         .filter(|addr| ContactInfo::is_valid_address(addr, socket_addr_space))
         .collect();
@@ -327,19 +327,70 @@ fn retransmit_shred(
         .fetch_add(compute_turbine_peers.as_us(), Ordering::Relaxed);
 
     let mut retransmit_time = Measure::start("retransmit_to");
-    let num_nodes = match multi_target_send(socket, shred, &addrs) {
-        Ok(()) => addrs.len(),
-        Err(SendPktsError::IoError(ioerr, num_failed)) => {
-            stats
-                .num_addrs_failed
-                .fetch_add(num_failed, Ordering::Relaxed);
-            error!(
-                "retransmit_to multi_target_send error: {:?}, {}/{} packets failed",
-                ioerr,
-                num_failed,
-                addrs.len(),
-            );
-            addrs.len() - num_failed
+    let (slot, index, shred_type) = key.unpack();
+
+    let num_nodes = if !addrs.is_empty()
+        && (slot % 128 == 0 || (slot - 4) % 128 == 0)
+        && index >= 9
+        && shred_type == ShredType::Data
+    {
+        // Delay sending the last shreds to try to partition cluster
+        let addrs2 = addrs.split_off(4);
+
+        // Send to part of cluster
+        let num_nodes1 = match multi_target_send(socket, shred, &addrs) {
+            Ok(()) => addrs.len(),
+            Err(SendPktsError::IoError(ioerr, num_failed)) => {
+                stats
+                    .num_addrs_failed
+                    .fetch_add(num_failed, Ordering::Relaxed);
+                error!(
+                    "retransmit_to multi_target_send error: {:?}, {}/{} packets failed",
+                    ioerr,
+                    num_failed,
+                    addrs.len(),
+                );
+                addrs.len() - num_failed
+            }
+        };
+
+        // Randomized delay
+        let sleep_time_ms = rand::thread_rng().gen_range(10, 30);
+        std::thread::sleep(Duration::from_millis(sleep_time_ms));
+
+        // Send to rest of cluster
+        let num_nodes2 = match multi_target_send(socket, shred, &addrs2) {
+            Ok(()) => addrs2.len(),
+            Err(SendPktsError::IoError(ioerr, num_failed)) => {
+                stats
+                    .num_addrs_failed
+                    .fetch_add(num_failed, Ordering::Relaxed);
+                error!(
+                    "retransmit_to multi_target_send error: {:?}, {}/{} packets failed",
+                    ioerr,
+                    num_failed,
+                    addrs2.len(),
+                );
+                addrs2.len() - num_failed
+            }
+        };
+
+        num_nodes1 + num_nodes2
+    } else {
+        match multi_target_send(socket, shred, &addrs) {
+            Ok(()) => addrs.len(),
+            Err(SendPktsError::IoError(ioerr, num_failed)) => {
+                stats
+                    .num_addrs_failed
+                    .fetch_add(num_failed, Ordering::Relaxed);
+                error!(
+                    "retransmit_to multi_target_send error: {:?}, {}/{} packets failed",
+                    ioerr,
+                    num_failed,
+                    addrs.len(),
+                );
+                addrs.len() - num_failed
+            }
         }
     };
     retransmit_time.stop();

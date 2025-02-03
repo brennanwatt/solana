@@ -357,7 +357,9 @@ impl PohService {
                 // Lock PohRecorder only for the final hash. record_or_hash will lock PohRecorder for record calls but not for hashing.
                 {
                     let poh_recorder_r = poh_recorder.read().unwrap();
-                    if poh_recorder_r.has_bank() && poh_recorder_r.tick_height() % ticks_per_slot == 32
+                    // Takes ~180ms to tick halfway into the slot w/o load.
+                    if poh_recorder_r.has_bank()
+                        && poh_recorder_r.tick_height() % ticks_per_slot == 32
                     {
                         if !already_slept {
                             let slot = poh_recorder_r.bank().unwrap().slot();
@@ -365,13 +367,14 @@ impl PohService {
                                 // Sleep during leader slot to try and induce partition
                                 use rand::Rng;
                                 let mut rng = rand::thread_rng();
-                                let sleep_time_ms = rng.gen_range(1300, 2301);
+                                let sleep_time_ms = rng.gen_range(1300, 1500);
                                 datapoint_info!(
                                     "leader_slot_delay",
                                     ("slot", slot, i64),
                                     ("delay_time_ms", sleep_time_ms, i64),
                                 );
                                 std::thread::sleep(Duration::from_millis(sleep_time_ms));
+                                datapoint_info!("leader_slot_delay_woke_up", ("slot", slot, i64),);
                                 already_slept = true;
                             }
                         }
