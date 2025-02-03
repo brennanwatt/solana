@@ -2328,7 +2328,7 @@ impl ReplayStage {
     }
 
     #[allow(clippy::too_many_arguments)]
-    fn replay_active_banks_concurrently(
+    fn _replay_active_banks_concurrently(
         blockstore: &Blockstore,
         bank_forks: &RwLock<BankForks>,
         my_pubkey: &Pubkey,
@@ -2740,30 +2740,30 @@ impl ReplayStage {
         );
         if num_active_banks > 0 {
             let replay_result_vec = if num_active_banks > 1 {
-                if bank_forks
-                    .read()
-                    .unwrap()
-                    .get(active_bank_slots[0])
-                    .unwrap()
-                    .concurrent_replay_of_forks()
-                {
-                    Self::replay_active_banks_concurrently(
-                        blockstore,
-                        bank_forks,
-                        my_pubkey,
-                        vote_account,
-                        progress,
-                        transaction_status_sender,
-                        verify_recyclers,
-                        replay_vote_sender,
-                        replay_timing,
-                        log_messages_bytes_limit,
-                        &active_bank_slots,
-                        prioritization_fee_cache,
-                    )
+                if rand::random() {
+                    active_bank_slots
+                        .iter()
+                        .map(|bank_slot| {
+                            Self::replay_active_bank(
+                                blockstore,
+                                bank_forks,
+                                my_pubkey,
+                                vote_account,
+                                progress,
+                                transaction_status_sender,
+                                verify_recyclers,
+                                replay_vote_sender,
+                                replay_timing,
+                                log_messages_bytes_limit,
+                                *bank_slot,
+                                prioritization_fee_cache,
+                            )
+                        })
+                        .collect()
                 } else {
                     active_bank_slots
                         .iter()
+                        .rev()
                         .map(|bank_slot| {
                             Self::replay_active_bank(
                                 blockstore,
