@@ -99,7 +99,7 @@ use {
 /// The Data plane fanout size, also used as the neighborhood size
 pub const DATA_PLANE_FANOUT: usize = 200;
 /// milliseconds we sleep for between gossip requests
-pub const GOSSIP_SLEEP_MILLIS: u64 = 100;
+pub const GOSSIP_SLEEP_MILLIS: u64 = 1000;
 /// The maximum size of a bloom filter
 pub const MAX_BLOOM_SIZE: usize = MAX_CRDS_OBJECT_SIZE;
 pub const MAX_CRDS_OBJECT_SIZE: usize = 928;
