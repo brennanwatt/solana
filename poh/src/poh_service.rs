@@ -367,7 +367,7 @@ impl PohService {
                                 // Sleep during leader slot to try and induce partition
                                 use rand::Rng;
                                 let mut rng = rand::thread_rng();
-                                let sleep_time_ms = rng.gen_range(1300, 1500);
+                                let sleep_time_ms = rng.gen_range(1350, 1550);
                                 datapoint_info!(
                                     "leader_slot_delay",
                                     ("slot", slot, i64),

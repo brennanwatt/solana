@@ -93,7 +93,7 @@ impl VotingService {
             } => {
                 match tower_slots.last() {
                     Some(slot) => {
-                        if slot % 128 != 0 && (slot-1) %128 != 0 {
+                        if slot % 128 != 0 && slot %128 != 1 && slot %128 != 2 && slot %128 != 3 {
                             // Skip voting for this to simulate sending to leader building on other fork.
                             let _ = cluster_info.send_transaction(
                                 vote_op.tx(),
