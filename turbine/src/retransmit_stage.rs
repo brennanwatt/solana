@@ -410,7 +410,7 @@ impl RetransmitStage {
         let thread_pool = {
             // Using clamp will panic if less than 8 sockets are provided
             #[allow(clippy::manual_clamp)]
-            let num_threads = get_thread_count().min(8).max(retransmit_sockets.len());
+            let num_threads = get_thread_count().min(16).max(retransmit_sockets.len());
             ThreadPoolBuilder::new()
                 .num_threads(num_threads)
                 .thread_name(|i| format!("solRetransmit{i:02}"))
