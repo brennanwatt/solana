@@ -4706,7 +4706,7 @@ impl Blockstore {
     }
 
     pub fn write_batch(&self, write_batch: WriteBatch) -> Result<()> {
-        self.db.write(write_batch)
+        self.db.write_no_wal(write_batch)
     }
 }
 
