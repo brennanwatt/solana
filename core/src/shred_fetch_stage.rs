@@ -31,7 +31,7 @@ use {
     },
 };
 
-const PACKET_COALESCE_DURATION: Duration = Duration::from_millis(1);
+const PACKET_COALESCE_DURATION: Duration = Duration::from_millis(0);
 // When running with very short epochs (e.g. for testing), we want to avoid
 // filtering out shreds that we actually need. This value was chosen empirically
 // because it's large enough to protect against observed short epoch problems
