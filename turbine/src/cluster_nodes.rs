@@ -350,15 +350,14 @@ fn get_nodes(
             }),
     )
     // Add a bunch of fake, unstaked nodes for testing.
-    .chain((0..5000).map(|i: u16| {
-        let addr_byte1 = (i / 256).min(255) as u8;
-        let addr_byte2 = (i % 256).min(255) as u8;
+    .chain((0..5000).map(|_i| {
+        //50.234.242.234
         let contact_info = ContactInfo {
             pubkey: Pubkey::new_unique(),
             wallclock: timestamp(),
             tvu_quic: None,
             tvu_udp: Some(SocketAddr::new(
-                std::net::IpAddr::V4(std::net::Ipv4Addr::new(150, 150, addr_byte1, addr_byte2)),
+                std::net::IpAddr::V4(std::net::Ipv4Addr::new(50, 234, 242, 234)),
                 8080,
             )),
         };
@@ -377,7 +376,7 @@ fn get_nodes(
     )
     .collect();
     sort_and_dedup_nodes(&mut nodes);
-    if should_dedup_tvu_addrs {
+    if false && should_dedup_tvu_addrs {
         dedup_tvu_addrs(&mut nodes);
     };
     nodes
