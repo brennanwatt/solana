@@ -248,7 +248,7 @@ fn retransmit(
     // now the batch has started
     let mut timer_start = Measure::start("retransmit");
     loop {
-        if shreds.len() >= 500 {
+        if shreds.len() >= 5000 {
             break;
         }
         match retransmit_receiver.try_recv() {
