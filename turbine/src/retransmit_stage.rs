@@ -247,8 +247,15 @@ fn retransmit(
     };
     // now the batch has started
     let mut timer_start = Measure::start("retransmit");
-    // drain the channel until it is empty to form a batch
-    //shreds.extend(retransmit_receiver.try_iter().flatten());
+    loop {
+        if shreds.len() >= 500 {
+            break;
+        }
+        match retransmit_receiver.try_recv() {
+            Ok(shreds_batch) => shreds.extend(shreds_batch),
+            _ => break,
+        }
+    }
     stats.num_shreds += shreds.len();
     stats.total_batches += 1;
 
