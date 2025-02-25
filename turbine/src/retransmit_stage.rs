@@ -360,7 +360,7 @@ fn retransmit_shred(
     stats: &RetransmitStats,
 ) -> Option<RetransmitShredOutput> {
     let key = shred::layout::get_shred_id(shred.as_ref())?;
-    if shred_deduper.dedup(key, shred.as_ref(), MAX_DUPLICATE_COUNT) {
+    if key.slot() < root_bank.slot() || shred_deduper.dedup(key, shred.as_ref(), MAX_DUPLICATE_COUNT) {
         stats.num_shreds_skipped.fetch_add(1, Ordering::Relaxed);
         return None;
     }
